@@ -87,6 +87,83 @@ class _ReporteScreenState extends State<ReporteScreen> {
   double get _totalVentas => _filas.fold(0, (suma, fila) => suma + fila.venta);
   double get _totalCobros =>
       _filas.fold(0, (suma, fila) => suma + fila.totalAbonos);
+  double get _totalEsmaltes =>
+      _filas.fold(0, (suma, fila) => suma + fila.esmalte);
+
+  Future<void> _editarAbono(FilaVenta fila, int numero) async {
+    final montoActual = numero == 1 ? fila.abono1 : fila.abono2;
+    final comentarioActual = numero == 1 ? fila.comentario1 : fila.comentario2;
+    final montoController = TextEditingController(
+      text: montoActual == 0 ? '' : montoActual.toStringAsFixed(2),
+    );
+    final comentarioController = TextEditingController(text: comentarioActual);
+    final resultado = await showDialog<(double, String)>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Abono $numero'),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: montoController,
+                autofocus: true,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                  labelText: 'Valor',
+                  prefixText: '\$ ',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: comentarioController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Comentario',
+                  hintText: 'Ejemplo: recibo, fecha o forma de pago',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final monto = double.tryParse(
+                    montoController.text.trim().replaceAll(',', '.'),
+                  ) ??
+                  0;
+              Navigator.pop(
+                context,
+                (monto, comentarioController.text.trim()),
+              );
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+    montoController.dispose();
+    comentarioController.dispose();
+    if (resultado == null || !mounted) return;
+    setState(() {
+      if (numero == 1) {
+        fila.abono1 = resultado.$1;
+        fila.comentario1 = resultado.$2;
+      } else {
+        fila.abono2 = resultado.$1;
+        fila.comentario2 = resultado.$2;
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -166,9 +243,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
               DataColumn(label: Text('ESMALTE')),
               DataColumn(label: Text('VENTA')),
               DataColumn(label: Text('ABONO 1')),
-              DataColumn(label: Text('COMENTARIO 1')),
               DataColumn(label: Text('ABONO 2')),
-              DataColumn(label: Text('COMENTARIO 2')),
               DataColumn(label: Text('TOT. ABONO')),
               DataColumn(label: Text('SALDO')),
             ],
@@ -191,16 +266,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
         DataCell(SizedBox(width: 180, child: Text(fila.cliente))),
         DataCell(Text(fila.fecha)),
         DataCell(Text(fila.numeroFactura)),
-        DataCell(_numero(fila.esmalte, (valor) => fila.esmalte = valor)),
+        DataCell(_numero(
+          fila.esmalte,
+          (valor) => setState(() => fila.esmalte = valor),
+        )),
         DataCell(Text('\$${fila.venta.toStringAsFixed(2)}')),
-        DataCell(_numero(
-            fila.abono1, (valor) => setState(() => fila.abono1 = valor))),
-        DataCell(_entrada(
-            fila.comentario1, 120, (valor) => fila.comentario1 = valor)),
-        DataCell(_numero(
-            fila.abono2, (valor) => setState(() => fila.abono2 = valor))),
-        DataCell(_entrada(
-            fila.comentario2, 120, (valor) => fila.comentario2 = valor)),
+        DataCell(_botonAbono(fila, 1)),
+        DataCell(_botonAbono(fila, 2)),
         DataCell(Text('\$${fila.totalAbonos.toStringAsFixed(2)}')),
         DataCell(Text('\$${fila.saldo.toStringAsFixed(2)}',
             style: const TextStyle(fontWeight: FontWeight.bold))),
@@ -236,6 +308,17 @@ class _ReporteScreenState extends State<ReporteScreen> {
     );
   }
 
+  Widget _botonAbono(FilaVenta fila, int numero) {
+    final monto = numero == 1 ? fila.abono1 : fila.abono2;
+    return SizedBox(
+      width: 100,
+      child: OutlinedButton(
+        onPressed: () => _editarAbono(fila, numero),
+        child: Text(monto == 0 ? 'Añadir' : '\$${monto.toStringAsFixed(2)}'),
+      ),
+    );
+  }
+
   Widget _totales() {
     return Card(
       child: Padding(
@@ -244,6 +327,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
           alignment: WrapAlignment.end,
           spacing: 30,
           children: [
+            Text('Total esmaltes: ${_totalEsmaltes.toStringAsFixed(2)}'),
             Text('Total ventas: \$${_totalVentas.toStringAsFixed(2)}'),
             Text(
               'Total cobros: \$${_totalCobros.toStringAsFixed(2)}',

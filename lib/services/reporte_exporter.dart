@@ -1,11 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/fila_venta.dart';
+import 'web_download_stub.dart'
+    if (dart.library.js_interop) 'web_download.dart';
 
 class ReporteExporter {
   Future<String?> guardar(List<FilaVenta> filas) async {
@@ -13,11 +14,9 @@ class ReporteExporter {
     final bytes = Uint8List.fromList(utf8.encode('\ufeff$contenido'));
 
     if (kIsWeb) {
-      return FilePicker.platform.saveFile(
-        dialogTitle: 'Guardar reporte de ventas',
-        fileName: 'reporte_ventas_cosmeticos_hg.csv',
-        bytes: bytes,
-      );
+      const nombre = 'reporte_ventas_cosmeticos_hg.csv';
+      descargarArchivoWeb(bytes, nombre);
+      return nombre;
     }
 
     final directorio = await getApplicationDocumentsDirectory();
