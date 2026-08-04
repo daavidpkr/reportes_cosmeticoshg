@@ -10,25 +10,33 @@ import 'web_download_stub.dart'
     if (dart.library.js_interop) 'web_download.dart';
 
 class ReporteExporter {
-  static const _nombreArchivo = 'reporte_ventas_cosmeticos_hg.pdf';
-
-  Future<String> guardar(List<FilaVenta> filas) async {
-    final bytes = await _generarPdf(filas);
+  Future<String> guardar(List<FilaVenta> filas, {String? vendedor}) async {
+    final seleccionadas = vendedor == null
+        ? filas
+        : filas.where((fila) => fila.vendedor == vendedor).toList();
+    final sufijo = vendedor == null
+        ? 'general'
+        : vendedor.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    final nombreArchivo = 'reporte_ventas_$sufijo.pdf';
+    final bytes = await _generarPdf(seleccionadas, vendedor: vendedor);
 
     if (kIsWeb) {
-      descargarArchivoWeb(bytes, _nombreArchivo);
-      return _nombreArchivo;
+      descargarArchivoWeb(bytes, nombreArchivo);
+      return nombreArchivo;
     }
 
     final directorio = await getApplicationDocumentsDirectory();
     final archivo = File(
-      '${directorio.path}${Platform.pathSeparator}$_nombreArchivo',
+      '${directorio.path}${Platform.pathSeparator}$nombreArchivo',
     );
     await archivo.writeAsBytes(bytes, flush: true);
     return archivo.path;
   }
 
-  Future<Uint8List> _generarPdf(List<FilaVenta> filas) async {
+  Future<Uint8List> _generarPdf(
+    List<FilaVenta> filas, {
+    String? vendedor,
+  }) async {
     final documento = pw.Document(
       title: 'Reporte de ventas - Cosméticos HG',
       author: 'Cosméticos HG',
@@ -41,7 +49,12 @@ class ReporteExporter {
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4.landscape,
         margin: const pw.EdgeInsets.all(24),
-        header: (_) => _encabezado('REPORTE DE VENTAS', rosa),
+        header: (_) => _encabezado(
+          vendedor == null
+              ? 'REPORTE GENERAL DE VENTAS'
+              : 'REPORTE DE VENTAS - $vendedor',
+          rosa,
+        ),
         footer: _piePagina,
         build: (_) => [
           pw.TableHelper.fromTextArray(
@@ -51,10 +64,10 @@ class ReporteExporter {
               'CLIENTE',
               'FECHA',
               'NRO. FACT.',
+              'VENDEDOR',
               'ESMALTE',
               'VENTA',
-              'ABONO 1',
-              'ABONO 2',
+              'ABONOS',
               'TOT. ABONO',
               'SALDO',
             ],
@@ -65,10 +78,16 @@ class ReporteExporter {
                       fila.cliente,
                       fila.fecha,
                       fila.numeroFactura,
-                      fila.esmalte.toStringAsFixed(2),
+                      fila.vendedor,
+                      fila.esmalte,
                       _dinero(fila.venta),
-                      _dinero(fila.abono1),
-                      _dinero(fila.abono2),
+                      fila.abonos
+                          .asMap()
+                          .entries
+                          .where((item) => item.value.valor != 0)
+                          .map((item) =>
+                              '${item.key + 1}: ${_dinero(item.value.valor)}')
+                          .join(' / '),
                       _dinero(fila.totalAbonos),
                       _dinero(fila.saldo),
                     ])
@@ -91,8 +110,11 @@ class ReporteExporter {
           pw.Row(
             mainAxisAlignment: pw.MainAxisAlignment.end,
             children: [
-              _total('Total esmaltes',
-                  filas.fold(0.0, (suma, fila) => suma + fila.esmalte)),
+              _total(
+                  'Total esmaltes',
+                  filas
+                      .fold(0, (suma, fila) => suma + fila.esmalte)
+                      .toDouble()),
               pw.SizedBox(width: 24),
               _total('Total ventas',
                   filas.fold(0.0, (suma, fila) => suma + fila.venta),
@@ -148,24 +170,16 @@ class ReporteExporter {
   List<List<Object>> _obtenerComentarios(List<FilaVenta> filas) {
     final resultado = <List<Object>>[];
     for (final fila in filas) {
-      if (fila.comentario1.trim().isNotEmpty) {
+      for (var indice = 0; indice < fila.abonos.length; indice++) {
+        final abono = fila.abonos[indice];
+        if (abono.comentario.trim().isEmpty) continue;
         resultado.add([
           fila.numero,
           fila.numeroFactura,
           fila.cliente,
-          'Abono 1',
-          _dinero(fila.abono1),
-          fila.comentario1,
-        ]);
-      }
-      if (fila.comentario2.trim().isNotEmpty) {
-        resultado.add([
-          fila.numero,
-          fila.numeroFactura,
-          fila.cliente,
-          'Abono 2',
-          _dinero(fila.abono2),
-          fila.comentario2,
+          'Abono ${indice + 1}',
+          _dinero(abono.valor),
+          abono.comentario,
         ]);
       }
     }
@@ -200,7 +214,7 @@ class ReporteExporter {
 
   pw.Widget _total(String etiqueta, double valor, {bool dinero = false}) =>
       pw.Text(
-        '$etiqueta: ${dinero ? _dinero(valor) : valor.toStringAsFixed(2)}',
+        '$etiqueta: ${dinero ? _dinero(valor) : valor.toInt()}',
         style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
       );
 

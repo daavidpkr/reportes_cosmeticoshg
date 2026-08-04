@@ -1,3 +1,10 @@
+class Abono {
+  Abono({this.valor = 0, this.comentario = ''});
+
+  double valor;
+  String comentario;
+}
+
 class FilaVenta {
   FilaVenta({
     required this.numero,
@@ -5,28 +12,25 @@ class FilaVenta {
     this.cliente = '',
     this.fecha = '',
     this.numeroFactura = '',
+    this.vendedor = '',
     this.esmalte = 0,
     this.venta = 0,
-    this.abono1 = 0,
-    this.comentario1 = '',
-    this.abono2 = 0,
-    this.comentario2 = '',
-  });
+    List<Abono>? abonos,
+  }) : abonos = abonos ?? [Abono(), Abono()];
 
   final int numero;
   String referencia;
   String cliente;
   String fecha;
   String numeroFactura;
-  double esmalte;
+  String vendedor;
+  int esmalte;
   double venta;
-  double abono1;
-  String comentario1;
-  double abono2;
-  String comentario2;
+  final List<Abono> abonos;
 
-  double get totalAbonos => abono1 + abono2;
+  double get totalAbonos => abonos.fold(0, (suma, abono) => suma + abono.valor);
   double get saldo => venta - totalAbonos;
+  bool get pagada => venta > 0 && saldo <= 0.005;
   bool get tieneDatos =>
       venta > 0 || cliente.isNotEmpty || referencia.isNotEmpty;
 }
