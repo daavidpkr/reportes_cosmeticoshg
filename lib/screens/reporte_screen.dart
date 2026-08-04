@@ -707,42 +707,45 @@ class _ReporteScreenState extends State<ReporteScreen> {
         ),
       );
 
-  Widget _tabla() => Scrollbar(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
+  Widget _tabla() => Padding(
+        padding: const EdgeInsets.only(left: 43),
+        child: Scrollbar(
           child: SingleChildScrollView(
-            child: DataTable(
-              horizontalMargin: 7 * _escalaReporte,
-              columnSpacing: 13 * _escalaReporte,
-              dataRowMinHeight: 38 * _escalaReporte,
-              dataRowMaxHeight: 58 * _escalaReporte,
-              headingRowHeight: 46 * _escalaReporte,
-              headingRowColor: WidgetStatePropertyAll(Colors.pink.shade800),
-              headingTextStyle: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-                fontSize: 14 * _escalaReporte,
+            scrollDirection: Axis.horizontal,
+            child: SingleChildScrollView(
+              child: DataTable(
+                horizontalMargin: 7 * _escalaReporte,
+                columnSpacing: 13 * _escalaReporte,
+                dataRowMinHeight: 38 * _escalaReporte,
+                dataRowMaxHeight: 58 * _escalaReporte,
+                headingRowHeight: 46 * _escalaReporte,
+                headingRowColor: WidgetStatePropertyAll(Colors.pink.shade800),
+                headingTextStyle: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14 * _escalaReporte,
+                ),
+                dataTextStyle: TextStyle(fontSize: 15 * _escalaReporte),
+                columns: const [
+                  DataColumn(label: Text('NRO')),
+                  DataColumn(label: Text('REF. (FACT)')),
+                  DataColumn(label: Text('CLIENTE')),
+                  DataColumn(label: Text('NOMBRE COMERCIAL')),
+                  DataColumn(label: Text('FECHA')),
+                  DataColumn(label: Text('NRO. FACT.')),
+                  DataColumn(label: Text('VENDEDOR')),
+                  DataColumn(label: Text('ESMALTE')),
+                  DataColumn(label: Text('VENTA')),
+                  DataColumn(label: Text('ABONO 1')),
+                  DataColumn(label: Text('ABONO 2')),
+                  DataColumn(label: SizedBox.shrink()),
+                  DataColumn(label: Text('TOT. ABONO')),
+                  DataColumn(label: Text('SALDO')),
+                ],
+                rows: _filasVisibles
+                    .map((item) => _crearFila(item.key, item.value))
+                    .toList(),
               ),
-              dataTextStyle: TextStyle(fontSize: 15 * _escalaReporte),
-              columns: const [
-                DataColumn(label: Text('NRO')),
-                DataColumn(label: Text('REF. (FACT)')),
-                DataColumn(label: Text('CLIENTE')),
-                DataColumn(label: Text('NOMBRE COMERCIAL')),
-                DataColumn(label: Text('FECHA')),
-                DataColumn(label: Text('NRO. FACT.')),
-                DataColumn(label: Text('VENDEDOR')),
-                DataColumn(label: Text('ESMALTE')),
-                DataColumn(label: Text('VENTA')),
-                DataColumn(label: Text('ABONO 1')),
-                DataColumn(label: Text('ABONO 2')),
-                DataColumn(label: SizedBox.shrink()),
-                DataColumn(label: Text('TOT. ABONO')),
-                DataColumn(label: Text('SALDO')),
-              ],
-              rows: _filasVisibles
-                  .map((item) => _crearFila(item.key, item.value))
-                  .toList(),
             ),
           ),
         ),
@@ -762,11 +765,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
             enviar: true,
           )),
           DataCell(SizedBox(
-            width: 155 * _escalaReporte,
+            width: 175 * _escalaReporte,
             child: Text(fila.cliente),
           )),
           DataCell(SizedBox(
-            width: 135 * _escalaReporte,
+            width: 155 * _escalaReporte,
             child: Text(fila.nombreComercial),
           )),
           DataCell(Text(fila.fecha)),
