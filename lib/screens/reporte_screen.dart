@@ -30,6 +30,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
   String? _ordenColumna;
   bool _ordenAscendente = true;
   double _zoom = 1;
+  bool _vistaGeneral = false;
+  final _busquedaController = TextEditingController();
 
   // La antigua vista al 90% es ahora la escala base (100%).
   double get _escalaReporte => _zoom * .99;
@@ -45,6 +47,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   @override
   void dispose() {
     _focusZoom.dispose();
+    _busquedaController.dispose();
     super.dispose();
   }
 
@@ -228,14 +231,20 @@ class _ReporteScreenState extends State<ReporteScreen> {
       }
     }
 
+    if (factura == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Factura no encontrada')),
+      );
+      return;
+    }
     final fila = _filas[indice];
     setState(() {
       fila.referencia = valor;
-      fila.cliente = factura?.cliente ?? (valor.isEmpty ? '' : 'NO ENCONTRADA');
-      fila.nombreComercial = factura?.nombreComercial ?? '';
-      fila.fecha = factura?.fecha ?? '';
-      fila.numeroFactura = factura?.secuencial ?? valor;
-      fila.venta = factura?.total ?? 0;
+      fila.cliente = factura.cliente;
+      fila.nombreComercial = factura.nombreComercial;
+      fila.fecha = factura.fecha;
+      fila.numeroFactura = factura.secuencial;
+      fila.venta = factura.total;
       _asegurarFilaVacia();
     });
     _guardarProgreso();
@@ -494,37 +503,96 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   Future<void> _guardar() async {
-    final opcion = await showDialog<({String? vendedor})>(
+    await _guardarProgreso();
+    if (!mounted) return;
+    var desde = _reportes.reportes.first.id;
+    var hasta = _reportes.reportes.last.id;
+    String? vendedor;
+    final opcion = await showDialog<bool>(
       context: context,
-      builder: (context) => SimpleDialog(
-        title: const Text('Tipo de reporte'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(context, (vendedor: null)),
-            child: const ListTile(
-              leading: Icon(Icons.groups),
-              title: Text('Reporte general'),
-              subtitle: Text('Incluye todos los vendedores'),
-            ),
-          ),
-          ..._vendedores.vendedores.map(
-            (vendedor) => SimpleDialogOption(
-              onPressed: () =>
-                  Navigator.pop(context, (vendedor: vendedor.etiqueta)),
-              child: ListTile(
-                leading: const Icon(Icons.person),
-                title: Text(vendedor.etiqueta),
-                subtitle: const Text('Reporte de este vendedor'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, actualizar) => AlertDialog(
+          title: const Text('Descargar PDF'),
+          content: SizedBox(
+            width: 430,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Escoja el rango del reporte'),
               ),
-            ),
+              const SizedBox(height: 12),
+              Row(children: [
+                Expanded(
+                    child: DropdownButtonFormField<String>(
+                  initialValue: desde,
+                  decoration: const InputDecoration(
+                      labelText: 'Desde', border: OutlineInputBorder()),
+                  items: _reportes.reportes
+                      .map((r) =>
+                          DropdownMenuItem(value: r.id, child: Text(r.nombre)))
+                      .toList(),
+                  onChanged: (v) => actualizar(() => desde = v ?? desde),
+                )),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: DropdownButtonFormField<String>(
+                  initialValue: hasta,
+                  decoration: const InputDecoration(
+                      labelText: 'Hasta', border: OutlineInputBorder()),
+                  items: _reportes.reportes
+                      .map((r) =>
+                          DropdownMenuItem(value: r.id, child: Text(r.nombre)))
+                      .toList(),
+                  onChanged: (v) => actualizar(() => hasta = v ?? hasta),
+                )),
+              ]),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String?>(
+                initialValue: vendedor,
+                decoration: const InputDecoration(
+                    labelText: 'Contenido', border: OutlineInputBorder()),
+                items: [
+                  const DropdownMenuItem<String?>(
+                      value: null, child: Text('Todos los vendedores')),
+                  ..._vendedores.vendedores.map((v) =>
+                      DropdownMenuItem<String?>(
+                          value: v.etiqueta, child: Text(v.etiqueta))),
+                ],
+                onChanged: (v) => actualizar(() => vendedor = v),
+              ),
+            ]),
           ),
-        ],
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancelar')),
+            FilledButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: const Icon(Icons.download),
+              label: const Text('Descargar'),
+            ),
+          ],
+        ),
       ),
     );
-    if (opcion == null) return;
-    final filas = opcion.vendedor == null
-        ? _filas
-        : _filas.where((fila) => fila.vendedor == opcion.vendedor).toList();
+    if (opcion != true) return;
+    if (desde.compareTo(hasta) > 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content:
+                  Text('El mes inicial no puede ser posterior al mes final.')),
+        );
+      }
+      return;
+    }
+    final reportes = _reportes.reportes
+        .where((r) => r.id.compareTo(desde) >= 0 && r.id.compareTo(hasta) <= 0)
+        .toList();
+    final todas = reportes.expand((r) => r.filas).toList();
+    final filas = vendedor == null
+        ? todas
+        : todas.where((f) => f.vendedor == vendedor).toList();
     if (!filas.any((fila) => fila.tieneDatos)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -535,8 +603,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
     }
     try {
       final ruta = await _exporter.guardar(
-        _filas,
-        vendedor: opcion.vendedor,
+        filas,
+        vendedor: vendedor,
+        periodo: '${reportes.first.nombre} a ${reportes.last.nombre}',
         nombresVendedores: {
           for (final vendedor in _vendedores.vendedores)
             vendedor.etiqueta: vendedor.nombre,
@@ -554,6 +623,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
     }
   }
 
+  // Conservado para compatibilidad con el flujo de diálogo anterior.
+  // ignore: unused_element
   Future<void> _buscar() async {
     final controller = TextEditingController(text: _filtro);
     var vendedor = _filtroVendedor;
@@ -859,15 +930,40 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   Widget _encabezadoSinFiltro(String titulo) => Text(titulo);
 
-  List<FilaVenta> get _filasParaTotales =>
-      _filasVisibles.map((item) => item.value).toList();
+  List<FilaVenta> get _filasParaTotales => _vistaGeneral
+      ? _filasGenerales
+      : _filasVisibles.map((item) => item.value).toList();
   int get _totalEsmaltes =>
       _filasParaTotales.fold(0, (suma, fila) => suma + fila.esmalte);
   double get _totalVentas =>
       _filasParaTotales.fold(0, (suma, fila) => suma + fila.venta);
   double get _totalCobros =>
       _filasParaTotales.fold(0, (suma, fila) => suma + fila.totalAbonos);
+  double get _totalPorCobrar =>
+      _filasParaTotales.fold(0, (suma, fila) => suma + fila.saldo);
 
+  List<FilaVenta> get _filasGenerales {
+    final texto = _filtro.toLowerCase();
+    return _reportes.reportes.expand((r) => r.filas).where((fila) {
+      if (!fila.tieneDatos) return false;
+      final coincide = texto.isEmpty ||
+          fila.numeroFactura.toLowerCase().contains(texto) ||
+          fila.cliente.toLowerCase().contains(texto) ||
+          fila.nombreComercial.toLowerCase().contains(texto) ||
+          fila.vendedor.toLowerCase().contains(texto);
+      if (!coincide ||
+          (_filtroVendedor.isNotEmpty && fila.vendedor != _filtroVendedor)) {
+        return false;
+      }
+      return switch (_filtroEstado) {
+        'pagados' => fila.pagada,
+        'pendientes' => !fila.pagada,
+        _ => true,
+      };
+    }).toList();
+  }
+
+  // ignore: unused_element
   String get _descripcionFiltro {
     final partes = <String>[];
     if (_filtro.isNotEmpty) partes.add('Texto: $_filtro');
@@ -903,24 +999,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
             child: Column(
               children: [
                 _barraAcciones(),
-                if (_filtro.isNotEmpty ||
-                    _filtroVendedor.isNotEmpty ||
-                    _filtroEstado != 'todos' ||
-                    _filtrosColumnas.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Chip(
-                      label: Text(_descripcionFiltro),
-                      onDeleted: () => setState(() {
-                        _filtro = '';
-                        _filtroVendedor = '';
-                        _filtroEstado = 'todos';
-                        _filtrosColumnas.clear();
-                      }),
-                    ),
-                  ),
                 const SizedBox(height: 10),
-                Expanded(child: _tabla()),
+                _barraBusqueda(),
+                const SizedBox(height: 8),
+                Expanded(child: _vistaGeneral ? _tablaGeneral() : _tabla()),
                 const SizedBox(height: 10),
                 _totales(),
               ],
@@ -993,21 +1075,18 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 label: const Text('Vendedores'),
               ),
               FilledButton.tonalIcon(
-                onPressed: _buscar,
-                icon: const Icon(Icons.search),
-                label: const Text('Buscar / filtrar'),
+                onPressed: () => setState(() => _vistaGeneral = !_vistaGeneral),
+                icon: Icon(_vistaGeneral
+                    ? Icons.calendar_view_month
+                    : Icons.table_view),
+                label: Text(
+                    _vistaGeneral ? 'Reporte mes a mes' : 'Reporte general'),
               ),
               _botonZoom(),
               FilledButton.icon(
                 onPressed: _guardar,
                 icon: const Icon(Icons.download),
                 label: const Text('Descargar PDF'),
-              ),
-              FilledButton.icon(
-                onPressed: _reiniciar,
-                style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                icon: const Icon(Icons.delete),
-                label: const Text('Eliminar reporte'),
               ),
             ],
           ),
@@ -1026,14 +1105,84 @@ class _ReporteScreenState extends State<ReporteScreen> {
           PopupMenuItem(value: 1.15, child: Text('115%')),
           PopupMenuItem(value: 1.25, child: Text('125%')),
         ],
-        child: Chip(
-          avatar: const Icon(Icons.zoom_in, size: 18),
-          label: Text('Zoom ${(_zoom * 100).round()}%'),
+        child: const Tooltip(
+          message: 'Zoom',
+          child:
+              Padding(padding: EdgeInsets.all(10), child: Icon(Icons.zoom_in)),
+        ),
+      );
+
+  Widget _barraBusqueda() => LayoutBuilder(
+        builder: (context, constraints) => Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            SizedBox(
+              width: constraints.maxWidth >= 850
+                  ? constraints.maxWidth - 386
+                  : constraints.maxWidth,
+              child: TextField(
+                controller: _busquedaController,
+                onChanged: (valor) => setState(() => _filtro = valor.trim()),
+                decoration: InputDecoration(
+                  hintText:
+                      'Buscar factura, cliente, nombre comercial o vendedor',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _filtro.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Limpiar búsqueda',
+                          onPressed: () {
+                            _busquedaController.clear();
+                            setState(() => _filtro = '');
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
+                  border: const OutlineInputBorder(),
+                  isDense: true,
+                ),
+              ),
+            ),
+            SizedBox(
+                width: 190,
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: _filtroVendedor,
+                  decoration: const InputDecoration(
+                      labelText: 'Vendedor',
+                      border: OutlineInputBorder(),
+                      isDense: true),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('Todos')),
+                    ..._vendedores.vendedores.map((v) => DropdownMenuItem(
+                        value: v.etiqueta, child: Text(v.etiqueta)))
+                  ],
+                  onChanged: (v) => setState(() => _filtroVendedor = v ?? ''),
+                )),
+            SizedBox(
+                width: 180,
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: _filtroEstado,
+                  decoration: const InputDecoration(
+                      labelText: 'Estado',
+                      border: OutlineInputBorder(),
+                      isDense: true),
+                  items: const [
+                    DropdownMenuItem(value: 'todos', child: Text('Todos')),
+                    DropdownMenuItem(value: 'pagados', child: Text('Pagados')),
+                    DropdownMenuItem(
+                        value: 'pendientes', child: Text('Pendientes')),
+                  ],
+                  onChanged: (v) =>
+                      setState(() => _filtroEstado = v ?? 'todos'),
+                )),
+          ],
         ),
       );
 
   Widget _tabla() => Padding(
-        padding: const EdgeInsets.only(left: 27),
+        padding: const EdgeInsets.only(left: 10),
         child: Scrollbar(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -1071,6 +1220,52 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     .map((item) => _crearFila(item.key, item.value))
                     .toList(),
               ),
+            ),
+          ),
+        ),
+      );
+
+  Widget _tablaGeneral() => Scrollbar(
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SingleChildScrollView(
+            child: DataTable(
+              headingRowColor: WidgetStatePropertyAll(Colors.pink.shade800),
+              headingTextStyle: const TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.bold),
+              columns: const [
+                DataColumn(label: Text('CLIENTE')),
+                DataColumn(label: Text('NOMBRE COMERCIAL')),
+                DataColumn(label: Text('FECHA')),
+                DataColumn(label: Text('NRO. FACT.')),
+                DataColumn(label: Text('VENDEDOR')),
+                DataColumn(label: Text('ESMALTE')),
+                DataColumn(label: Text('VENTA')),
+                DataColumn(label: Text('TOT. ABONO')),
+                DataColumn(label: Text('SALDO')),
+              ],
+              rows: _filasGenerales
+                  .map((fila) => DataRow(
+                        color: fila.pagada
+                            ? WidgetStatePropertyAll(
+                                Colors.green.withValues(alpha: .12))
+                            : null,
+                        cells: [
+                          DataCell(Text(fila.cliente)),
+                          DataCell(Text(fila.nombreComercial)),
+                          DataCell(Text(fila.fecha)),
+                          DataCell(Text(fila.numeroFactura)),
+                          DataCell(Text(fila.vendedor)),
+                          DataCell(Text('${fila.esmalte}')),
+                          DataCell(Text('\$${fila.venta.toStringAsFixed(2)}')),
+                          DataCell(
+                              Text('\$${fila.totalAbonos.toStringAsFixed(2)}')),
+                          DataCell(Text('\$${fila.saldo.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold))),
+                        ],
+                      ))
+                  .toList(),
             ),
           ),
         ),
@@ -1239,7 +1434,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
           padding: const EdgeInsets.all(14),
           child: Wrap(
             alignment: WrapAlignment.end,
+            crossAxisAlignment: WrapCrossAlignment.center,
             spacing: 30,
+            runSpacing: 10,
             children: [
               Text('Total esmaltes: $_totalEsmaltes'),
               Text('Total ventas: \$${_totalVentas.toStringAsFixed(2)}'),
@@ -1250,6 +1447,19 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
+              Text(
+                'Total por cobrar: \$${_totalPorCobrar.toStringAsFixed(2)}',
+                style: const TextStyle(
+                    color: Colors.orange, fontWeight: FontWeight.bold),
+              ),
+              if (!_vistaGeneral) ...[
+                FilledButton.icon(
+                  onPressed: _reiniciar,
+                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                  icon: const Icon(Icons.delete),
+                  label: const Text('Eliminar reporte'),
+                ),
+              ],
             ],
           ),
         ),

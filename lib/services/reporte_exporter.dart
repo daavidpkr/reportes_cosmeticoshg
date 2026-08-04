@@ -14,6 +14,7 @@ class ReporteExporter {
     List<FilaVenta> filas, {
     String? vendedor,
     Map<String, String> nombresVendedores = const {},
+    String? periodo,
   }) async {
     final seleccionadas = vendedor == null
         ? filas
@@ -21,11 +22,15 @@ class ReporteExporter {
     final sufijo = vendedor == null
         ? 'general'
         : vendedor.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
-    final nombreArchivo = 'reporte_ventas_$sufijo.pdf';
+    final periodoArchivo = periodo == null
+        ? ''
+        : '_${periodo.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}';
+    final nombreArchivo = 'reporte_ventas_$sufijo$periodoArchivo.pdf';
     final bytes = await _generarPdf(
       seleccionadas,
       vendedor: vendedor,
       nombresVendedores: nombresVendedores,
+      periodo: periodo,
     );
 
     if (kIsWeb) {
@@ -45,6 +50,7 @@ class ReporteExporter {
     List<FilaVenta> filas, {
     String? vendedor,
     Map<String, String> nombresVendedores = const {},
+    String? periodo,
   }) async {
     final documento = pw.Document(
       title: 'Reporte de ventas - Cosméticos HG',
@@ -59,9 +65,7 @@ class ReporteExporter {
         pageFormat: PdfPageFormat.a4.landscape,
         margin: const pw.EdgeInsets.all(24),
         header: (_) => _encabezado(
-          vendedor == null
-              ? 'REPORTE GENERAL DE VENTAS'
-              : 'REPORTE DE VENTAS - ${nombresVendedores[vendedor] ?? vendedor}',
+          '${vendedor == null ? 'REPORTE GENERAL DE VENTAS' : 'REPORTE DE VENTAS - ${nombresVendedores[vendedor] ?? vendedor}'}${periodo == null ? '' : ' - $periodo'}',
           rosa,
         ),
         footer: _piePagina,
@@ -133,6 +137,10 @@ class ReporteExporter {
               pw.SizedBox(width: 24),
               _total('Total cobros',
                   filas.fold(0.0, (suma, fila) => suma + fila.totalAbonos),
+                  dinero: true),
+              pw.SizedBox(width: 24),
+              _total('Total por cobrar',
+                  filas.fold(0.0, (suma, fila) => suma + fila.saldo),
                   dinero: true),
             ],
           ),
