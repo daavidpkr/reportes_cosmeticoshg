@@ -1,4 +1,6 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/fila_venta.dart';
 import '../services/facturas_store.dart';
@@ -17,16 +19,58 @@ class _ReporteScreenState extends State<ReporteScreen> {
   final _facturas = FacturasStore.instance;
   final _exporter = ReporteExporter();
   final _vendedores = VendedoresStore();
+  final _focusZoom = FocusNode();
   late List<FilaVenta> _filas;
   String _filtro = '';
   String _filtroVendedor = '';
   String _filtroEstado = 'todos';
+  double _zoom = 1;
+
+  double get _escalaReporte => _zoom * 1.1;
 
   @override
   void initState() {
     super.initState();
     _crearFilas();
     _cargarVendedores();
+  }
+
+  @override
+  void dispose() {
+    _focusZoom.dispose();
+    super.dispose();
+  }
+
+  void _cambiarZoom(double cambio) {
+    setState(() => _zoom = (_zoom + cambio).clamp(0.65, 1.25));
+  }
+
+  KeyEventResult _atajoZoom(FocusNode node, KeyEvent evento) {
+    if (evento is! KeyDownEvent ||
+        !HardwareKeyboard.instance.isControlPressed) {
+      return KeyEventResult.ignored;
+    }
+    final aumentar = evento.character == '+' ||
+        evento.logicalKey == LogicalKeyboardKey.equal ||
+        evento.logicalKey == LogicalKeyboardKey.add;
+    final reducir = evento.character == '-' ||
+        evento.logicalKey == LogicalKeyboardKey.minus;
+    if (aumentar) {
+      _cambiarZoom(0.1);
+      return KeyEventResult.handled;
+    }
+    if (reducir) {
+      _cambiarZoom(-0.1);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _ruedaZoom(PointerSignalEvent evento) {
+    if (evento is PointerScrollEvent &&
+        HardwareKeyboard.instance.isControlPressed) {
+      _cambiarZoom(evento.scrollDelta.dy < 0 ? 0.1 : -0.1);
+    }
   }
 
   Future<void> _cargarVendedores() async {
@@ -63,6 +107,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
     setState(() {
       fila.referencia = valor;
       fila.cliente = factura?.cliente ?? (valor.isEmpty ? '' : 'NO ENCONTRADA');
+      fila.nombreComercial = factura?.nombreComercial ?? '';
       fila.fecha = factura?.fecha ?? '';
       fila.numeroFactura = factura?.secuencial ?? valor;
       fila.venta = factura?.total ?? 0;
@@ -148,53 +193,122 @@ class _ReporteScreenState extends State<ReporteScreen> {
     });
   }
 
-  void _agregarAbono(FilaVenta fila) {
+  Future<void> _agregarAbono(FilaVenta fila) async {
     setState(() => fila.abonos.add(Abono()));
-    _editarAbono(fila, fila.abonos.length - 1, nuevo: true);
+    await _editarAbono(fila, fila.abonos.length - 1, nuevo: true);
+  }
+
+  Future<void> _gestionarAbonosAdicionales(FilaVenta fila) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, actualizar) => AlertDialog(
+          title: const Text('Abonos adicionales'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (fila.abonos.length == 2)
+                  const Text('No hay abonos adicionales en esta fila.'),
+                for (var indice = 2; indice < fila.abonos.length; indice++)
+                  ListTile(
+                    title: Text('Abono ${indice + 1}'),
+                    subtitle: Text(
+                      fila.abonos[indice].comentario.isEmpty
+                          ? 'Sin comentario'
+                          : fila.abonos[indice].comentario,
+                    ),
+                    trailing: Text(
+                      '\$${fila.abonos[indice].valor.toStringAsFixed(2)}',
+                    ),
+                    onTap: () async {
+                      await _editarAbono(fila, indice);
+                      actualizar(() {});
+                    },
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                await _agregarAbono(fila);
+                actualizar(() {});
+              },
+              icon: const Icon(Icons.add),
+              label: const Text('Añadir abono'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _gestionarVendedores() async {
-    final controller = TextEditingController();
+    final codigoController = TextEditingController();
+    final nombreController = TextEditingController();
+    Future<void> guardar(StateSetter actualizar) async {
+      if (await _vendedores.agregar(
+        codigoController.text,
+        nombreController.text,
+      )) {
+        codigoController.clear();
+        nombreController.clear();
+        actualizar(() {});
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Ingresa código y nombre. No pueden estar repetidos.',
+            ),
+          ),
+        );
+      }
+    }
+
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, actualizar) => AlertDialog(
           title: const Text('Vendedores'),
           content: SizedBox(
-            width: 380,
+            width: 440,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: controller,
-                        decoration: const InputDecoration(
-                          labelText: 'Nombre del vendedor',
-                          border: OutlineInputBorder(),
-                        ),
-                        onSubmitted: (_) async {
-                          if (await _vendedores.agregar(controller.text)) {
-                            controller.clear();
-                            actualizar(() {});
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    IconButton.filled(
-                      tooltip: 'Guardar vendedor',
-                      onPressed: () async {
-                        if (await _vendedores.agregar(controller.text)) {
-                          controller.clear();
-                          actualizar(() {});
-                        }
-                      },
-                      icon: const Icon(Icons.add),
-                    ),
-                  ],
+                TextField(
+                  controller: codigoController,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                    labelText: 'Código del vendedor',
+                    hintText: 'Ejemplo: V001',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
+                const SizedBox(height: 10),
+                Row(children: [
+                  Expanded(
+                    child: TextField(
+                      controller: nombreController,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre del vendedor',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSubmitted: (_) => guardar(actualizar),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    tooltip: 'Guardar vendedor',
+                    onPressed: () => guardar(actualizar),
+                    icon: const Icon(Icons.add),
+                  ),
+                ]),
                 const SizedBox(height: 12),
                 if (_vendedores.vendedores.isEmpty)
                   const Text('Todavía no hay vendedores guardados')
@@ -205,16 +319,25 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       shrinkWrap: true,
                       itemCount: _vendedores.vendedores.length,
                       itemBuilder: (_, indice) {
-                        final nombre = _vendedores.vendedores[indice];
+                        final vendedor = _vendedores.vendedores[indice];
                         return ListTile(
                           dense: true,
-                          title: Text(nombre),
+                          leading: CircleAvatar(
+                            child: Text(
+                              vendedor.codigo.isEmpty ? '—' : vendedor.codigo,
+                              style: const TextStyle(fontSize: 10),
+                            ),
+                          ),
+                          title: Text(vendedor.nombre),
+                          subtitle: vendedor.codigo.isEmpty
+                              ? const Text('Sin código (vendedor anterior)')
+                              : Text('Código: ${vendedor.codigo}'),
                           trailing: IconButton(
                             tooltip: 'Eliminar',
                             onPressed: () async {
-                              await _vendedores.eliminar(nombre);
+                              await _vendedores.eliminar(vendedor);
                               for (final fila in _filas) {
-                                if (fila.vendedor == nombre) {
+                                if (fila.vendedor == vendedor.etiqueta) {
                                   fila.vendedor = '';
                                 }
                               }
@@ -238,7 +361,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
         ),
       ),
     );
-    controller.dispose();
+    codigoController.dispose();
+    nombreController.dispose();
     if (mounted) setState(() {});
   }
 
@@ -258,10 +382,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
           ),
           ..._vendedores.vendedores.map(
             (vendedor) => SimpleDialogOption(
-              onPressed: () => Navigator.pop(context, (vendedor: vendedor)),
+              onPressed: () =>
+                  Navigator.pop(context, (vendedor: vendedor.etiqueta)),
               child: ListTile(
                 leading: const Icon(Icons.person),
-                title: Text(vendedor),
+                title: Text(vendedor.etiqueta),
                 subtitle: const Text('Reporte de este vendedor'),
               ),
             ),
@@ -314,7 +439,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   controller: controller,
                   autofocus: true,
                   decoration: const InputDecoration(
-                    labelText: 'Factura, cliente o vendedor',
+                    labelText: 'Factura, cliente, nombre comercial o vendedor',
                     prefixIcon: Icon(Icons.search),
                     border: OutlineInputBorder(),
                   ),
@@ -332,9 +457,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       child: Text('Todos los vendedores'),
                     ),
                     ..._vendedores.vendedores.map(
-                      (nombre) => DropdownMenuItem(
-                        value: nombre,
-                        child: Text(nombre),
+                      (item) => DropdownMenuItem(
+                        value: item.etiqueta,
+                        child: Text(item.etiqueta),
                       ),
                     ),
                   ],
@@ -435,6 +560,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       if (texto.isEmpty) return true;
       return item.value.numeroFactura.toLowerCase().contains(texto) ||
           item.value.cliente.toLowerCase().contains(texto) ||
+          item.value.nombreComercial.toLowerCase().contains(texto) ||
           item.value.vendedor.toLowerCase().contains(texto);
     }).where((item) {
       if (_filtroVendedor.isNotEmpty &&
@@ -479,30 +605,38 @@ class _ReporteScreenState extends State<ReporteScreen> {
         ),
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          children: [
-            _barraAcciones(),
-            if (_filtro.isNotEmpty ||
-                _filtroVendedor.isNotEmpty ||
-                _filtroEstado != 'todos')
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Chip(
-                  label: Text(_descripcionFiltro),
-                  onDeleted: () => setState(() {
-                    _filtro = '';
-                    _filtroVendedor = '';
-                    _filtroEstado = 'todos';
-                  }),
-                ),
-              ),
-            const SizedBox(height: 10),
-            Expanded(child: _tabla()),
-            const SizedBox(height: 10),
-            _totales(),
-          ],
+      body: Focus(
+        focusNode: _focusZoom,
+        autofocus: true,
+        onKeyEvent: _atajoZoom,
+        child: Listener(
+          onPointerSignal: _ruedaZoom,
+          child: Padding(
+            padding: const EdgeInsets.all(8),
+            child: Column(
+              children: [
+                _barraAcciones(),
+                if (_filtro.isNotEmpty ||
+                    _filtroVendedor.isNotEmpty ||
+                    _filtroEstado != 'todos')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Chip(
+                      label: Text(_descripcionFiltro),
+                      onDeleted: () => setState(() {
+                        _filtro = '';
+                        _filtroVendedor = '';
+                        _filtroEstado = 'todos';
+                      }),
+                    ),
+                  ),
+                const SizedBox(height: 10),
+                Expanded(child: _tabla()),
+                const SizedBox(height: 10),
+                _totales(),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -538,6 +672,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 icon: const Icon(Icons.search),
                 label: const Text('Buscar / filtrar'),
               ),
+              _botonZoom(),
               FilledButton.icon(
                 onPressed: _guardar,
                 icon: const Icon(Icons.download),
@@ -554,20 +689,46 @@ class _ReporteScreenState extends State<ReporteScreen> {
         ),
       );
 
+  Widget _botonZoom() => PopupMenuButton<double>(
+        tooltip: 'Cambiar zoom del reporte',
+        initialValue: _zoom,
+        onSelected: (valor) => setState(() => _zoom = valor),
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: .65, child: Text('65%')),
+          PopupMenuItem(value: .75, child: Text('75%')),
+          PopupMenuItem(value: .85, child: Text('85%')),
+          PopupMenuItem(value: 1, child: Text('100%')),
+          PopupMenuItem(value: 1.15, child: Text('115%')),
+          PopupMenuItem(value: 1.25, child: Text('125%')),
+        ],
+        child: Chip(
+          avatar: const Icon(Icons.zoom_in, size: 18),
+          label: Text('Zoom ${(_zoom * 100).round()}%'),
+        ),
+      );
+
   Widget _tabla() => Scrollbar(
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SingleChildScrollView(
             child: DataTable(
+              horizontalMargin: 7 * _escalaReporte,
+              columnSpacing: 13 * _escalaReporte,
+              dataRowMinHeight: 38 * _escalaReporte,
+              dataRowMaxHeight: 58 * _escalaReporte,
+              headingRowHeight: 46 * _escalaReporte,
               headingRowColor: WidgetStatePropertyAll(Colors.pink.shade800),
-              headingTextStyle: const TextStyle(
+              headingTextStyle: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
+                fontSize: 14 * _escalaReporte,
               ),
+              dataTextStyle: TextStyle(fontSize: 15 * _escalaReporte),
               columns: const [
                 DataColumn(label: Text('NRO')),
                 DataColumn(label: Text('REF. (FACT)')),
                 DataColumn(label: Text('CLIENTE')),
+                DataColumn(label: Text('NOMBRE COMERCIAL')),
                 DataColumn(label: Text('FECHA')),
                 DataColumn(label: Text('NRO. FACT.')),
                 DataColumn(label: Text('VENDEDOR')),
@@ -575,7 +736,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 DataColumn(label: Text('VENTA')),
                 DataColumn(label: Text('ABONO 1')),
                 DataColumn(label: Text('ABONO 2')),
-                DataColumn(label: Text('OTROS ABONOS')),
+                DataColumn(label: SizedBox.shrink()),
                 DataColumn(label: Text('TOT. ABONO')),
                 DataColumn(label: Text('SALDO')),
               ],
@@ -596,11 +757,18 @@ class _ReporteScreenState extends State<ReporteScreen> {
           DataCell(Text('${fila.numero}')),
           DataCell(_entrada(
             fila.referencia,
-            90,
+            72 * _escalaReporte,
             (valor) => _buscarFactura(indice, valor),
             enviar: true,
           )),
-          DataCell(SizedBox(width: 180, child: Text(fila.cliente))),
+          DataCell(SizedBox(
+            width: 155 * _escalaReporte,
+            child: Text(fila.cliente),
+          )),
+          DataCell(SizedBox(
+            width: 135 * _escalaReporte,
+            child: Text(fila.nombreComercial),
+          )),
           DataCell(Text(fila.fecha)),
           DataCell(Text(fila.numeroFactura)),
           DataCell(_selectorVendedor(fila)),
@@ -618,19 +786,20 @@ class _ReporteScreenState extends State<ReporteScreen> {
       );
 
   Widget _selectorVendedor(FilaVenta fila) => SizedBox(
-        width: 150,
+        width: 125 * _escalaReporte,
         child: DropdownButtonFormField<String>(
           initialValue: fila.vendedor.isEmpty ? null : fila.vendedor,
           isExpanded: true,
           hint: const Text('Escoger'),
           decoration: const InputDecoration(
             isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 10),
             border: OutlineInputBorder(),
           ),
           items: _vendedores.vendedores
-              .map((nombre) => DropdownMenuItem(
-                    value: nombre,
-                    child: Text(nombre, overflow: TextOverflow.ellipsis),
+              .map((item) => DropdownMenuItem(
+                    value: item.etiqueta,
+                    child: Text(item.etiqueta, overflow: TextOverflow.ellipsis),
                   ))
               .toList(),
           onChanged: (valor) => setState(() => fila.vendedor = valor ?? ''),
@@ -638,12 +807,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
       );
 
   Widget _entradaEntera(FilaVenta fila) => SizedBox(
-        width: 75,
+        width: 58 * _escalaReporte,
         child: TextFormField(
           initialValue: fila.esmalte == 0 ? '' : '${fila.esmalte}',
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(
             isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 7, vertical: 10),
             border: OutlineInputBorder(),
           ),
           onChanged: (texto) =>
@@ -663,6 +833,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
           initialValue: valor,
           decoration: const InputDecoration(
             isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 7, vertical: 10),
             border: OutlineInputBorder(),
           ),
           onChanged: enviar ? null : alCambiar,
@@ -673,8 +844,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
   Widget _botonAbono(FilaVenta fila, int indice) {
     final abono = fila.abonos[indice];
     return SizedBox(
-      width: 100,
+      width: 82 * _escalaReporte,
       child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          padding: EdgeInsets.symmetric(horizontal: 6 * _escalaReporte),
+          visualDensity: VisualDensity.compact,
+          textStyle: TextStyle(fontSize: 14 * _escalaReporte),
+        ),
         onPressed: () => _editarAbono(fila, indice),
         child: Text(
           abono.valor == 0 ? 'Añadir' : '\$${abono.valor.toStringAsFixed(2)}',
@@ -684,24 +860,32 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   Widget _abonosAdicionales(FilaVenta fila) => SizedBox(
-        width: 180,
-        child: Wrap(
-          spacing: 4,
-          runSpacing: 4,
-          children: [
-            for (var indice = 2; indice < fila.abonos.length; indice++)
-              OutlinedButton(
-                onPressed: () => _editarAbono(fila, indice),
-                child: Text(
-                  '${indice + 1}: \$${fila.abonos[indice].valor.toStringAsFixed(2)}',
+        width: 42 * _escalaReporte,
+        child: IconButton.filledTonal(
+          padding: EdgeInsets.zero,
+          visualDensity: VisualDensity.compact,
+          tooltip: fila.abonos.length > 2
+              ? 'Ver o añadir abonos (${fila.abonos.length - 2})'
+              : 'Añadir otro abono a esta fila',
+          onPressed: () => _gestionarAbonosAdicionales(fila),
+          icon: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(Icons.add, size: 20 * _escalaReporte),
+              if (fila.abonos.length > 2)
+                Positioned(
+                  right: -9,
+                  top: -9,
+                  child: CircleAvatar(
+                    radius: 8,
+                    child: Text(
+                      '${fila.abonos.length - 2}',
+                      style: const TextStyle(fontSize: 9),
+                    ),
+                  ),
                 ),
-              ),
-            IconButton.filledTonal(
-              tooltip: 'Añadir otro abono a esta fila',
-              onPressed: () => _agregarAbono(fila),
-              icon: const Icon(Icons.add),
-            ),
-          ],
+            ],
+          ),
         ),
       );
 

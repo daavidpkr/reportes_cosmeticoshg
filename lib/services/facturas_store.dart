@@ -18,6 +18,7 @@ class FacturasStore {
 
     final factura = Factura(
       cliente: _extraer(texto, 'razonSocialComprador') ?? 'CLIENTE GENERAL',
+      nombreComercial: _extraerNombreComercial(texto),
       fecha: _extraer(texto, 'fechaEmision') ?? '',
       secuencial: secuencial,
       total: _parsearMonto(_extraer(texto, 'importeTotal')),
@@ -26,6 +27,17 @@ class FacturasStore {
     _facturas[secuencial] = factura;
     if (referenciaSinCeros != null) _facturas[referenciaSinCeros] = factura;
     return true;
+  }
+
+  String _extraerNombreComercial(String texto) {
+    final direccion = _extraer(texto, 'direccionComprador');
+    if (direccion == null) return '';
+    final separador = direccion.indexOf('|');
+    if (separador == -1) return '';
+    return direccion
+        .substring(separador + 1)
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
   }
 
   String? _extraer(String texto, String etiqueta) {

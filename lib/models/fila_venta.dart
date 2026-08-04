@@ -10,6 +10,7 @@ class FilaVenta {
     required this.numero,
     this.referencia = '',
     this.cliente = '',
+    this.nombreComercial = '',
     this.fecha = '',
     this.numeroFactura = '',
     this.vendedor = '',
@@ -21,6 +22,7 @@ class FilaVenta {
   final int numero;
   String referencia;
   String cliente;
+  String nombreComercial;
   String fecha;
   String numeroFactura;
   String vendedor;
