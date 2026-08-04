@@ -9,7 +9,10 @@ import 'package:flutter/material.dart';
 import '../services/facturas_store.dart';
 
 class CargaFacturasScreen extends StatefulWidget {
-  const CargaFacturasScreen({super.key});
+  const CargaFacturasScreen({super.key, required this.mes, required this.anio});
+
+  final int mes;
+  final int anio;
 
   @override
   State<CargaFacturasScreen> createState() => _CargaFacturasScreenState();
@@ -62,6 +65,7 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
     });
     var procesados = 0;
     var rechazados = ignorados;
+    var otroMes = 0;
     try {
       for (final leer in contenidos) {
         try {
@@ -71,7 +75,14 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
             continue;
           }
           final contenido = utf8.decode(bytes, allowMalformed: true);
-          _store.agregarDesdeTexto(contenido) ? procesados++ : rechazados++;
+          switch (_store.agregarDesdeTexto(contenido)) {
+            case ResultadoFactura.agregada:
+              procesados++;
+            case ResultadoFactura.mesIncorrecto:
+              otroMes++;
+            case ResultadoFactura.invalida:
+              rechazados++;
+          }
         } catch (_) {
           rechazados++;
         }
@@ -80,9 +91,16 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
       if (mounted) setState(() => _cargando = false);
     }
     if (!mounted) return;
-    final detalle = rechazados == 0 ? '' : ' · $rechazados no válidos';
+    final errores = [
+      if (otroMes > 0) '$otroMes de otro mes',
+      if (rechazados > 0) '$rechazados no válidos',
+    ];
+    final detalle = errores.isEmpty ? '' : ' · ${errores.join(' · ')}';
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$procesados archivo(s) procesado(s)$detalle')),
+      SnackBar(
+        content: Text('$procesados archivo(s) procesado(s)$detalle'),
+        backgroundColor: otroMes > 0 ? Colors.orange.shade800 : null,
+      ),
     );
   }
 
@@ -117,13 +135,13 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
                   const Icon(Icons.cloud_upload, size: 80, color: Colors.pink),
                   const SizedBox(height: 20),
                   Text(
-                    'Sube facturas electrónicas en formato XML o HTML',
+                    'Facturas de ${widget.mes.toString().padLeft(2, '0')}/${widget.anio}',
                     style: Theme.of(context).textTheme.titleLarge,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Se extraerán el cliente, la fecha, el secuencial y el importe total.',
+                    'Solo se aceptarán facturas emitidas en este mes. Se guardarán los datos extraídos, no los archivos.',
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),

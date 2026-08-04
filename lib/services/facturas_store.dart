@@ -1,10 +1,14 @@
 import '../models/factura.dart';
 
+enum ResultadoFactura { agregada, invalida, mesIncorrecto }
+
 class FacturasStore {
   FacturasStore._();
 
   static final FacturasStore instance = FacturasStore._();
   final Map<String, Factura> _facturas = {};
+  int? mesPermitido;
+  int? anioPermitido;
 
   int get cantidad => _facturas.values.toSet().length;
 
@@ -12,21 +16,53 @@ class FacturasStore {
 
   void limpiar() => _facturas.clear();
 
-  bool agregarDesdeTexto(String texto) {
+  List<Factura> get facturas => _facturas.values.toSet().toList();
+
+  void cargar(Iterable<Factura> facturas) {
+    limpiar();
+    for (final factura in facturas) {
+      _registrar(factura);
+    }
+  }
+
+  ResultadoFactura agregarDesdeTexto(String texto) {
     final secuencial = _extraer(texto, 'secuencial');
-    if (secuencial == null || secuencial.isEmpty) return false;
+    if (secuencial == null || secuencial.isEmpty) {
+      return ResultadoFactura.invalida;
+    }
+
+    final fecha = _extraer(texto, 'fechaEmision') ?? '';
+    final partes =
+        RegExp(r'^(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})').firstMatch(fecha);
+    if (mesPermitido != null || anioPermitido != null) {
+      if (partes == null) return ResultadoFactura.invalida;
+      final primero = int.tryParse(partes.group(1)!);
+      final segundo = int.tryParse(partes.group(2)!);
+      final tercero = int.tryParse(partes.group(3)!);
+      final anio = partes.group(1)!.length == 4 ? primero : tercero;
+      final mes = segundo;
+      if ((mesPermitido != null && mes != mesPermitido) ||
+          (anioPermitido != null && anio != anioPermitido)) {
+        return ResultadoFactura.mesIncorrecto;
+      }
+    }
 
     final factura = Factura(
       cliente: _extraer(texto, 'razonSocialComprador') ?? 'CLIENTE GENERAL',
       nombreComercial: _extraerNombreComercial(texto),
-      fecha: _extraer(texto, 'fechaEmision') ?? '',
+      fecha: fecha,
       secuencial: secuencial,
       total: _parsearMonto(_extraer(texto, 'importeTotal')),
     );
+    _registrar(factura);
+    return ResultadoFactura.agregada;
+  }
+
+  void _registrar(Factura factura) {
+    final secuencial = factura.secuencial;
     final referenciaSinCeros = int.tryParse(secuencial)?.toString();
     _facturas[secuencial] = factura;
     if (referenciaSinCeros != null) _facturas[referenciaSinCeros] = factura;
-    return true;
   }
 
   String _extraerNombreComercial(String texto) {

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../models/fila_venta.dart';
 import '../services/facturas_store.dart';
 import '../services/reporte_exporter.dart';
+import '../services/reportes_store.dart';
 import '../services/vendedores_store.dart';
 import 'carga_facturas_screen.dart';
 
@@ -19,20 +20,26 @@ class _ReporteScreenState extends State<ReporteScreen> {
   final _facturas = FacturasStore.instance;
   final _exporter = ReporteExporter();
   final _vendedores = VendedoresStore();
+  final _reportes = ReportesStore();
   final _focusZoom = FocusNode();
   late List<FilaVenta> _filas;
   String _filtro = '';
   String _filtroVendedor = '';
   String _filtroEstado = 'todos';
+  final Map<String, String> _filtrosColumnas = {};
+  String? _ordenColumna;
+  bool _ordenAscendente = true;
   double _zoom = 1;
 
-  double get _escalaReporte => _zoom * 1.1;
+  // La antigua vista al 90% es ahora la escala base (100%).
+  double get _escalaReporte => _zoom * .99;
 
   @override
   void initState() {
     super.initState();
     _crearFilas();
     _cargarVendedores();
+    _cargarReportes();
   }
 
   @override
@@ -78,6 +85,124 @@ class _ReporteScreenState extends State<ReporteScreen> {
     if (mounted) setState(() {});
   }
 
+  Future<void> _cargarReportes() async {
+    await _reportes.cargar();
+    _activarReporte(_reportes.activo, guardar: false);
+  }
+
+  void _activarReporte(ReporteMensual reporte, {bool guardar = true}) {
+    _reportes.activo = reporte;
+    _filas = reporte.filas;
+    _facturas
+      ..mesPermitido = reporte.mes
+      ..anioPermitido = reporte.anio
+      ..cargar(reporte.facturas);
+    _filtrosColumnas.clear();
+    _ordenColumna = null;
+    if (mounted) setState(() {});
+    if (guardar) _guardarProgreso();
+  }
+
+  Future<void> _guardarProgreso() async {
+    if (_reportes.reportes.isEmpty) return;
+    _reportes.activo.filas = _filas;
+    _reportes.activo.facturas = _facturas.facturas;
+    await _reportes.guardar();
+  }
+
+  Future<void> _nuevoReporte() async {
+    final siguiente = DateTime(_reportes.activo.anio, _reportes.activo.mes + 1);
+    var mes = siguiente.month;
+    final anioController = TextEditingController(text: '${siguiente.year}');
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, actualizar) => AlertDialog(
+          title: const Text('Crear nuevo reporte'),
+          content: SizedBox(
+            width: 340,
+            child: Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    initialValue: mes,
+                    decoration: const InputDecoration(
+                      labelText: 'Mes',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: List.generate(
+                      12,
+                      (i) => DropdownMenuItem(
+                        value: i + 1,
+                        child: Text(_nombreMes(i + 1)),
+                      ),
+                    ),
+                    onChanged: (valor) => actualizar(() => mes = valor ?? mes),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 110,
+                  child: TextField(
+                    controller: anioController,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    decoration: const InputDecoration(
+                      labelText: 'Año',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Crear'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final anio = int.tryParse(anioController.text);
+    anioController.dispose();
+    if (confirmar != true || !mounted) return;
+    if (anio == null || anio < 2020 || anio > 2100) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ingresa un año entre 2020 y 2100.')),
+      );
+      return;
+    }
+    if (!_reportes.crear(anio, mes)) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content:
+            Text('Ese reporte mensual ya existe. Selecciónalo en la lista.'),
+      ));
+      return;
+    }
+    _activarReporte(_reportes.activo);
+  }
+
+  String _nombreMes(int mes) => const [
+        'Enero',
+        'Febrero',
+        'Marzo',
+        'Abril',
+        'Mayo',
+        'Junio',
+        'Julio',
+        'Agosto',
+        'Septiembre',
+        'Octubre',
+        'Noviembre',
+        'Diciembre',
+      ][mes - 1];
+
   void _crearFilas() {
     _filas = List.generate(15, (indice) => FilaVenta(numero: indice + 1));
   }
@@ -113,6 +238,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       fila.venta = factura?.total ?? 0;
       _asegurarFilaVacia();
     });
+    _guardarProgreso();
   }
 
   void _asegurarFilaVacia() {
@@ -191,6 +317,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         abono.comentario = resultado.$2;
       }
     });
+    _guardarProgreso();
   }
 
   Future<void> _agregarAbono(FilaVenta fila) async {
@@ -407,7 +534,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
       return;
     }
     try {
-      final ruta = await _exporter.guardar(_filas, vendedor: opcion.vendedor);
+      final ruta = await _exporter.guardar(
+        _filas,
+        vendedor: opcion.vendedor,
+        nombresVendedores: {
+          for (final vendedor in _vendedores.vendedores)
+            vendedor.etiqueta: vendedor.nombre,
+        },
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('PDF guardado en: $ruta')),
@@ -524,12 +658,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   Future<void> _reiniciar() async {
+    final nombre = _reportes.activo.nombre;
     final confirmado = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Eliminar reporte'),
-        content: const Text(
-          '¿Deseas vaciar el reporte y eliminar las facturas cargadas?',
+        content: Text(
+          '¿Deseas eliminar completamente el reporte de $nombre? Esta acción también elimina ese mes y sus datos guardados.',
         ),
         actions: [
           TextButton(
@@ -545,18 +680,20 @@ class _ReporteScreenState extends State<ReporteScreen> {
       ),
     );
     if (confirmado != true || !mounted) return;
-    setState(() {
-      _facturas.limpiar();
-      _filtro = '';
-      _filtroVendedor = '';
-      _filtroEstado = 'todos';
-      _crearFilas();
-    });
+    _reportes.eliminarActivo();
+    _filtro = '';
+    _filtroVendedor = '';
+    _filtroEstado = 'todos';
+    _activarReporte(_reportes.activo);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Se eliminó el reporte de $nombre.')),
+    );
   }
 
-  Iterable<MapEntry<int, FilaVenta>> get _filasVisibles {
+  List<MapEntry<int, FilaVenta>> get _filasVisibles {
     final texto = _filtro.toLowerCase();
-    return _filas.asMap().entries.where((item) {
+    final resultado = _filas.asMap().entries.where((item) {
       if (texto.isEmpty) return true;
       return item.value.numeroFactura.toLowerCase().contains(texto) ||
           item.value.cliente.toLowerCase().contains(texto) ||
@@ -572,8 +709,155 @@ class _ReporteScreenState extends State<ReporteScreen> {
         'pendientes' => item.value.tieneDatos && !item.value.pagada,
         _ => true,
       };
+    }).where((item) {
+      return _filtrosColumnas.entries.every((filtro) => _valorTexto(
+            item.value,
+            filtro.key,
+          ).toLowerCase().contains(filtro.value.toLowerCase()));
+    }).toList();
+    final columna = _ordenColumna;
+    if (columna != null) {
+      resultado.sort((a, b) {
+        if (!a.value.tieneDatos && b.value.tieneDatos) return 1;
+        if (a.value.tieneDatos && !b.value.tieneDatos) return -1;
+        final izquierda = _valorOrden(a.value, columna);
+        final derecha = _valorOrden(b.value, columna);
+        final comparacion = izquierda is num && derecha is num
+            ? izquierda.compareTo(derecha)
+            : izquierda.toString().toLowerCase().compareTo(
+                  derecha.toString().toLowerCase(),
+                );
+        return _ordenAscendente ? comparacion : -comparacion;
+      });
+    }
+    return resultado;
+  }
+
+  String _valorTexto(FilaVenta fila, String columna) => switch (columna) {
+        'nro' => '${fila.numero}',
+        'referencia' => fila.referencia,
+        'cliente' => fila.cliente,
+        'nombre' => fila.nombreComercial,
+        'fecha' => fila.fecha,
+        'factura' => fila.numeroFactura,
+        'vendedor' => fila.vendedor,
+        'esmalte' => '${fila.esmalte}',
+        'venta' => fila.venta.toStringAsFixed(2),
+        'abono1' => fila.abonos[0].valor.toStringAsFixed(2),
+        'abono2' => fila.abonos[1].valor.toStringAsFixed(2),
+        'totalAbono' => fila.totalAbonos.toStringAsFixed(2),
+        'saldo' => fila.saldo.toStringAsFixed(2),
+        _ => '',
+      };
+
+  Object _valorOrden(FilaVenta fila, String columna) => switch (columna) {
+        'nro' => fila.numero,
+        'referencia' => int.tryParse(fila.referencia) ?? fila.referencia,
+        'factura' => int.tryParse(fila.numeroFactura) ?? fila.numeroFactura,
+        'fecha' => _fechaParaOrdenar(fila.fecha),
+        'esmalte' => fila.esmalte,
+        'venta' => fila.venta,
+        'abono1' => fila.abonos[0].valor,
+        'abono2' => fila.abonos[1].valor,
+        'totalAbono' => fila.totalAbonos,
+        'saldo' => fila.saldo,
+        _ => _valorTexto(fila, columna),
+      };
+
+  Object _fechaParaOrdenar(String fecha) {
+    final partes = RegExp(r'^(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})')
+        .firstMatch(fecha.trim());
+    if (partes == null) return fecha;
+    final primera = int.tryParse(partes.group(1)!) ?? 0;
+    final mes = int.tryParse(partes.group(2)!) ?? 0;
+    final tercera = int.tryParse(partes.group(3)!) ?? 0;
+    final anio = partes.group(1)!.length == 4 ? primera : tercera;
+    final dia = partes.group(1)!.length == 4 ? tercera : primera;
+    return anio * 10000 + mes * 100 + dia;
+  }
+
+  Future<void> _filtrarColumna(String columna, String titulo) async {
+    final controller = TextEditingController(text: _filtrosColumnas[columna]);
+    final valor = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Filtrar $titulo'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Valor que debe contener',
+            prefixIcon: Icon(Icons.filter_alt),
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (texto) => Navigator.pop(context, texto),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, ''),
+            child: const Text('Quitar filtro'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Aplicar'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (valor == null || !mounted) return;
+    setState(() {
+      if (valor.isEmpty) {
+        _filtrosColumnas.remove(columna);
+      } else {
+        _filtrosColumnas[columna] = valor;
+      }
     });
   }
+
+  Widget _encabezado(String titulo, String columna) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(titulo),
+          PopupMenuButton<String>(
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
+            tooltip: 'Ordenar o filtrar $titulo',
+            icon: Icon(
+              _filtrosColumnas.containsKey(columna)
+                  ? Icons.filter_alt
+                  : Icons.arrow_drop_down,
+              color: Colors.white,
+              size: 20,
+            ),
+            onSelected: (accion) {
+              if (accion == 'asc' || accion == 'desc') {
+                setState(() {
+                  _ordenColumna = columna;
+                  _ordenAscendente = accion == 'asc';
+                });
+              } else if (accion == 'filter') {
+                _filtrarColumna(columna, titulo);
+              } else {
+                setState(() => _filtrosColumnas.remove(columna));
+              }
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                  value: 'asc', child: Text('Orden ascendente')),
+              const PopupMenuItem(
+                  value: 'desc', child: Text('Orden descendente')),
+              const PopupMenuDivider(),
+              const PopupMenuItem(value: 'filter', child: Text('Filtrar…')),
+              if (_filtrosColumnas.containsKey(columna))
+                const PopupMenuItem(
+                    value: 'clear', child: Text('Quitar filtro')),
+            ],
+          ),
+        ],
+      );
+
+  Widget _encabezadoSinFiltro(String titulo) => Text(titulo);
 
   List<FilaVenta> get _filasParaTotales =>
       _filasVisibles.map((item) => item.value).toList();
@@ -592,6 +876,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
     }
     if (_filtroEstado == 'pagados') partes.add('Pagados al 100%');
     if (_filtroEstado == 'pendientes') partes.add('Pendientes');
+    if (_filtrosColumnas.isNotEmpty) {
+      partes.add('${_filtrosColumnas.length} filtro(s) de columna');
+    }
     return partes.join(' · ');
   }
 
@@ -618,7 +905,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 _barraAcciones(),
                 if (_filtro.isNotEmpty ||
                     _filtroVendedor.isNotEmpty ||
-                    _filtroEstado != 'todos')
+                    _filtroEstado != 'todos' ||
+                    _filtrosColumnas.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
                     child: Chip(
@@ -627,6 +915,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                         _filtro = '';
                         _filtroVendedor = '';
                         _filtroEstado = 'todos';
+                        _filtrosColumnas.clear();
                       }),
                     ),
                   ),
@@ -649,15 +938,51 @@ class _ReporteScreenState extends State<ReporteScreen> {
             spacing: 10,
             runSpacing: 10,
             children: [
+              SizedBox(
+                width: 190,
+                child: DropdownButtonFormField<String>(
+                  initialValue:
+                      _reportes.reportes.isEmpty ? null : _reportes.activo.id,
+                  decoration: const InputDecoration(
+                    labelText: 'Reporte mensual',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: _reportes.reportes
+                      .map((reporte) => DropdownMenuItem(
+                            value: reporte.id,
+                            child: Text(reporte.nombre),
+                          ))
+                      .toList(),
+                  onChanged: (id) async {
+                    if (id == null) return;
+                    await _guardarProgreso();
+                    _activarReporte(
+                      _reportes.reportes.firstWhere((e) => e.id == id),
+                    );
+                  },
+                ),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: _reportes.reportes.isEmpty ? null : _nuevoReporte,
+                icon: const Icon(Icons.calendar_month),
+                label: const Text('Nuevo mes'),
+              ),
               FilledButton.tonalIcon(
                 onPressed: () async {
                   await Navigator.push<void>(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const CargaFacturasScreen(),
+                      builder: (_) => CargaFacturasScreen(
+                        mes: _reportes.activo.mes,
+                        anio: _reportes.activo.anio,
+                      ),
                     ),
                   );
-                  if (mounted) setState(() {});
+                  if (mounted) {
+                    setState(() {});
+                    await _guardarProgreso();
+                  }
                 },
                 icon: const Icon(Icons.upload_file),
                 label: Text('Subir facturas (${_facturas.cantidad})'),
@@ -708,7 +1033,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       );
 
   Widget _tabla() => Padding(
-        padding: const EdgeInsets.only(left: 43),
+        padding: const EdgeInsets.only(left: 27),
         child: Scrollbar(
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -726,21 +1051,21 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   fontSize: 14 * _escalaReporte,
                 ),
                 dataTextStyle: TextStyle(fontSize: 15 * _escalaReporte),
-                columns: const [
-                  DataColumn(label: Text('NRO')),
-                  DataColumn(label: Text('REF. (FACT)')),
-                  DataColumn(label: Text('CLIENTE')),
-                  DataColumn(label: Text('NOMBRE COMERCIAL')),
-                  DataColumn(label: Text('FECHA')),
-                  DataColumn(label: Text('NRO. FACT.')),
-                  DataColumn(label: Text('VENDEDOR')),
-                  DataColumn(label: Text('ESMALTE')),
-                  DataColumn(label: Text('VENTA')),
-                  DataColumn(label: Text('ABONO 1')),
-                  DataColumn(label: Text('ABONO 2')),
-                  DataColumn(label: SizedBox.shrink()),
-                  DataColumn(label: Text('TOT. ABONO')),
-                  DataColumn(label: Text('SALDO')),
+                columns: [
+                  DataColumn(label: _encabezadoSinFiltro('NRO')),
+                  DataColumn(label: _encabezadoSinFiltro('REF. (FACT)')),
+                  DataColumn(label: _encabezado('CLIENTE', 'cliente')),
+                  DataColumn(label: _encabezado('NOMBRE COMERCIAL', 'nombre')),
+                  DataColumn(label: _encabezado('FECHA', 'fecha')),
+                  DataColumn(label: _encabezado('NRO. FACT.', 'factura')),
+                  DataColumn(label: _encabezado('VENDEDOR', 'vendedor')),
+                  DataColumn(label: _encabezadoSinFiltro('ESMALTE')),
+                  DataColumn(label: _encabezado('VENTA', 'venta')),
+                  DataColumn(label: _encabezadoSinFiltro('ABONO 1')),
+                  DataColumn(label: _encabezadoSinFiltro('ABONO 2')),
+                  const DataColumn(label: SizedBox.shrink()),
+                  DataColumn(label: _encabezadoSinFiltro('TOT. ABONO')),
+                  DataColumn(label: _encabezado('SALDO', 'saldo')),
                 ],
                 rows: _filasVisibles
                     .map((item) => _crearFila(item.key, item.value))
@@ -757,7 +1082,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ? WidgetStatePropertyAll(Colors.green.withValues(alpha: 0.12))
             : null,
         cells: [
-          DataCell(Text('${fila.numero}')),
+          DataCell(SizedBox(
+            width: 28 * _escalaReporte,
+            child: Text('${fila.numero}'),
+          )),
           DataCell(_entrada(
             fila.referencia,
             72 * _escalaReporte,
@@ -789,7 +1117,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       );
 
   Widget _selectorVendedor(FilaVenta fila) => SizedBox(
-        width: 125 * _escalaReporte,
+        width: 82 * _escalaReporte,
         child: DropdownButtonFormField<String>(
           initialValue: fila.vendedor.isEmpty ? null : fila.vendedor,
           isExpanded: true,
@@ -805,7 +1133,19 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     child: Text(item.etiqueta, overflow: TextOverflow.ellipsis),
                   ))
               .toList(),
-          onChanged: (valor) => setState(() => fila.vendedor = valor ?? ''),
+          selectedItemBuilder: (_) => _vendedores.vendedores
+              .map((item) => Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      item.codigo.isEmpty ? item.nombre : item.codigo,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ))
+              .toList(),
+          onChanged: (valor) {
+            setState(() => fila.vendedor = valor ?? '');
+            _guardarProgreso();
+          },
         ),
       );
 
@@ -819,8 +1159,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
             contentPadding: EdgeInsets.symmetric(horizontal: 7, vertical: 10),
             border: OutlineInputBorder(),
           ),
-          onChanged: (texto) =>
-              setState(() => fila.esmalte = int.tryParse(texto) ?? 0),
+          onChanged: (texto) {
+            setState(() => fila.esmalte = int.tryParse(texto) ?? 0);
+            _guardarProgreso();
+          },
         ),
       );
 

@@ -10,7 +10,11 @@ import 'web_download_stub.dart'
     if (dart.library.js_interop) 'web_download.dart';
 
 class ReporteExporter {
-  Future<String> guardar(List<FilaVenta> filas, {String? vendedor}) async {
+  Future<String> guardar(
+    List<FilaVenta> filas, {
+    String? vendedor,
+    Map<String, String> nombresVendedores = const {},
+  }) async {
     final seleccionadas = vendedor == null
         ? filas
         : filas.where((fila) => fila.vendedor == vendedor).toList();
@@ -18,7 +22,11 @@ class ReporteExporter {
         ? 'general'
         : vendedor.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
     final nombreArchivo = 'reporte_ventas_$sufijo.pdf';
-    final bytes = await _generarPdf(seleccionadas, vendedor: vendedor);
+    final bytes = await _generarPdf(
+      seleccionadas,
+      vendedor: vendedor,
+      nombresVendedores: nombresVendedores,
+    );
 
     if (kIsWeb) {
       descargarArchivoWeb(bytes, nombreArchivo);
@@ -36,6 +44,7 @@ class ReporteExporter {
   Future<Uint8List> _generarPdf(
     List<FilaVenta> filas, {
     String? vendedor,
+    Map<String, String> nombresVendedores = const {},
   }) async {
     final documento = pw.Document(
       title: 'Reporte de ventas - Cosméticos HG',
@@ -52,7 +61,7 @@ class ReporteExporter {
         header: (_) => _encabezado(
           vendedor == null
               ? 'REPORTE GENERAL DE VENTAS'
-              : 'REPORTE DE VENTAS - $vendedor',
+              : 'REPORTE DE VENTAS - ${nombresVendedores[vendedor] ?? vendedor}',
           rosa,
         ),
         footer: _piePagina,
@@ -80,7 +89,7 @@ class ReporteExporter {
                       fila.nombreComercial,
                       fila.fecha,
                       fila.numeroFactura,
-                      fila.vendedor,
+                      nombresVendedores[fila.vendedor] ?? fila.vendedor,
                       fila.esmalte,
                       _dinero(fila.venta),
                       fila.abonos
