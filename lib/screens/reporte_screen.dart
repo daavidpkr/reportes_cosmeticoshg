@@ -71,11 +71,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
     try {
       final ruta = await _exporter.guardar(_filas);
       if (!mounted) return;
-      final mensaje = ruta == null
-          ? 'Se canceló el guardado'
-          : 'Reporte guardado en: $ruta';
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(mensaje)));
+          .showSnackBar(SnackBar(content: Text('PDF guardado en: $ruta')));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -211,7 +208,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
             FilledButton.icon(
               onPressed: _guardar,
               icon: const Icon(Icons.download),
-              label: const Text('Descargar reporte'),
+              label: const Text('Descargar PDF'),
             ),
             FilledButton.icon(
               onPressed: _reiniciar,

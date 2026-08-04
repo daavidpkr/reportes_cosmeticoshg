@@ -13,6 +13,7 @@ dependencies:
   path_provider: ^2.1.2
   desktop_drop: ^0.7.1
   web: ^1.1.1
+  pdf: ^3.12.0
 
 dev_dependencies:
   flutter_test:

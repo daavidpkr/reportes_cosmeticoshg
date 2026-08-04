@@ -7,6 +7,6 @@ void main() {
 
     expect(find.text('COSMÉTICOS HG - REPORTE DE VENTAS'), findsOneWidget);
     expect(find.textContaining('Subir facturas'), findsOneWidget);
-    expect(find.text('Descargar reporte'), findsOneWidget);
+    expect(find.text('Descargar PDF'), findsOneWidget);
   });
 }
