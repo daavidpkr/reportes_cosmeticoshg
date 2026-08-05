@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Credenciales locales de Supabase (no subir al repositorio)
+.env
+.env.*
+!.env.example
