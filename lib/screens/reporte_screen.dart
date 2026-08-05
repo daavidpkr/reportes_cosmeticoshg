@@ -841,26 +841,52 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   Future<void> _reiniciar() async {
     final nombre = _reportes.activo.nombre;
+    final confirmacionController = TextEditingController();
     final confirmado = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Eliminar reporte'),
-        content: Text(
-          '¿Deseas eliminar completamente el reporte de $nombre? Esta acción también elimina ese mes y sus datos guardados.',
+      builder: (context) => StatefulBuilder(
+        builder: (context, actualizar) => AlertDialog(
+          title: const Text('Eliminar reporte'),
+          content: SizedBox(
+            width: 430,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Text(
+                'Esta acción eliminará completamente el reporte de $nombre y todos sus datos guardados.',
+              ),
+              const SizedBox(height: 18),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text('Para confirmar, escribe “$nombre”:'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: confirmacionController,
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: nombre,
+                  prefixIcon: const Icon(Icons.warning_amber_rounded),
+                ),
+                onChanged: (_) => actualizar(() {}),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: confirmacionController.text.trim() == nombre
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              child: const Text('Eliminar definitivamente'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancelar'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Sí, eliminar'),
-          ),
-        ],
       ),
     );
+    confirmacionController.dispose();
     if (confirmado != true || !mounted) return;
     _reportes.eliminarActivo();
     _filtro = '';
@@ -1497,23 +1523,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: const Color(0xFFEAE3EA))),
         clipBehavior: Clip.antiAlias,
-        child: Column(children: [
-          Expanded(child: _vistaGeneral ? _tablaGeneral() : _tabla()),
-          if (!_vistaGeneral)
-            Container(
-              width: double.infinity,
-              alignment: Alignment.centerRight,
-              padding: const EdgeInsets.all(14),
-              decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: Color(0xFFEAE3EA)))),
-              child: FilledButton.icon(
-                  onPressed: _reiniciar,
-                  style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFA8425A)),
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Eliminar reporte')),
-            ),
-        ]),
+        child: _vistaGeneral ? _tablaGeneral() : _tabla(),
       );
 
   // Conservada como referencia del flujo compacto anterior.
@@ -1699,40 +1709,58 @@ class _ReporteScreenState extends State<ReporteScreen> {
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SingleChildScrollView(
-              child: DataTable(
-                horizontalMargin: 7 * _escalaReporte,
-                columnSpacing: 13 * _escalaReporte,
-                dataRowMinHeight: 38 * _escalaReporte,
-                dataRowMaxHeight: 58 * _escalaReporte,
-                headingRowHeight: 46 * _escalaReporte,
-                headingRowColor:
-                    const WidgetStatePropertyAll(Color(0xFFF5F3F6)),
-                headingTextStyle: TextStyle(
-                  color: const Color(0xFF8A7C89),
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: .7,
-                  fontSize: 11 * _escalaReporte,
-                ),
-                dataTextStyle: TextStyle(fontSize: 15 * _escalaReporte),
-                columns: [
-                  DataColumn(label: _encabezadoSinFiltro('NRO')),
-                  DataColumn(label: _encabezadoSinFiltro('REF. (FACT)')),
-                  DataColumn(label: _encabezado('CLIENTE', 'cliente')),
-                  DataColumn(label: _encabezado('NOMBRE COMERCIAL', 'nombre')),
-                  DataColumn(label: _encabezado('FECHA', 'fecha')),
-                  DataColumn(label: _encabezado('NRO. FACT.', 'factura')),
-                  DataColumn(label: _encabezado('VENDEDOR', 'vendedor')),
-                  DataColumn(label: _encabezadoSinFiltro('ESMALTE')),
-                  DataColumn(label: _encabezado('VENTA', 'venta')),
-                  DataColumn(label: _encabezadoSinFiltro('ABONO 1')),
-                  DataColumn(label: _encabezadoSinFiltro('ABONO 2')),
-                  const DataColumn(label: SizedBox.shrink()),
-                  DataColumn(label: _encabezadoSinFiltro('TOT. ABONO')),
-                  DataColumn(label: _encabezado('SALDO', 'saldo')),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  DataTable(
+                    horizontalMargin: 7 * _escalaReporte,
+                    columnSpacing: 13 * _escalaReporte,
+                    dataRowMinHeight: 38 * _escalaReporte,
+                    dataRowMaxHeight: 58 * _escalaReporte,
+                    headingRowHeight: 46 * _escalaReporte,
+                    headingRowColor:
+                        const WidgetStatePropertyAll(Color(0xFFF5F3F6)),
+                    headingTextStyle: TextStyle(
+                      color: const Color(0xFF8A7C89),
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: .7,
+                      fontSize: 11 * _escalaReporte,
+                    ),
+                    dataTextStyle: TextStyle(fontSize: 15 * _escalaReporte),
+                    columns: [
+                      DataColumn(label: _encabezadoSinFiltro('NRO')),
+                      DataColumn(label: _encabezadoSinFiltro('REF. (FACT)')),
+                      DataColumn(label: _encabezado('CLIENTE', 'cliente')),
+                      DataColumn(
+                          label: _encabezado('NOMBRE COMERCIAL', 'nombre')),
+                      DataColumn(label: _encabezado('FECHA', 'fecha')),
+                      DataColumn(label: _encabezado('NRO. FACT.', 'factura')),
+                      DataColumn(label: _encabezado('VENDEDOR', 'vendedor')),
+                      DataColumn(label: _encabezadoSinFiltro('ESMALTE')),
+                      DataColumn(label: _encabezado('VENTA', 'venta')),
+                      DataColumn(label: _encabezadoSinFiltro('ABONO 1')),
+                      DataColumn(label: _encabezadoSinFiltro('ABONO 2')),
+                      const DataColumn(label: SizedBox.shrink()),
+                      DataColumn(label: _encabezadoSinFiltro('TOT. ABONO')),
+                      DataColumn(label: _encabezado('SALDO', 'saldo')),
+                    ],
+                    rows: _filasVisibles
+                        .map((item) => _crearFila(item.key, item.value))
+                        .toList(),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    child: FilledButton.icon(
+                      onPressed: _reiniciar,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFA8425A),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Eliminar reporte'),
+                    ),
+                  ),
                 ],
-                rows: _filasVisibles
-                    .map((item) => _crearFila(item.key, item.value))
-                    .toList(),
               ),
             ),
           ),
