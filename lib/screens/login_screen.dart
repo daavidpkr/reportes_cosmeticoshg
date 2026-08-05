@@ -1,41 +1,70 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+typedef AutenticarUsuario = Future<void> Function(
+  String correo,
+  String contrasena,
+);
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({required this.onInicioExitoso, super.key});
+  const LoginScreen({this.autenticar, super.key});
 
-  final ValueChanged<bool> onInicioExitoso;
+  /// Permite sustituir Supabase Auth durante las pruebas automatizadas.
+  final AutenticarUsuario? autenticar;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  static const _usuarioValido = 'admin';
-  static const _contrasenaValida = 'HG2026';
   final _formKey = GlobalKey<FormState>();
-  final _usuarioController = TextEditingController();
+  final _correoController = TextEditingController();
   final _contrasenaController = TextEditingController();
   bool _ocultarContrasena = true;
-  bool _mantenerSesion = false;
+  bool _iniciandoSesion = false;
   String? _errorAcceso;
 
   @override
   void dispose() {
-    _usuarioController.dispose();
+    _correoController.dispose();
     _contrasenaController.dispose();
     super.dispose();
   }
 
-  void _iniciarSesion() {
+  Future<void> _iniciarSesion() async {
     FocusScope.of(context).unfocus();
     setState(() => _errorAcceso = null);
     if (!_formKey.currentState!.validate()) return;
-    if (_usuarioController.text.trim() == _usuarioValido &&
-        _contrasenaController.text == _contrasenaValida) {
-      widget.onInicioExitoso(_mantenerSesion);
-      return;
+
+    setState(() => _iniciandoSesion = true);
+    try {
+      final correo = _correoController.text.trim();
+      final contrasena = _contrasenaController.text;
+      if (widget.autenticar != null) {
+        await widget.autenticar!(correo, contrasena);
+      } else {
+        await Supabase.instance.client.auth.signInWithPassword(
+          email: correo,
+          password: contrasena,
+        );
+      }
+    } on AuthException catch (error) {
+      if (mounted) setState(() => _errorAcceso = _mensajeAuth(error));
+    } catch (_) {
+      if (mounted) {
+        setState(() => _errorAcceso =
+            'No se pudo conectar. Revisa tu conexión e inténtalo nuevamente.');
+      }
+    } finally {
+      if (mounted) setState(() => _iniciandoSesion = false);
     }
-    setState(() => _errorAcceso = 'Usuario o contraseña incorrectos.');
+  }
+
+  String _mensajeAuth(AuthException error) {
+    if (error.statusCode == '400' || error.statusCode == '401') {
+      return 'Correo o contraseña incorrectos.';
+    }
+    return error.message;
   }
 
   @override
@@ -60,35 +89,48 @@ class _LoginScreenState extends State<LoginScreen> {
                       CircleAvatar(
                         radius: 36,
                         backgroundColor: colores.primaryContainer,
-                        child: Icon(Icons.lock_outline,
-                            size: 38, color: colores.onPrimaryContainer),
+                        child: Icon(
+                          Icons.lock_outline,
+                          size: 38,
+                          color: colores.onPrimaryContainer,
+                        ),
                       ),
                       const SizedBox(height: 20),
-                      Text('COSMÉTICOS HG',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.bold)),
+                      Text(
+                        'COSMÉTICOS HG',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(height: 6),
-                      Text('Inicia sesión para acceder a los reportes',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: colores.onSurfaceVariant)),
+                      Text(
+                        'Inicia sesión para acceder a los reportes',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: colores.onSurfaceVariant),
+                      ),
                       const SizedBox(height: 28),
                       TextFormField(
                         key: const Key('campoUsuario'),
-                        controller: _usuarioController,
+                        controller: _correoController,
                         autofocus: true,
+                        keyboardType: TextInputType.emailAddress,
                         textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.username],
+                        autofillHints: const [AutofillHints.email],
                         decoration: const InputDecoration(
-                          labelText: 'Usuario',
-                          prefixIcon: Icon(Icons.person_outline),
+                          labelText: 'Correo electrónico',
+                          prefixIcon: Icon(Icons.email_outlined),
                           border: OutlineInputBorder(),
                         ),
-                        validator: (valor) =>
-                            valor == null || valor.trim().isEmpty
-                                ? 'Ingresa tu usuario.'
-                                : null,
+                        validator: (valor) {
+                          if (valor == null || valor.trim().isEmpty) {
+                            return 'Ingresa tu correo electrónico.';
+                          }
+                          if (!valor.contains('@')) {
+                            return 'Ingresa un correo válido.';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 16),
                       TextFormField(
@@ -117,25 +159,15 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? 'Ingresa tu contraseña.'
                             : null,
                       ),
-                      CheckboxListTile(
-                        key: const Key('mantenerSesion'),
-                        value: _mantenerSesion,
-                        onChanged: (valor) =>
-                            setState(() => _mantenerSesion = valor ?? false),
-                        title: const Text('Mantener la sesión iniciada'),
-                        subtitle: const Text(
-                          'Se cerrará después de 15 días sin entrar.',
-                        ),
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                      ),
                       if (_errorAcceso != null) ...[
                         const SizedBox(height: 14),
                         Semantics(
                           liveRegion: true,
-                          child: Text(_errorAcceso!,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(color: colores.error)),
+                          child: Text(
+                            _errorAcceso!,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: colores.error),
+                          ),
                         ),
                       ],
                       const SizedBox(height: 24),
@@ -144,9 +176,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         height: 48,
                         child: FilledButton.icon(
                           key: const Key('botonIniciarSesion'),
-                          onPressed: _iniciarSesion,
-                          icon: const Icon(Icons.login),
-                          label: const Text('Iniciar sesión'),
+                          onPressed: _iniciandoSesion ? null : _iniciarSesion,
+                          icon: _iniciandoSesion
+                              ? const SizedBox.square(
+                                  dimension: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.login),
+                          label: Text(_iniciandoSesion
+                              ? 'Iniciando…'
+                              : 'Iniciar sesión'),
                         ),
                       ),
                     ],
