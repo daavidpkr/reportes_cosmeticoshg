@@ -10,7 +10,9 @@ import '../services/vendedores_store.dart';
 import 'carga_facturas_screen.dart';
 
 class ReporteScreen extends StatefulWidget {
-  const ReporteScreen({super.key});
+  const ReporteScreen({this.onCerrarSesion, super.key});
+
+  final VoidCallback? onCerrarSesion;
 
   @override
   State<ReporteScreen> createState() => _ReporteScreenState();
@@ -987,6 +989,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
           style: TextStyle(fontSize: 16),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            tooltip: 'Cerrar sesión',
+            onPressed: widget.onCerrarSesion,
+            icon: const Icon(Icons.logout),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Focus(
         focusNode: _focusZoom,
@@ -1023,6 +1033,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
               SizedBox(
                 width: 190,
                 child: DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue:
                       _reportes.reportes.isEmpty ? null : _reportes.activo.id,
                   decoration: const InputDecoration(
