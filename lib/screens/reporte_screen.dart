@@ -873,6 +873,108 @@ class _ReporteScreenState extends State<ReporteScreen> {
     );
   }
 
+  Future<void> _eliminarReporteCliente() async {
+    final candidatas = _filas.where((fila) => fila.tieneDatos).toList();
+    if (candidatas.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('No hay reportes de clientes para eliminar.')),
+      );
+      return;
+    }
+
+    var seleccionada = candidatas.first;
+    final elegir = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, actualizar) => AlertDialog(
+          title: const Text('Eliminar reporte de un cliente'),
+          content: SizedBox(
+            width: 440,
+            child: DropdownButtonFormField<int>(
+              initialValue: seleccionada.numero,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Selecciona el cliente',
+                border: OutlineInputBorder(),
+              ),
+              items: candidatas
+                  .map((fila) => DropdownMenuItem(
+                        value: fila.numero,
+                        child: Text(
+                          '${fila.cliente.isEmpty ? "Sin nombre" : fila.cliente} · Factura ${fila.numeroFactura.isEmpty ? fila.referencia : fila.numeroFactura}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ))
+                  .toList(),
+              onChanged: (numero) {
+                if (numero == null) return;
+                actualizar(() {
+                  seleccionada = candidatas.firstWhere(
+                    (fila) => fila.numero == numero,
+                  );
+                });
+              },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Continuar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (elegir != true || !mounted) return;
+
+    final cliente = seleccionada.cliente.isEmpty
+        ? 'la factura ${seleccionada.numeroFactura}'
+        : seleccionada.cliente;
+    final confirmar = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar eliminación'),
+        content: Text(
+          '¿Deseas eliminar del reporte de ${_reportes.activo.nombre} el registro de $cliente?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sí, eliminar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmar != true || !mounted) return;
+
+    try {
+      await _supabaseReportes.eliminarFila(
+        seleccionada.numero,
+        _reportes.activo.nombre,
+      );
+      if (!mounted) return;
+      final indice = _filas.indexOf(seleccionada);
+      setState(() => _filas[indice] = FilaVenta(numero: seleccionada.numero));
+      await _guardarProgreso();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Se eliminó el reporte de $cliente.')),
+      );
+    } catch (error) {
+      _mostrarErrorNube('No se pudo eliminar el reporte de $cliente: $error');
+    }
+  }
+
   List<MapEntry<int, FilaVenta>> get _filasVisibles {
     final texto = _filtro.toLowerCase();
     final resultado = _filas.asMap().entries.where((item) {
@@ -1193,6 +1295,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 onPressed: _gestionarVendedores,
                 icon: const Icon(Icons.person_add),
                 label: const Text('Vendedores'),
+              ),
+              FilledButton.tonalIcon(
+                onPressed: _eliminarReporteCliente,
+                icon: const Icon(Icons.person_remove),
+                label: const Text('Eliminar reporte de cliente'),
               ),
               FilledButton.tonalIcon(
                 onPressed: () => setState(() => _vistaGeneral = !_vistaGeneral),

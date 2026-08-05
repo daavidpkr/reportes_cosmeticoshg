@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../services/facturas_store.dart';
+import '../services/supabase_reportes_service.dart';
 
 class CargaFacturasScreen extends StatefulWidget {
   const CargaFacturasScreen({super.key, required this.mes, required this.anio});
@@ -20,6 +21,7 @@ class CargaFacturasScreen extends StatefulWidget {
 
 class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
   final _store = FacturasStore.instance;
+  final _supabaseReportes = SupabaseReportesService();
   bool _cargando = false;
   bool _arrastrando = false;
 
@@ -86,6 +88,19 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
         } catch (_) {
           rechazados++;
         }
+      }
+      if (procesados > 0) {
+        await _supabaseReportes.guardarFacturas(_store.facturas);
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('No se pudieron guardar las facturas en la nube: $error'),
+            backgroundColor: Colors.red.shade700,
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _cargando = false);
