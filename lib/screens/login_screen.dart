@@ -17,6 +17,17 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const _burgundy = Color(0xFF7A1F3D);
+  static const _burgundyDark = Color(0xFF591530);
+  static const _plum = Color(0xFF3D1A4A);
+  static const _lilac = Color(0xFFC9A8D4);
+  static const _gold = Color(0xFFC9A24C);
+  static const _goldSoft = Color(0xFFF1E4C0);
+  static const _background = Color(0xFFF5F3F6);
+  static const _ink = Color(0xFF241420);
+  static const _inkSoft = Color(0xFF8A7C89);
+  static const _line = Color(0xFFEAE3EA);
+
   final _formKey = GlobalKey<FormState>();
   final _correoController = TextEditingController();
   final _contrasenaController = TextEditingController();
@@ -52,8 +63,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) setState(() => _errorAcceso = _mensajeAuth(error));
     } catch (_) {
       if (mounted) {
-        setState(() => _errorAcceso =
-            'No se pudo conectar. Revisa tu conexión e inténtalo nuevamente.');
+        setState(
+          () => _errorAcceso =
+              'No se pudo conectar. Revisa tu conexión e inténtalo nuevamente.',
+        );
       }
     } finally {
       if (mounted) setState(() => _iniciandoSesion = false);
@@ -69,135 +82,317 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colores = Theme.of(context).colorScheme;
     return Scaffold(
-      backgroundColor: colores.surfaceContainerLowest,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420),
-            child: Card(
-              elevation: 6,
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircleAvatar(
-                        radius: 36,
-                        backgroundColor: colores.primaryContainer,
-                        child: Icon(
-                          Icons.lock_outline,
-                          size: 38,
-                          color: colores.onPrimaryContainer,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'COSMÉTICOS HG',
-                        style: Theme.of(context)
-                            .textTheme
-                            .headlineSmall
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Inicia sesión para acceder a los reportes',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: colores.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: 28),
-                      TextFormField(
-                        key: const Key('campoUsuario'),
-                        controller: _correoController,
-                        autofocus: true,
-                        keyboardType: TextInputType.emailAddress,
-                        textInputAction: TextInputAction.next,
-                        autofillHints: const [AutofillHints.email],
-                        decoration: const InputDecoration(
-                          labelText: 'Correo electrónico',
-                          prefixIcon: Icon(Icons.email_outlined),
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (valor) {
-                          if (valor == null || valor.trim().isEmpty) {
-                            return 'Ingresa tu correo electrónico.';
-                          }
-                          if (!valor.contains('@')) {
-                            return 'Ingresa un correo válido.';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        key: const Key('campoContrasena'),
-                        controller: _contrasenaController,
-                        obscureText: _ocultarContrasena,
-                        textInputAction: TextInputAction.done,
-                        autofillHints: const [AutofillHints.password],
-                        onFieldSubmitted: (_) => _iniciarSesion(),
-                        decoration: InputDecoration(
-                          labelText: 'Contraseña',
-                          prefixIcon: const Icon(Icons.key_outlined),
-                          border: const OutlineInputBorder(),
-                          suffixIcon: IconButton(
-                            tooltip: _ocultarContrasena
-                                ? 'Mostrar contraseña'
-                                : 'Ocultar contraseña',
-                            onPressed: () => setState(
-                                () => _ocultarContrasena = !_ocultarContrasena),
-                            icon: Icon(_ocultarContrasena
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined),
-                          ),
-                        ),
-                        validator: (valor) => valor == null || valor.isEmpty
-                            ? 'Ingresa tu contraseña.'
-                            : null,
-                      ),
-                      if (_errorAcceso != null) ...[
-                        const SizedBox(height: 14),
-                        Semantics(
-                          liveRegion: true,
-                          child: Text(
-                            _errorAcceso!,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: colores.error),
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 48,
-                        child: FilledButton.icon(
-                          key: const Key('botonIniciarSesion'),
-                          onPressed: _iniciandoSesion ? null : _iniciarSesion,
-                          icon: _iniciandoSesion
-                              ? const SizedBox.square(
-                                  dimension: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.login),
-                          label: Text(_iniciandoSesion
-                              ? 'Iniciando…'
-                              : 'Iniciar sesión'),
-                        ),
-                      ),
-                    ],
+      body: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFF8F5F9), Color(0xFFEFE9F0)],
+          ),
+        ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            const Positioned(
+              left: -130,
+              top: -120,
+              child: _Glow(size: 410, color: Color(0x59C9A8D4)),
+            ),
+            const Positioned(
+              right: -120,
+              bottom: -150,
+              child: _Glow(size: 430, color: Color(0x40C9A24C)),
+            ),
+            SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 380),
+                    child: _buildCard(context),
                   ),
                 ),
               ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCard(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _line),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x243D1A4A),
+            blurRadius: 60,
+            spreadRadius: -20,
+            offset: Offset(0, 28),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        alignment: Alignment.topCenter,
+        children: [
+          Positioned(
+            top: -72,
+            child: Container(
+              width: 260,
+              height: 130,
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.elliptical(130, 65),
+                  bottomRight: Radius.elliptical(130, 65),
+                ),
+                gradient: LinearGradient(colors: [_burgundyDark, _plum]),
+              ),
+              foregroundDecoration: const BoxDecoration(
+                color: Color(0xEFFFFFFF),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(32, 36, 32, 36),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildLockIcon(),
+                  const SizedBox(height: 18),
+                  const Text(
+                    'COSMÉTICOS HG',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _plum,
+                      fontSize: 21,
+                      height: 1.15,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: .5,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Inicia sesión para acceder a los reportes',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: _inkSoft,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 26),
+                  _buildEmailField(),
+                  const SizedBox(height: 14),
+                  _buildPasswordField(),
+                  if (_errorAcceso != null) ...[
+                    const SizedBox(height: 14),
+                    Semantics(
+                      liveRegion: true,
+                      child: Text(
+                        _errorAcceso!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          color: Color(0xFFB3261E),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 22),
+                  _buildLoginButton(),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLockIcon() {
+    return Container(
+      width: 64,
+      height: 64,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          center: Alignment(-.36, -.44),
+          colors: [_goldSoft, _gold],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x66C9A24C),
+            blurRadius: 18,
+            spreadRadius: -4,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: const Icon(Icons.lock_outline_rounded,
+          color: _burgundyDark, size: 28),
+    );
+  }
+
+  Widget _buildEmailField() {
+    return TextFormField(
+      key: const Key('campoUsuario'),
+      controller: _correoController,
+      autofocus: true,
+      keyboardType: TextInputType.emailAddress,
+      textInputAction: TextInputAction.next,
+      autofillHints: const [AutofillHints.email],
+      style: const TextStyle(color: _ink, fontSize: 13.5),
+      decoration: _fieldDecoration(
+        hintText: 'Correo electrónico',
+        prefixIcon: Icons.email_outlined,
+      ),
+      validator: (valor) {
+        if (valor == null || valor.trim().isEmpty) {
+          return 'Ingresa tu correo electrónico.';
+        }
+        if (!valor.contains('@')) return 'Ingresa un correo válido.';
+        return null;
+      },
+    );
+  }
+
+  Widget _buildPasswordField() {
+    return TextFormField(
+      key: const Key('campoContrasena'),
+      controller: _contrasenaController,
+      obscureText: _ocultarContrasena,
+      textInputAction: TextInputAction.done,
+      autofillHints: const [AutofillHints.password],
+      onFieldSubmitted: (_) => _iniciarSesion(),
+      style: const TextStyle(color: _ink, fontSize: 13.5),
+      decoration: _fieldDecoration(
+        hintText: 'Contraseña',
+        prefixIcon: Icons.key_outlined,
+        suffix: IconButton(
+          tooltip:
+              _ocultarContrasena ? 'Mostrar contraseña' : 'Ocultar contraseña',
+          onPressed: () => setState(
+            () => _ocultarContrasena = !_ocultarContrasena,
+          ),
+          icon: Icon(
+            _ocultarContrasena
+                ? Icons.visibility_outlined
+                : Icons.visibility_off_outlined,
+            size: 19,
+            color: _inkSoft,
+          ),
+        ),
+      ),
+      validator: (valor) =>
+          valor == null || valor.isEmpty ? 'Ingresa tu contraseña.' : null,
+    );
+  }
+
+  InputDecoration _fieldDecoration({
+    required String hintText,
+    required IconData prefixIcon,
+    Widget? suffix,
+  }) {
+    OutlineInputBorder border(Color color, [double width = 1]) =>
+        OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: color, width: width),
+        );
+
+    return InputDecoration(
+      hintText: hintText,
+      hintStyle: const TextStyle(color: _inkSoft, fontSize: 13.5),
+      prefixIcon: Icon(prefixIcon, color: _burgundy, size: 19),
+      suffixIcon: suffix,
+      filled: true,
+      fillColor: _background,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+      border: border(_line),
+      enabledBorder: border(_line),
+      focusedBorder: border(_lilac, 1.5),
+      errorBorder: border(const Color(0xFFB3261E)),
+      focusedErrorBorder: border(const Color(0xFFB3261E), 1.5),
+      errorStyle: const TextStyle(fontSize: 11.5),
+    );
+  }
+
+  Widget _buildLoginButton() {
+    return Container(
+      width: double.infinity,
+      height: 46,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        gradient: const LinearGradient(colors: [_burgundy, _plum]),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x667A1F3D),
+            blurRadius: 22,
+            spreadRadius: -6,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(999),
+        child: InkWell(
+          key: const Key('botonIniciarSesion'),
+          onTap: _iniciandoSesion ? null : _iniciarSesion,
+          borderRadius: BorderRadius.circular(999),
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_iniciandoSesion)
+                  const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                else
+                  const Icon(Icons.login_rounded,
+                      color: Colors.white, size: 18),
+                const SizedBox(width: 9),
+                Text(
+                  _iniciandoSesion ? 'Iniciando…' : 'Iniciar sesión',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
       ),
     );
   }
+}
+
+class _Glow extends StatelessWidget {
+  const _Glow({required this.size, required this.color});
+
+  final double size;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(colors: [color, color.withAlpha(0)]),
+        ),
+      );
 }

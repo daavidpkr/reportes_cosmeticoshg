@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "reportes_cosmeticoshg" "\0"
+            VALUE "FileDescription", "Cosmeticos HG - Reportes" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "reportes_cosmeticoshg" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
             VALUE "OriginalFilename", "reportes_cosmeticoshg.exe" "\0"
-            VALUE "ProductName", "reportes_cosmeticoshg" "\0"
+            VALUE "ProductName", "Cosmeticos HG - Reportes" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
