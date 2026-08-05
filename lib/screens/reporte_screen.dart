@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,6 +8,7 @@ import '../models/fila_venta.dart';
 import '../services/facturas_store.dart';
 import '../services/reporte_exporter.dart';
 import '../services/reportes_store.dart';
+import '../services/supabase_reportes_service.dart';
 import '../services/vendedores_store.dart';
 import 'carga_facturas_screen.dart';
 
@@ -23,6 +26,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   final _exporter = ReporteExporter();
   final _vendedores = VendedoresStore();
   final _reportes = ReportesStore();
+  final _supabaseReportes = SupabaseReportesService();
   final _focusZoom = FocusNode();
   late List<FilaVenta> _filas;
   String _filtro = '';
@@ -34,6 +38,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
   double _zoom = 1;
   bool _vistaGeneral = false;
   final _busquedaController = TextEditingController();
+  StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
+  Timer? _busquedaFacturaTimer;
+  int _versionBusqueda = 0;
 
   // La antigua vista al 90% es ahora la escala base (100%).
   double get _escalaReporte => _zoom * .99;
@@ -48,6 +55,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   @override
   void dispose() {
+    _filasSubscription?.cancel();
+    _busquedaFacturaTimer?.cancel();
     _focusZoom.dispose();
     _busquedaController.dispose();
     super.dispose();
@@ -105,7 +114,55 @@ class _ReporteScreenState extends State<ReporteScreen> {
     _filtrosColumnas.clear();
     _ordenColumna = null;
     if (mounted) setState(() {});
+    _escucharReporteActivo();
     if (guardar) _guardarProgreso();
+  }
+
+  void _escucharReporteActivo() {
+    _filasSubscription?.cancel();
+    final reporte = _reportes.activo;
+    _filasSubscription = _supabaseReportes.observarFilas(reporte.nombre).listen(
+      (datos) {
+        if (!mounted || _reportes.activo.id != reporte.id) return;
+        final porNumero = <int, FilaVenta>{
+          for (final fila in _filas) fila.numero: fila,
+        };
+        for (final dato in datos) {
+          final numero = (dato['nro_fila'] as num?)?.toInt();
+          if (numero == null) continue;
+          final fila = porNumero.putIfAbsent(
+            numero,
+            () => FilaVenta(numero: numero),
+          );
+          fila
+            ..referencia = dato['ref_fact']?.toString() ?? ''
+            ..vendedor = dato['vendedor']?.toString() ?? ''
+            ..esmalte = (dato['esmaltes'] as num?)?.toInt() ?? 0;
+          final abonos = dato['abonos'];
+          if (abonos is List) {
+            fila.abonos
+              ..clear()
+              ..addAll(abonos.map(
+                  (valor) => Abono(valor: (valor as num?)?.toDouble() ?? 0)));
+            while (fila.abonos.length < 2) {
+              fila.abonos.add(Abono());
+            }
+          }
+          if (fila.referencia.isNotEmpty) {
+            _completarFacturaNube(fila, fila.referencia);
+          }
+        }
+        _filas = porNumero.values.toList()
+          ..sort((a, b) => a.numero.compareTo(b.numero));
+        while (_filas.length < 15) {
+          _filas.add(FilaVenta(numero: _filas.length + 1));
+        }
+        setState(() {});
+      },
+      onError: (Object error) => _mostrarErrorNube(
+        'No se pudo sincronizar el reporte en tiempo real: $error',
+      ),
+    );
   }
 
   Future<void> _guardarProgreso() async {
@@ -213,43 +270,94 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   void _buscarFactura(int indice, String referencia) {
-    final valor = referencia.trim();
-    final factura = _facturas.buscar(valor);
-    if (factura != null) {
-      final repetida = _filas.asMap().entries.where((item) {
-        return item.key != indice &&
-            item.value.numeroFactura == factura.secuencial;
-      }).firstOrNull;
-      if (repetida != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'La factura ${factura.secuencial} ya fue agregada en la fila ${repetida.value.numero}.',
-            ),
-            backgroundColor: Colors.orange.shade800,
-          ),
-        );
-        return;
-      }
-    }
+    _busquedaFacturaTimer?.cancel();
+    final version = ++_versionBusqueda;
+    _busquedaFacturaTimer = Timer(const Duration(milliseconds: 350), () {
+      _buscarFacturaAhora(indice, referencia, version);
+    });
+  }
 
+  Future<void> _buscarFacturaAhora(
+      int indice, String referencia, int version) async {
+    final valor = referencia.trim();
+    if (valor.isEmpty || indice >= _filas.length) return;
+    var factura = _facturas.buscar(valor);
+    try {
+      factura ??= await _supabaseReportes.buscarFacturaPorRef(valor);
+    } catch (error) {
+      _mostrarErrorNube('No se pudo consultar la factura: $error');
+      return;
+    }
+    if (!mounted || version != _versionBusqueda || indice >= _filas.length) {
+      return;
+    }
     if (factura == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Factura no encontrada')),
       );
       return;
     }
+    final facturaEncontrada = factura;
+    final repetida = _filas.asMap().entries.where((item) {
+      return item.key != indice &&
+          item.value.numeroFactura == facturaEncontrada.secuencial;
+    }).firstOrNull;
+    if (repetida != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'La factura ${facturaEncontrada.secuencial} ya fue agregada en la fila ${repetida.value.numero}.',
+          ),
+          backgroundColor: Colors.orange.shade800,
+        ),
+      );
+      return;
+    }
     final fila = _filas[indice];
     setState(() {
       fila.referencia = valor;
-      fila.cliente = factura.cliente;
-      fila.nombreComercial = factura.nombreComercial;
-      fila.fecha = factura.fecha;
-      fila.numeroFactura = factura.secuencial;
-      fila.venta = factura.total;
+      fila.cliente = facturaEncontrada.cliente;
+      fila.nombreComercial = facturaEncontrada.nombreComercial;
+      fila.fecha = facturaEncontrada.fecha;
+      fila.numeroFactura = facturaEncontrada.secuencial;
+      fila.venta = facturaEncontrada.total;
       _asegurarFilaVacia();
     });
     _guardarProgreso();
+    _guardarFilaNube(fila);
+  }
+
+  Future<void> _completarFacturaNube(FilaVenta fila, String referencia) async {
+    if (fila.cliente.isNotEmpty && fila.venta > 0) return;
+    try {
+      final factura = await _supabaseReportes.buscarFacturaPorRef(referencia);
+      if (!mounted || factura == null || fila.referencia != referencia) return;
+      setState(() {
+        fila
+          ..cliente = factura.cliente
+          ..nombreComercial = factura.nombreComercial
+          ..fecha = factura.fecha
+          ..numeroFactura = factura.secuencial
+          ..venta = factura.total;
+      });
+    } catch (_) {
+      // El stream volverá a intentar completar la factura en la próxima emisión.
+    }
+  }
+
+  Future<void> _guardarFilaNube(FilaVenta fila) async {
+    try {
+      await _supabaseReportes.guardarFila(fila, _reportes.activo.nombre);
+    } catch (error) {
+      _mostrarErrorNube('No se pudo guardar la fila ${fila.numero}: $error');
+    }
+  }
+
+  void _mostrarErrorNube(String mensaje) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mensaje), backgroundColor: Colors.red.shade700),
+    );
   }
 
   void _asegurarFilaVacia() {
@@ -329,6 +437,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       }
     });
     _guardarProgreso();
+    if (resultado != null) _guardarFilaNube(fila);
   }
 
   Future<void> _agregarAbono(FilaVenta fila) async {
@@ -1351,6 +1460,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
           onChanged: (valor) {
             setState(() => fila.vendedor = valor ?? '');
             _guardarProgreso();
+            _guardarFilaNube(fila);
           },
         ),
       );
@@ -1368,6 +1478,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
           onChanged: (texto) {
             setState(() => fila.esmalte = int.tryParse(texto) ?? 0);
             _guardarProgreso();
+            _guardarFilaNube(fila);
           },
         ),
       );
@@ -1387,7 +1498,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
             contentPadding: EdgeInsets.symmetric(horizontal: 7, vertical: 10),
             border: OutlineInputBorder(),
           ),
-          onChanged: enviar ? null : alCambiar,
+          onChanged: alCambiar,
           onFieldSubmitted: enviar ? alCambiar : null,
         ),
       );
