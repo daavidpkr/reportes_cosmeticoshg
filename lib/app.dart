@@ -44,7 +44,34 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
       title: 'Cosméticos HG - Reportes',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.pink),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF7A1F3D),
+          primary: const Color(0xFF7A1F3D),
+          secondary: const Color(0xFF3D1A4A),
+          surface: Colors.white,
+        ),
+        scaffoldBackgroundColor: const Color(0xFFF5F3F6),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFEAE3EA)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFFC9A8D4), width: 1.5),
+          ),
+        ),
+        cardTheme: CardThemeData(
+          elevation: 0,
+          color: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+            side: const BorderSide(color: Color(0xFFEAE3EA)),
+          ),
+        ),
         useMaterial3: true,
       ),
       home: _sesionIniciada
