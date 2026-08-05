@@ -70,14 +70,14 @@ class SupabaseReportesService {
       }, onConflict: 'ref_fact');
     }
 
-    await _client.from('reportes_ventas').upsert({
+    await _client.from('reportes_ventas').insert({
       'nro_fila': fila.numero,
       'ref_fact': fila.referencia,
       'vendedor': fila.vendedor,
       'esmaltes': fila.esmalte,
       'abonos': fila.abonos.map((abono) => abono.valor).toList(),
       'mes_reporte': mesReporte,
-    }, onConflict: 'nro_fila,mes_reporte');
+    });
   }
 
   Future<void> eliminarFila(int numeroFila, String mesReporte) => _client
