@@ -1749,7 +1749,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                         .toList(),
                   ),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    padding: const EdgeInsets.fromLTRB(12, 10, 28, 12),
                     child: FilledButton.icon(
                       onPressed: _reiniciar,
                       style: FilledButton.styleFrom(
@@ -1837,11 +1837,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
             enviar: true,
           )),
           DataCell(SizedBox(
-            width: 175 * _escalaReporte,
+            width: 240 * _escalaReporte,
             child: Text(fila.cliente),
           )),
           DataCell(SizedBox(
-            width: 155 * _escalaReporte,
+            width: 220 * _escalaReporte,
             child: Text(fila.nombreComercial),
           )),
           DataCell(Text(fila.fecha)),
