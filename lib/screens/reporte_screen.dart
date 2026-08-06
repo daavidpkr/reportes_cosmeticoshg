@@ -101,8 +101,29 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   Future<void> _cargarReportes() async {
-    await _reportes.cargar();
-    _activarReporte(_reportes.activo, guardar: false);
+    try {
+      final datos = await _supabaseReportes.obtenerReportesMensuales();
+
+      await _reportes.cargarDesdeNube(datos);
+
+      if (datos.isEmpty) {
+        await _supabaseReportes.guardarReporteMensual(
+          _reportes.activo.anio,
+          _reportes.activo.mes,
+        );
+      }
+
+      if (!mounted) return;
+
+      _activarReporte(
+        _reportes.activo,
+        guardar: false,
+      );
+    } catch (error) {
+      _mostrarErrorNube(
+        'No se pudieron cargar los reportes: $error',
+      );
+    }
   }
 
   void _activarReporte(ReporteMensual reporte, {bool guardar = true}) {
@@ -183,9 +204,16 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   Future<void> _nuevoReporte() async {
-    final siguiente = DateTime(_reportes.activo.anio, _reportes.activo.mes + 1);
+    final siguiente = DateTime(
+      _reportes.activo.anio,
+      _reportes.activo.mes + 1,
+    );
+
     var mes = siguiente.month;
-    final anioController = TextEditingController(text: '${siguiente.year}');
+    final anioController = TextEditingController(
+      text: '${siguiente.year}',
+    );
+
     final confirmar = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -241,23 +269,44 @@ class _ReporteScreenState extends State<ReporteScreen> {
         ),
       ),
     );
+
     final anio = int.tryParse(anioController.text);
     anioController.dispose();
+
     if (confirmar != true || !mounted) return;
+
     if (anio == null || anio < 2020 || anio > 2100) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Ingresa un año entre 2020 y 2100.')),
       );
       return;
     }
-    if (!_reportes.crear(anio, mes)) {
+
+    if (_reportes.reportes.any(
+      (reporte) => reporte.anio == anio && reporte.mes == mes,
+    )) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content:
             Text('Ese reporte mensual ya existe. Selecciónalo en la lista.'),
       ));
       return;
     }
-    _activarReporte(_reportes.activo);
+
+    try {
+      // Primero se crea en Supabase.
+      await _supabaseReportes.guardarReporteMensual(anio, mes);
+
+      // Después se agrega a la aplicación.
+      _reportes.crear(anio, mes);
+
+      if (!mounted) return;
+
+      _activarReporte(_reportes.activo);
+    } catch (error) {
+      _mostrarErrorNube(
+        'No se pudo crear el reporte: $error',
+      );
+    }
   }
 
   String _nombreMes(int mes) => const [
@@ -856,8 +905,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   Future<void> _reiniciar() async {
-    final nombre = _reportes.activo.nombre;
+    final reporteEliminar = _reportes.activo;
+    final nombre = reporteEliminar.nombre;
+    final anio = reporteEliminar.anio;
+    final mes = reporteEliminar.mes;
+
     final confirmacionController = TextEditingController();
+
     final confirmado = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -902,17 +956,55 @@ class _ReporteScreenState extends State<ReporteScreen> {
         ),
       ),
     );
+
     confirmacionController.dispose();
+
     if (confirmado != true || !mounted) return;
-    _reportes.eliminarActivo();
-    _filtro = '';
-    _filtroVendedor = '';
-    _filtroEstado = 'todos';
-    _activarReporte(_reportes.activo);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Se eliminó el reporte de $nombre.')),
-    );
+
+    try {
+      final eraUnico = _reportes.reportes.length == 1;
+
+      // Elimina todas las filas del mes.
+      await _supabaseReportes.eliminarFilasReporte(nombre);
+
+      // Elimina también el mes de la lista de reportes.
+      await _supabaseReportes.eliminarReporteMensual(
+        anio,
+        mes,
+      );
+
+      // Actualiza la memoria local.
+      _reportes.eliminarActivo();
+
+      // ReportesStore crea automáticamente un nuevo mes
+      // si acabamos de eliminar el único existente.
+      if (eraUnico) {
+        await _supabaseReportes.guardarReporteMensual(
+          _reportes.activo.anio,
+          _reportes.activo.mes,
+        );
+      }
+
+      _filtro = '';
+      _filtroVendedor = '';
+      _filtroEstado = 'todos';
+
+      if (!mounted) return;
+
+      _activarReporte(_reportes.activo);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Se eliminó el reporte de $nombre.',
+          ),
+        ),
+      );
+    } catch (error) {
+      _mostrarErrorNube(
+        'No se pudo eliminar el reporte: $error',
+      );
+    }
   }
 
   Future<void> _eliminarReporteCliente() async {

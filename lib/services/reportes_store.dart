@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/factura.dart';
@@ -53,23 +51,48 @@ class ReporteMensual {
 }
 
 class ReportesStore {
-  static const _clave = 'reportes_mensuales_v1';
   static const _claveActivo = 'reporte_mensual_activo';
   final List<ReporteMensual> reportes = [];
   late ReporteMensual activo;
 
-  Future<void> cargar() async {
+  Future<void> cargarDesdeNube(
+    List<Map<String, dynamic>> datos,
+  ) async {
     final prefs = await SharedPreferences.getInstance();
-    final texto = prefs.getString(_clave);
+
     reportes.clear();
-    if (texto != null) {
-      reportes.addAll((jsonDecode(texto) as List)
-          .map((e) => ReporteMensual.fromJson(e as Map<String, dynamic>)));
+
+    for (final dato in datos) {
+      final anio = (dato['anio'] as num?)?.toInt();
+      final mes = (dato['mes'] as num?)?.toInt();
+
+      if (anio == null || mes == null) continue;
+
+      reportes.add(
+        ReporteMensual(
+          anio: anio,
+          mes: mes,
+        ),
+      );
     }
-    if (reportes.isEmpty) reportes.add(ReporteMensual(anio: 2026, mes: 7));
+
     reportes.sort((a, b) => a.id.compareTo(b.id));
-    final id = prefs.getString(_claveActivo);
-    activo = reportes.where((e) => e.id == id).firstOrNull ?? reportes.last;
+
+    if (reportes.isEmpty) {
+      final ahora = DateTime.now();
+
+      reportes.add(
+        ReporteMensual(
+          anio: ahora.year,
+          mes: ahora.month,
+        ),
+      );
+    }
+
+    final idActivo = prefs.getString(_claveActivo);
+
+    activo =
+        reportes.where((e) => e.id == idActivo).firstOrNull ?? reportes.last;
   }
 
   bool crear(int anio, int mes) {
@@ -95,8 +118,6 @@ class ReportesStore {
 
   Future<void> guardar() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-        _clave, jsonEncode(reportes.map((e) => e.toJson()).toList()));
     await prefs.setString(_claveActivo, activo.id);
   }
 }

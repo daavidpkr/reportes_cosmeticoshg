@@ -9,6 +9,42 @@ class SupabaseReportesService {
 
   final SupabaseClient _client;
 
+  Future<List<Map<String, dynamic>>> obtenerReportesMensuales() async {
+    final respuesta = await _client
+        .from('reportes_mensuales')
+        .select('id, anio, mes')
+        .order('anio', ascending: true)
+        .order('mes', ascending: true);
+
+    return List<Map<String, dynamic>>.from(respuesta);
+  }
+
+  Future<void> guardarReporteMensual(int anio, int mes) async {
+    final id = '$anio-${mes.toString().padLeft(2, '0')}';
+
+    await _client.from('reportes_mensuales').upsert(
+      {
+        'id': id,
+        'anio': anio,
+        'mes': mes,
+      },
+      onConflict: 'id',
+    );
+  }
+
+  Future<void> eliminarReporteMensual(int anio, int mes) async {
+    final id = '$anio-${mes.toString().padLeft(2, '0')}';
+
+    await _client.from('reportes_mensuales').delete().eq('id', id);
+  }
+
+  Future<void> eliminarFilasReporte(String mesReporte) async {
+    await _client
+        .from('reportes_ventas')
+        .delete()
+        .eq('mes_reporte', mesReporte);
+  }
+
   Future<Factura?> buscarFacturaPorRef(String referencia) async {
     final ref = referencia.trim();
     if (ref.isEmpty) return null;

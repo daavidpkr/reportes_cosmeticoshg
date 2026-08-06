@@ -1,74 +1,178 @@
 import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class Vendedor {
-  const Vendedor({required this.codigo, required this.nombre});
+  const Vendedor({
+    required this.codigo,
+    required this.nombre,
+  });
 
   final String codigo;
   final String nombre;
 
   String get etiqueta => codigo.isEmpty ? nombre : '$codigo - $nombre';
 
-  Map<String, String> toJson() => {'codigo': codigo, 'nombre': nombre};
+  Map<String, String> toJson() => {
+        'codigo': codigo,
+        'nombre': nombre,
+      };
 }
 
 class VendedoresStore {
   static const _clave = 'vendedores_con_codigo';
-  static const _claveAnterior = 'vendedores';
+
+  // Indica que esta PC ya migró sus vendedores locales.
+  static const _claveMigracion = 'vendedores_migrados_a_supabase_v1';
+
+  final SupabaseClient _client = Supabase.instance.client;
+
   final List<Vendedor> vendedores = [];
 
   Future<void> cargar() async {
     final preferencias = await SharedPreferences.getInstance();
+
+    final migracionRealizada = preferencias.getBool(_claveMigracion) ?? false;
+
+    // Primera ejecución después de la migración:
+    // recupera vendedores existentes de SharedPreferences
+    // y los envía a Supabase.
+    if (!migracionRealizada) {
+      await _migrarVendedoresLocales(preferencias);
+
+      await preferencias.setBool(
+        _claveMigracion,
+        true,
+      );
+    }
+
+    // Desde este punto Supabase es la fuente principal.
+    await _cargarDesdeSupabase();
+  }
+
+  Future<void> _migrarVendedoresLocales(
+    SharedPreferences preferencias,
+  ) async {
+    final locales = <Vendedor>[];
+
     final guardados = preferencias.getStringList(_clave);
-    vendedores.clear();
+
     if (guardados != null) {
       for (final dato in guardados) {
-        final mapa = jsonDecode(dato) as Map<String, dynamic>;
-        vendedores.add(Vendedor(
-          codigo: mapa['codigo'] as String? ?? '',
-          nombre: mapa['nombre'] as String? ?? '',
-        ));
+        try {
+          final mapa = jsonDecode(dato) as Map<String, dynamic>;
+
+          final codigo =
+              (mapa['codigo']?.toString() ?? '').trim().toUpperCase();
+
+          final nombre = (mapa['nombre']?.toString() ?? '').trim();
+
+          if (codigo.isEmpty || nombre.isEmpty) continue;
+
+          locales.add(
+            Vendedor(
+              codigo: codigo,
+              nombre: nombre,
+            ),
+          );
+        } catch (_) {
+          // Ignora registros locales dañados.
+        }
       }
-    } else {
-      vendedores.addAll(
-        (preferencias.getStringList(_claveAnterior) ?? const [])
-            .map((nombre) => Vendedor(codigo: '', nombre: nombre)),
-      );
-      await _guardar();
     }
+
+    // Compatibilidad con la versión antigua que solamente
+    // almacenaba nombres. Estos registros no tienen código,
+    // por lo que no se suben automáticamente.
+    //
+    // Permanecen intactos en SharedPreferences.
+    if (locales.isEmpty) return;
+
+    await _client.from('vendedores').upsert(
+          locales
+              .map(
+                (vendedor) => {
+                  'codigo': vendedor.codigo,
+                  'nombre': vendedor.nombre,
+                },
+              )
+              .toList(),
+          onConflict: 'codigo',
+        );
+  }
+
+  Future<void> _cargarDesdeSupabase() async {
+    final respuesta = await _client
+        .from('vendedores')
+        .select('codigo, nombre')
+        .order('codigo', ascending: true);
+
+    vendedores
+      ..clear()
+      ..addAll(
+        List<Map<String, dynamic>>.from(respuesta).map(
+          (dato) => Vendedor(
+            codigo: dato['codigo']?.toString().trim().toUpperCase() ?? '',
+            nombre: dato['nombre']?.toString().trim() ?? '',
+          ),
+        ),
+      );
+
     _ordenar();
   }
 
-  Future<bool> agregar(String codigo, String nombre) async {
+  Future<bool> agregar(
+    String codigo,
+    String nombre,
+  ) async {
     final codigoLimpio = codigo.trim().toUpperCase();
     final nombreLimpio = nombre.trim();
-    if (codigoLimpio.isEmpty || nombreLimpio.isEmpty) return false;
-    if (vendedores.any((item) =>
-        item.codigo.toLowerCase() == codigoLimpio.toLowerCase() ||
-        item.nombre.toLowerCase() == nombreLimpio.toLowerCase())) {
+
+    if (codigoLimpio.isEmpty || nombreLimpio.isEmpty) {
       return false;
     }
-    vendedores.add(Vendedor(codigo: codigoLimpio, nombre: nombreLimpio));
-    _ordenar();
-    await _guardar();
-    return true;
+
+    if (vendedores.any(
+      (item) =>
+          item.codigo.toLowerCase() == codigoLimpio.toLowerCase() ||
+          item.nombre.toLowerCase() == nombreLimpio.toLowerCase(),
+    )) {
+      return false;
+    }
+
+    try {
+      await _client.from('vendedores').insert({
+        'codigo': codigoLimpio,
+        'nombre': nombreLimpio,
+      });
+
+      vendedores.add(
+        Vendedor(
+          codigo: codigoLimpio,
+          nombre: nombreLimpio,
+        ),
+      );
+
+      _ordenar();
+
+      return true;
+    } on PostgrestException {
+      return false;
+    }
   }
 
   Future<void> eliminar(Vendedor vendedor) async {
+    await _client.from('vendedores').delete().eq('codigo', vendedor.codigo);
+
     vendedores.remove(vendedor);
-    await _guardar();
   }
 
-  void _ordenar() => vendedores.sort(
-        (a, b) => a.codigo.toLowerCase().compareTo(b.codigo.toLowerCase()),
-      );
-
-  Future<void> _guardar() async {
-    final preferencias = await SharedPreferences.getInstance();
-    await preferencias.setStringList(
-      _clave,
-      vendedores.map((item) => jsonEncode(item.toJson())).toList(),
+  void _ordenar() {
+    vendedores.sort(
+      (a, b) => a.codigo.toLowerCase().compareTo(
+            b.codigo.toLowerCase(),
+          ),
     );
   }
 }
