@@ -58,26 +58,33 @@ class SupabaseReportesService {
   }
 
   Future<void> guardarFila(FilaVenta fila, String mesReporte) async {
+    final referencia = fila.numeroFactura.trim();
+
     // La factura maestra siempre se persiste antes que el reporte que la usa.
-    if (fila.referencia.trim().isNotEmpty) {
+    if (referencia.isNotEmpty) {
       await _client.from('facturas_maestras').upsert({
-        'ref_fact': fila.referencia.trim(),
+        'ref_fact': referencia,
         'cliente': fila.cliente,
         'nombre_comercial': fila.nombreComercial,
         'fecha': fila.fecha,
-        'nro_fact': fila.numeroFactura,
+        'nro_fact': referencia,
         'venta': fila.venta,
       }, onConflict: 'ref_fact');
     }
 
-    await _client.from('reportes_ventas').insert({
-      'nro_fila': fila.numero,
-      'ref_fact': fila.referencia,
-      'vendedor': fila.vendedor,
-      'esmaltes': fila.esmalte,
-      'abonos': fila.abonos.map((abono) => abono.valor).toList(),
-      'mes_reporte': mesReporte,
-    });
+    await _client.from('reportes_ventas').upsert(
+      {
+        'nro_fila': fila.numero,
+        'ref_fact': referencia,
+        'vendedor': fila.vendedor,
+        'esmaltes': fila.esmalte,
+        'abonos': fila.abonos.map((abono) => abono.valor).toList(),
+        'comentarios_abonos':
+            fila.abonos.map((abono) => abono.comentario).toList(),
+        'mes_reporte': mesReporte,
+      },
+      onConflict: 'nro_fila,mes_reporte',
+    );
   }
 
   Future<void> eliminarFila(int numeroFila, String mesReporte) => _client
@@ -85,6 +92,15 @@ class SupabaseReportesService {
       .delete()
       .eq('nro_fila', numeroFila)
       .eq('mes_reporte', mesReporte);
+
+  Future<void> eliminarFacturaMaestra(String referencia) async {
+    final ref = referencia.trim();
+    if (ref.isEmpty) {
+      throw Exception('La referencia de la factura está vacía.');
+    }
+
+    await _client.from('facturas_maestras').delete().eq('ref_fact', ref);
+  }
 
   Stream<List<Map<String, dynamic>>> observarFilas(String mesReporte) => _client
       .from('reportes_ventas')

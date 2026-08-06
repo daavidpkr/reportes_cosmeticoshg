@@ -16,6 +16,12 @@ class FacturasStore {
 
   void limpiar() => _facturas.clear();
 
+  void eliminar(String referencia) {
+    final factura = buscar(referencia);
+    if (factura == null) return;
+    _facturas.removeWhere((_, item) => identical(item, factura));
+  }
+
   List<Factura> get facturas => _facturas.values.toSet().toList();
 
   void cargar(Iterable<Factura> facturas) {

@@ -22,6 +22,7 @@ class ReporteScreen extends StatefulWidget {
 }
 
 class _ReporteScreenState extends State<ReporteScreen> {
+  static const _opcionAnulada = 'ANULADA';
   final _facturas = FacturasStore.instance;
   final _exporter = ReporteExporter();
   final _vendedores = VendedoresStore();
@@ -140,10 +141,19 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ..esmalte = (dato['esmaltes'] as num?)?.toInt() ?? 0;
           final abonos = dato['abonos'];
           if (abonos is List) {
+            final comentarios = dato['comentarios_abonos'];
             fila.abonos
               ..clear()
-              ..addAll(abonos.map(
-                  (valor) => Abono(valor: (valor as num?)?.toDouble() ?? 0)));
+              ..addAll(List.generate(abonos.length, (indice) {
+                final comentario =
+                    comentarios is List && indice < comentarios.length
+                        ? comentarios[indice]?.toString() ?? ''
+                        : '';
+                return Abono(
+                  valor: (abonos[indice] as num?)?.toDouble() ?? 0,
+                  comentario: comentario,
+                );
+              }));
             while (fila.abonos.length < 2) {
               fila.abonos.add(Abono());
             }
@@ -665,6 +675,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 items: [
                   const DropdownMenuItem<String?>(
                       value: null, child: Text('Todos los vendedores')),
+                  const DropdownMenuItem<String?>(
+                      value: _opcionAnulada, child: Text(_opcionAnulada)),
                   ..._vendedores.vendedores.map((v) =>
                       DropdownMenuItem<String?>(
                           value: v.etiqueta, child: Text(v.etiqueta))),
@@ -771,6 +783,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     const DropdownMenuItem(
                       value: '',
                       child: Text('Todos los vendedores'),
+                    ),
+                    const DropdownMenuItem(
+                      value: _opcionAnulada,
+                      child: Text(_opcionAnulada),
                     ),
                     ..._vendedores.vendedores.map(
                       (item) => DropdownMenuItem(
@@ -984,11 +1000,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
     if (confirmar != true || !mounted) return;
 
     try {
-      await _supabaseReportes.eliminarFila(
-        seleccionada.numero,
-        _reportes.activo.nombre,
+      await _supabaseReportes.eliminarFacturaMaestra(
+        seleccionada.numeroFactura,
       );
       if (!mounted) return;
+      _facturas.eliminar(seleccionada.numeroFactura);
       final indice = _filas.indexOf(seleccionada);
       setState(() => _filas[indice] = FilaVenta(numero: seleccionada.numero));
       await _guardarProgreso();
@@ -1481,6 +1497,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
             contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10)),
         items: [
           const DropdownMenuItem(value: '', child: Text('Vendedor: Todos')),
+          const DropdownMenuItem(
+              value: _opcionAnulada, child: Text(_opcionAnulada)),
           ..._vendedores.vendedores.map((v) =>
               DropdownMenuItem(value: v.etiqueta, child: Text(v.etiqueta)))
         ],
@@ -1676,6 +1694,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       isDense: true),
                   items: [
                     const DropdownMenuItem(value: '', child: Text('Todos')),
+                    const DropdownMenuItem(
+                        value: _opcionAnulada, child: Text(_opcionAnulada)),
                     ..._vendedores.vendedores.map((v) => DropdownMenuItem(
                         value: v.etiqueta, child: Text(v.etiqueta)))
                   ],
@@ -1872,20 +1892,30 @@ class _ReporteScreenState extends State<ReporteScreen> {
             border: OutlineInputBorder(),
           ),
           items: _vendedores.vendedores
-              .map((item) => DropdownMenuItem(
+              .map((item) => DropdownMenuItem<String>(
                     value: item.etiqueta,
                     child: Text(item.etiqueta, overflow: TextOverflow.ellipsis),
                   ))
-              .toList(),
+              .followedBy(const [
+            DropdownMenuItem<String>(
+              value: _opcionAnulada,
+              child: Text(_opcionAnulada),
+            ),
+          ]).toList(),
           selectedItemBuilder: (_) => _vendedores.vendedores
-              .map((item) => Align(
+              .map<Widget>((item) => Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
                       item.codigo.isEmpty ? item.nombre : item.codigo,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ))
-              .toList(),
+              .followedBy(const [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(_opcionAnulada),
+            ),
+          ]).toList(),
           onChanged: (valor) {
             setState(() => fila.vendedor = valor ?? '');
             _guardarProgreso();
