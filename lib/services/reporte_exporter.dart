@@ -59,6 +59,9 @@ class ReporteExporter {
     final filasConDatos = filas.where((fila) => fila.tieneDatos).toList();
     final comentarios = _obtenerComentarios(filasConDatos);
     final rosa = PdfColor.fromHex('#B71157');
+    // Equivale a Colors.green (#4CAF50) con 12 % de opacidad sobre blanco,
+    // que es el color usado para las filas pagadas en la tabla de la app.
+    final verdePagada = PdfColor.fromHex('#EAF5EA');
 
     documento.addPage(
       pw.MultiPage(
@@ -120,6 +123,15 @@ class ReporteExporter {
             ),
             border: pw.TableBorder.all(color: PdfColors.grey400, width: .5),
             oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+            cellDecoration: (_, __, rowNum) {
+              final indiceFila = rowNum - 1;
+              if (indiceFila >= 0 &&
+                  indiceFila < filasConDatos.length &&
+                  filasConDatos[indiceFila].pagada) {
+                return pw.BoxDecoration(color: verdePagada);
+              }
+              return const pw.BoxDecoration();
+            },
           ),
           pw.SizedBox(height: 18),
           pw.Row(

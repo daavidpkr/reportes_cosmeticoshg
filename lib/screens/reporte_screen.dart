@@ -1943,7 +1943,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     color: Color(0xFF3D1A4A), fontWeight: FontWeight.w700)),
           )),
           DataCell(_entrada(
-            fila.referencia,
+            _refSinCeros(fila.referencia),
             72 * _escalaReporte,
             (valor) => _buscarFactura(indice, valor),
             enviar: true,
@@ -2033,6 +2033,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
           },
         ),
       );
+
+  String _refSinCeros(String valor) {
+    final limpio = valor.trim();
+    if (limpio.isEmpty) return '';
+
+    final numero = int.tryParse(limpio);
+    return numero?.toString() ?? limpio;
+  }
 
   Widget _entrada(
     String valor,
