@@ -39,11 +39,12 @@ class _ReporteScreenState extends State<ReporteScreen> {
   bool _ordenAscendente = true;
   double _zoom = 1;
   bool _vistaGeneral = false;
+  int _seccionMovil = 0;
   final _busquedaController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
   Timer? _busquedaFacturaTimer;
   int _versionBusqueda = 0;
-  final Set<int> _filasExpandidas = {1};
+  final Set<int> _filasExpandidas = {};
 
   // La antigua vista al 90% es ahora la escala base (100%).
   double get _escalaReporte => _zoom * .99;
@@ -1371,6 +1372,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
           flexibleSpace: const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
                 colors: [Color(0xFF591530), Color(0xFF3D1A4A)],
               ),
             ),
@@ -1433,13 +1436,16 @@ class _ReporteScreenState extends State<ReporteScreen> {
         ),
         bottomNavigationBar: NavigationBar(
           height: 68,
-          selectedIndex: _vistaGeneral ? 1 : 0,
+          selectedIndex: _seccionMovil,
           indicatorColor: const Color(0xFFF2E9F4),
           onDestinationSelected: (indice) {
             if (indice == 2) {
               _gestionarVendedores();
             } else {
-              setState(() => _vistaGeneral = indice == 1);
+              setState(() {
+                _seccionMovil = indice;
+                _vistaGeneral = indice == 1 || indice == 3;
+              });
             }
           },
           destinations: const [
@@ -1450,7 +1456,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
             NavigationDestination(
                 icon: Icon(Icons.people_outline), label: 'Vendedores'),
             NavigationDestination(
-                icon: Icon(Icons.groups_outlined), label: 'Clientes'),
+                icon: Icon(Icons.insights_outlined), label: 'Estadísticas'),
           ],
         ),
         body: SafeArea(
@@ -1491,24 +1497,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(14, 4, 14, 110),
                   child: Column(children: [
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () => setState(_asegurarFilaVacia),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF3D1A4A),
-                          side: const BorderSide(
-                              color: Color(0xFFC9A8D4), width: 1.5),
-                          padding: const EdgeInsets.all(14),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                        icon: const Icon(Icons.add, size: 19),
-                        label: const Text('Añadir cliente',
-                            style: TextStyle(fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
@@ -1653,43 +1641,101 @@ class _ReporteScreenState extends State<ReporteScreen> {
       );
 
   Widget _controlesMoviles() => Column(children: [
-        _campoBusquedaRedisenado(),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 42,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              SizedBox(width: 165, child: _filtroVendedorMovil()),
-              const SizedBox(width: 8),
-              SizedBox(width: 145, child: _filtroEstadoMovil()),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFEAE3EA)),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x0A3D1A4A),
+                blurRadius: 12,
+                offset: Offset(0, 4),
+              ),
             ],
           ),
+          child: _campoBusquedaMovil(),
         ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 40,
-          child: ListView(scrollDirection: Axis.horizontal, children: [
-            FilledButton.tonalIcon(
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(child: _filtroVendedorMovil()),
+          const SizedBox(width: 8),
+          Expanded(child: _filtroEstadoMovil()),
+        ]),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child: FilledButton.tonalIcon(
               onPressed: _nuevoReporte,
-              icon: const Icon(Icons.add, size: 18),
+              style: _estiloAccionMovil,
+              icon: const Icon(Icons.add, size: 17),
               label: const Text('Nuevo mes'),
             ),
-            const SizedBox(width: 8),
-            FilledButton.tonalIcon(
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: FilledButton.tonalIcon(
               onPressed: _abrirCargaFacturas,
-              icon: const Icon(Icons.upload_file, size: 18),
+              style: _estiloAccionMovil,
+              icon: const Icon(Icons.upload_file, size: 17),
               label: Text('Subir facturas (${_facturas.cantidad})'),
             ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: _eliminarReporteCliente,
-              icon: const Icon(Icons.delete_outline, size: 18),
-              label: const Text('Eliminar cliente'),
+          ),
+        ]),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _eliminarReporteCliente,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: const Color(0xFF3D1A4A),
+              backgroundColor: Colors.white,
+              side: const BorderSide(color: Color(0xFFEAE3EA)),
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999)),
             ),
-          ]),
+            icon: const Icon(Icons.person_remove_outlined, size: 17),
+            label: const Text('Eliminar cliente'),
+          ),
         ),
       ]);
+
+  ButtonStyle get _estiloAccionMovil => FilledButton.styleFrom(
+        foregroundColor: const Color(0xFF3D1A4A),
+        backgroundColor: const Color(0xFFF2E9F4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
+        textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      );
+
+  Widget _campoBusquedaMovil() => TextField(
+        controller: _busquedaController,
+        onChanged: (valor) => setState(() => _filtro = valor.trim()),
+        decoration: InputDecoration(
+          hintText: 'Buscar factura, cliente o vendedor',
+          hintStyle: const TextStyle(color: Color(0xFF8A7C89), fontSize: 13),
+          prefixIcon: const Icon(Icons.search_rounded,
+              size: 20, color: Color(0xFF7A1F3D)),
+          suffixIcon: _filtro.isEmpty
+              ? null
+              : IconButton(
+                  tooltip: 'Limpiar búsqueda',
+                  onPressed: () {
+                    _busquedaController.clear();
+                    setState(() => _filtro = '');
+                  },
+                  icon: const Icon(Icons.close_rounded, size: 18),
+                ),
+          filled: true,
+          fillColor: Colors.white,
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(vertical: 14),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+        ),
+      );
 
   Widget _filtroVendedorMovil() => DropdownButtonFormField<String>(
         isExpanded: true,
@@ -1785,17 +1831,18 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                        fila.cliente.isEmpty
-                            ? 'Cliente sin nombre'
-                            : fila.cliente,
+                    Text(fila.cliente,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                             fontSize: 13.5, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 1),
                     Text(
-                      'Ref. ${fila.referencia.isEmpty ? "—" : _refSinCeros(fila.referencia)} · ${fila.numeroFactura.isEmpty ? "sin factura" : fila.numeroFactura}',
+                      [
+                        if (fila.referencia.isNotEmpty)
+                          'Ref. ${_refSinCeros(fila.referencia)}',
+                        if (fila.numeroFactura.isNotEmpty) fila.numeroFactura,
+                      ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -2064,6 +2111,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
           _pestana('Reporte general', _vistaGeneral,
               () => setState(() => _vistaGeneral = true)),
           _pestana('Vendedores', false, _gestionarVendedores),
+          _pestana('Estadísticas', false,
+              () => setState(() => _vistaGeneral = true)),
           const Spacer(),
           IconButton(
               tooltip: 'Cerrar sesión',
