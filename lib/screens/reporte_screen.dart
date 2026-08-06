@@ -1449,6 +1449,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 icon: Icon(Icons.bar_chart_outlined), label: 'General'),
             NavigationDestination(
                 icon: Icon(Icons.people_outline), label: 'Vendedores'),
+            NavigationDestination(
+                icon: Icon(Icons.groups_outlined), label: 'Clientes'),
           ],
         ),
         body: SafeArea(
@@ -1487,20 +1489,42 @@ class _ReporteScreenState extends State<ReporteScreen> {
               _listaMovil(),
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 110),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _reiniciar,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFFA8425A),
-                        side: const BorderSide(color: Color(0xFFA8425A)),
-                        padding: const EdgeInsets.all(13),
+                  padding: const EdgeInsets.fromLTRB(14, 4, 14, 110),
+                  child: Column(children: [
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => setState(_asegurarFilaVacia),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF3D1A4A),
+                          side: const BorderSide(
+                              color: Color(0xFFC9A8D4), width: 1.5),
+                          padding: const EdgeInsets.all(14),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14)),
+                        ),
+                        icon: const Icon(Icons.add, size: 19),
+                        label: const Text('Añadir cliente',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
                       ),
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('Eliminar reporte'),
                     ),
-                  ),
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: _reiniciar,
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFFA8425A),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.all(13),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.delete_outline, size: 18),
+                        label: const Text('Eliminar reporte'),
+                      ),
+                    ),
+                  ]),
                 ),
               ),
             ],
@@ -1578,7 +1602,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   Widget _kpiMovil(String titulo, String valor, IconData icono, Color color,
           {Color fondo = Colors.white}) =>
       Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(13, 12, 10, 12),
         decoration: BoxDecoration(
           color: fondo,
           borderRadius: BorderRadius.circular(14),
@@ -1587,36 +1611,42 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   ? const Color(0xFFEAE3EA)
                   : Colors.transparent),
         ),
-        child: Row(children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: .10),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icono, size: 18, color: color),
-          ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(titulo,
+        child: Stack(children: [
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(right: 28),
+                child: Text(titulo,
                     style: const TextStyle(
-                        color: Color(0xFF8A7C89), fontSize: 9.5)),
-                const SizedBox(height: 3),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(valor,
-                      style: TextStyle(
-                          color: color,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700)),
-                ),
-              ],
+                        color: Color(0xFF8A7C89),
+                        fontSize: 9.5,
+                        letterSpacing: .8)),
+              ),
+              const SizedBox(height: 5),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(valor,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ],
+          ),
+          Positioned(
+            top: 0,
+            right: 0,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: .10),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icono, size: 13, color: color),
             ),
           ),
         ]),
@@ -1721,12 +1751,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
     final expandida = _filasExpandidas.contains(fila.numero);
     return Container(
       decoration: BoxDecoration(
-        color: fila.pagada ? const Color(0xFFF0F8F2) : Colors.white,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-            color: fila.pagada
-                ? const Color(0xFFBBD9C4)
-                : const Color(0xFFEAE3EA)),
+        border: Border.all(color: const Color(0xFFEAE3EA)),
       ),
       child: Column(children: [
         InkWell(
@@ -1809,8 +1836,22 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              if (fila.nombreComercial.isNotEmpty)
-                _textoCampoMovil('Nombre comercial', fila.nombreComercial),
+              _campoEditableMovil(
+                'Cliente',
+                fila.cliente,
+                'Nombre del cliente',
+                (valor) => fila.cliente = valor,
+                fila,
+              ),
+              const SizedBox(height: 12),
+              _campoEditableMovil(
+                'Nombre comercial',
+                fila.nombreComercial,
+                'Nombre comercial',
+                (valor) => fila.nombreComercial = valor,
+                fila,
+              ),
+              const SizedBox(height: 12),
               Row(children: [
                 Expanded(
                     child: _textoCampoMovil(
@@ -1856,6 +1897,24 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   Expanded(child: _entradaEntera(fila)),
                 ]),
                 const SizedBox(height: 12),
+                const Text('VENTA',
+                    style: TextStyle(
+                        color: Color(0xFF8A7C89),
+                        fontSize: 10,
+                        letterSpacing: .6)),
+                const SizedBox(height: 5),
+                _entrada(
+                  fila.venta == 0 ? '' : fila.venta.toStringAsFixed(2),
+                  double.infinity,
+                  (valor) {
+                    final limpio =
+                        valor.replaceAll(',', '.').replaceAll('\$', '');
+                    setState(() => fila.venta = double.tryParse(limpio) ?? 0);
+                    _guardarProgreso();
+                    _guardarFilaNube(fila);
+                  },
+                ),
+                const SizedBox(height: 12),
                 const Text('ABONOS',
                     style: TextStyle(
                         color: Color(0xFF8A7C89),
@@ -1887,6 +1946,24 @@ class _ReporteScreenState extends State<ReporteScreen> {
                           color: const Color(0xFF7A1F3D)),
                     ]),
               ),
+              if (!_vistaGeneral) ...[
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    onPressed: _eliminarReporteCliente,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFFA8425A),
+                      side: const BorderSide(color: Color(0xFFA8425A)),
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Eliminar este cliente',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                  ),
+                ),
+              ],
             ]),
           ),
         ),
@@ -1904,6 +1981,35 @@ class _ReporteScreenState extends State<ReporteScreen> {
           Text(valor, maxLines: 2, overflow: TextOverflow.ellipsis),
         ]),
       );
+
+  Widget _campoEditableMovil(
+    String etiqueta,
+    String valor,
+    String sugerencia,
+    ValueChanged<String> asignar,
+    FilaVenta fila,
+  ) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(etiqueta.toUpperCase(),
+            style: const TextStyle(
+                color: Color(0xFF8A7C89), fontSize: 10, letterSpacing: .6)),
+        const SizedBox(height: 5),
+        TextFormField(
+          initialValue: valor,
+          decoration: InputDecoration(
+            hintText: sugerencia,
+            isDense: true,
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
+          ),
+          onChanged: (texto) {
+            setState(() => asignar(texto));
+            _guardarProgreso();
+            _guardarFilaNube(fila);
+          },
+        ),
+      ]);
 
   Widget _datoMovil(String etiqueta, String valor, {Color? color}) => SizedBox(
         width: 88,
