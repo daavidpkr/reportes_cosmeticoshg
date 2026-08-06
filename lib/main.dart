@@ -8,13 +8,13 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    await dotenv.load(fileName: '.env');
+    await dotenv.load(fileName: 'env');
     final url = dotenv.env['SUPABASE_URL']?.trim() ?? '';
     final anonKey = dotenv.env['SUPABASE_ANON_KEY']?.trim() ?? '';
 
     if (!_esUrlSupabaseValida(url) || anonKey.isEmpty) {
       throw const FormatException(
-        'Completa SUPABASE_URL y SUPABASE_ANON_KEY en el archivo .env.',
+        'Completa SUPABASE_URL y SUPABASE_ANON_KEY en el archivo env.',
       );
     }
 
