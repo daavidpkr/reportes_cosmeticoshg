@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -42,6 +43,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
   Timer? _busquedaFacturaTimer;
   int _versionBusqueda = 0;
+  final Set<int> _filasExpandidas = {1};
 
   // La antigua vista al 90% es ahora la escala base (100%).
   double get _escalaReporte => _zoom * .99;
@@ -1327,6 +1329,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_esReleaseMovil) return _vistaMovil();
+
     return Scaffold(
       body: Focus(
         focusNode: _focusZoom,
@@ -1355,6 +1359,564 @@ class _ReporteScreenState extends State<ReporteScreen> {
       ),
     );
   }
+
+  bool get _esReleaseMovil =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+
+  Widget _vistaMovil() => Scaffold(
+        appBar: AppBar(
+          foregroundColor: Colors.white,
+          flexibleSpace: const DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF591530), Color(0xFF3D1A4A)],
+              ),
+            ),
+          ),
+          titleSpacing: 16,
+          title: Row(children: [
+            Container(
+              width: 32,
+              height: 32,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(9),
+                gradient: const RadialGradient(
+                  center: Alignment(-.4, -.4),
+                  colors: [Color(0xFFF1E4C0), Color(0xFFC9A24C)],
+                ),
+              ),
+              child: const Text('HG',
+                  style: TextStyle(
+                      color: Color(0xFF591530),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12)),
+            ),
+            const SizedBox(width: 10),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Cosméticos HG',
+                    style:
+                        TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+                Text('P E R F E C T  N A I L S',
+                    style: TextStyle(
+                        color: Color(0xFFF1E4C0),
+                        fontSize: 8,
+                        letterSpacing: .5)),
+              ],
+            ),
+          ]),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 10),
+              child: IconButton.filled(
+                tooltip: 'Cerrar sesión',
+                style: IconButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: .12)),
+                onPressed: widget.onCerrarSesion,
+                icon: const Icon(Icons.logout, size: 19),
+              ),
+            ),
+          ],
+        ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: _guardar,
+          backgroundColor: const Color(0xFF7A1F3D),
+          foregroundColor: Colors.white,
+          elevation: 5,
+          icon: const Icon(Icons.download, size: 19),
+          label:
+              const Text('PDF', style: TextStyle(fontWeight: FontWeight.w700)),
+        ),
+        bottomNavigationBar: NavigationBar(
+          height: 68,
+          selectedIndex: _vistaGeneral ? 1 : 0,
+          indicatorColor: const Color(0xFFF2E9F4),
+          onDestinationSelected: (indice) {
+            if (indice == 2) {
+              _gestionarVendedores();
+            } else {
+              setState(() => _vistaGeneral = indice == 1);
+            }
+          },
+          destinations: const [
+            NavigationDestination(
+                icon: Icon(Icons.receipt_long_outlined), label: 'Ventas'),
+            NavigationDestination(
+                icon: Icon(Icons.bar_chart_outlined), label: 'General'),
+            NavigationDestination(
+                icon: Icon(Icons.people_outline), label: 'Vendedores'),
+          ],
+        ),
+        body: SafeArea(
+          child: CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            slivers: [
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
+                sliver: SliverList.list(children: [
+                  _encabezadoMovil(),
+                  const SizedBox(height: 14),
+                  _resumenMovil(),
+                  const SizedBox(height: 14),
+                  _controlesMoviles(),
+                  const SizedBox(height: 16),
+                  Row(children: [
+                    Text(_vistaGeneral ? 'Todos los registros' : 'Clientes',
+                        style: const TextStyle(
+                            color: Color(0xFF3D1A4A),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700)),
+                    const Spacer(),
+                    Text(
+                        '${_vistaGeneral ? _filasGenerales.length : _filasVisibles.length} registros',
+                        style: const TextStyle(
+                            color: Color(0xFF8A7C89), fontSize: 11)),
+                  ]),
+                  if (_descripcionFiltro.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(_descripcionFiltro,
+                        style: const TextStyle(
+                            color: Color(0xFF8A7C89), fontSize: 12)),
+                  ],
+                ]),
+              ),
+              _listaMovil(),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 110),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _reiniciar,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFA8425A),
+                        side: const BorderSide(color: Color(0xFFA8425A)),
+                        padding: const EdgeInsets.all(13),
+                      ),
+                      icon: const Icon(Icons.delete_outline, size: 18),
+                      label: const Text('Eliminar reporte'),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _encabezadoMovil() => Row(
+        children: [
+          Expanded(
+              child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_vistaGeneral ? 'Reporte general' : 'Reporte de ventas',
+                  style: const TextStyle(
+                      fontSize: 17, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(
+                  _vistaGeneral
+                      ? 'Consolidado de todos los meses'
+                      : 'Facturas, abonos y saldos por cliente',
+                  style:
+                      const TextStyle(color: Color(0xFF8A7C89), fontSize: 11)),
+            ],
+          )),
+          const SizedBox(width: 10),
+          SizedBox(
+              width: 135,
+              child: DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue:
+                    _reportes.reportes.isEmpty ? null : _reportes.activo.id,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.calendar_month_outlined, size: 17),
+                  prefixIconConstraints: BoxConstraints(minWidth: 34),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+                  isDense: true,
+                ),
+                items: _reportes.reportes
+                    .map((r) =>
+                        DropdownMenuItem(value: r.id, child: Text(r.nombre)))
+                    .toList(),
+                onChanged: (id) async {
+                  if (id == null) return;
+                  await _guardarProgreso();
+                  _activarReporte(
+                      _reportes.reportes.firstWhere((r) => r.id == id));
+                },
+              )),
+        ],
+      );
+
+  Widget _resumenMovil() => GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 1.75,
+        children: [
+          _kpiMovil('TOTAL ESMALTES', '$_totalEsmaltes', Icons.brush_outlined,
+              const Color(0xFF3D1A4A)),
+          _kpiMovil('VENTAS', '\$${_totalVentas.toStringAsFixed(2)}',
+              Icons.payments_outlined, const Color(0xFF7A1F3D)),
+          _kpiMovil('COBROS', '\$${_totalCobros.toStringAsFixed(2)}',
+              Icons.check_circle_outline, const Color(0xFF3F8158),
+              fondo: const Color(0xFFE5F2E9)),
+          _kpiMovil('POR COBRAR', '\$${_totalPorCobrar.toStringAsFixed(2)}',
+              Icons.schedule, const Color(0xFFB8863B),
+              fondo: const Color(0xFFFBF0DC)),
+        ],
+      );
+
+  Widget _kpiMovil(String titulo, String valor, IconData icono, Color color,
+          {Color fondo = Colors.white}) =>
+      Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: fondo,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+              color: fondo == Colors.white
+                  ? const Color(0xFFEAE3EA)
+                  : Colors.transparent),
+        ),
+        child: Row(children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icono, size: 18, color: color),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(titulo,
+                    style: const TextStyle(
+                        color: Color(0xFF8A7C89), fontSize: 9.5)),
+                const SizedBox(height: 3),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(valor,
+                      style: TextStyle(
+                          color: color,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ),
+        ]),
+      );
+
+  Widget _controlesMoviles() => Column(children: [
+        _campoBusquedaRedisenado(),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 42,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              SizedBox(width: 165, child: _filtroVendedorMovil()),
+              const SizedBox(width: 8),
+              SizedBox(width: 145, child: _filtroEstadoMovil()),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 40,
+          child: ListView(scrollDirection: Axis.horizontal, children: [
+            FilledButton.tonalIcon(
+              onPressed: _nuevoReporte,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Nuevo mes'),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.tonalIcon(
+              onPressed: _abrirCargaFacturas,
+              icon: const Icon(Icons.upload_file, size: 18),
+              label: Text('Subir facturas (${_facturas.cantidad})'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: _eliminarReporteCliente,
+              icon: const Icon(Icons.delete_outline, size: 18),
+              label: const Text('Eliminar cliente'),
+            ),
+          ]),
+        ),
+      ]);
+
+  Widget _filtroVendedorMovil() => DropdownButtonFormField<String>(
+        isExpanded: true,
+        initialValue: _filtroVendedor,
+        decoration: InputDecoration(
+          labelText: 'Vendedor',
+          isDense: true,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(999)),
+        ),
+        items: [
+          const DropdownMenuItem(value: '', child: Text('Todos')),
+          const DropdownMenuItem(
+              value: _opcionAnulada, child: Text(_opcionAnulada)),
+          ..._vendedores.vendedores.map((v) =>
+              DropdownMenuItem(value: v.etiqueta, child: Text(v.etiqueta))),
+        ],
+        onChanged: (v) => setState(() => _filtroVendedor = v ?? ''),
+      );
+
+  Widget _filtroEstadoMovil() => DropdownButtonFormField<String>(
+        isExpanded: true,
+        initialValue: _filtroEstado,
+        decoration: InputDecoration(
+          labelText: 'Estado',
+          isDense: true,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(999)),
+        ),
+        items: const [
+          DropdownMenuItem(value: 'todos', child: Text('Todos')),
+          DropdownMenuItem(value: 'pagados', child: Text('Pagados')),
+          DropdownMenuItem(value: 'pendientes', child: Text('Pendientes')),
+        ],
+        onChanged: (v) => setState(() => _filtroEstado = v ?? 'todos'),
+      );
+
+  Widget _listaMovil() {
+    final filas = _vistaGeneral
+        ? _filasGenerales
+        : _filasVisibles.map((item) => item.value).toList();
+    if (filas.isEmpty) {
+      return const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: Center(child: Text('No hay registros para mostrar.')),
+        ),
+      );
+    }
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      sliver: SliverList.separated(
+        itemCount: filas.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, indice) => _tarjetaFilaMovil(filas[indice]),
+      ),
+    );
+  }
+
+  Widget _tarjetaFilaMovil(FilaVenta fila) {
+    final expandida = _filasExpandidas.contains(fila.numero);
+    return Container(
+      decoration: BoxDecoration(
+        color: fila.pagada ? const Color(0xFFF0F8F2) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: fila.pagada
+                ? const Color(0xFFBBD9C4)
+                : const Color(0xFFEAE3EA)),
+      ),
+      child: Column(children: [
+        InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => setState(() {
+            expandida
+                ? _filasExpandidas.remove(fila.numero)
+                : _filasExpandidas.add(fila.numero);
+          }),
+          child: Padding(
+            padding: const EdgeInsets.all(13),
+            child: Row(children: [
+              Container(
+                width: 26,
+                height: 26,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF2E9F4),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text('${fila.numero}',
+                    style: const TextStyle(
+                        color: Color(0xFF3D1A4A),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        fila.cliente.isEmpty
+                            ? 'Cliente sin nombre'
+                            : fila.cliente,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 13.5, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 1),
+                    Text(
+                      'Ref. ${fila.referencia.isEmpty ? "—" : _refSinCeros(fila.referencia)} · ${fila.numeroFactura.isEmpty ? "sin factura" : fila.numeroFactura}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Color(0xFF8A7C89), fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+                Text('\$${fila.saldo.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        color: Color(0xFF7A1F3D),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700)),
+                const Text('saldo',
+                    style: TextStyle(color: Color(0xFF8A7C89), fontSize: 10.5)),
+              ]),
+              const SizedBox(width: 6),
+              AnimatedRotation(
+                turns: expandida ? .5 : 0,
+                duration: const Duration(milliseconds: 180),
+                child: const Icon(Icons.keyboard_arrow_down,
+                    size: 19, color: Color(0xFF8A7C89)),
+              ),
+            ]),
+          ),
+        ),
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 180),
+          crossFadeState:
+              expandida ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+          firstChild: const SizedBox(width: double.infinity),
+          secondChild: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: Color(0xFFEAE3EA))),
+            ),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              if (fila.nombreComercial.isNotEmpty)
+                _textoCampoMovil('Nombre comercial', fila.nombreComercial),
+              Row(children: [
+                Expanded(
+                    child: _textoCampoMovil(
+                        'Fecha', fila.fecha.isEmpty ? '—' : fila.fecha)),
+                const SizedBox(width: 10),
+                Expanded(
+                    child: _textoCampoMovil('Nro. fact.',
+                        fila.numeroFactura.isEmpty ? '—' : fila.numeroFactura)),
+              ]),
+              if (!_vistaGeneral) ...[
+                const SizedBox(height: 12),
+                const Text('VENDEDOR / REFERENCIA',
+                    style: TextStyle(
+                        color: Color(0xFF8A7C89),
+                        fontSize: 10,
+                        letterSpacing: .6)),
+                const SizedBox(height: 5),
+                Row(children: [
+                  Expanded(child: _selectorVendedor(fila)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                      child: _entrada(
+                    _refSinCeros(fila.referencia),
+                    double.infinity,
+                    (valor) => _buscarFactura(_filas.indexOf(fila), valor),
+                    enviar: true,
+                  )),
+                ]),
+                const SizedBox(height: 12),
+                const Text('ESMALTES',
+                    style: TextStyle(
+                        color: Color(0xFF8A7C89),
+                        fontSize: 10,
+                        letterSpacing: .6)),
+                const SizedBox(height: 5),
+                Row(children: [
+                  Container(
+                      width: 11,
+                      height: 11,
+                      decoration: const BoxDecoration(
+                          color: Color(0xFFC9A24C), shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _entradaEntera(fila)),
+                ]),
+                const SizedBox(height: 12),
+                const Text('ABONOS',
+                    style: TextStyle(
+                        color: Color(0xFF8A7C89),
+                        fontSize: 10,
+                        letterSpacing: .6)),
+                const SizedBox(height: 5),
+                Row(children: [
+                  Expanded(child: _botonAbono(fila, 0)),
+                  const SizedBox(width: 8),
+                  Expanded(child: _botonAbono(fila, 1)),
+                  _abonosAdicionales(fila),
+                ]),
+              ],
+              const SizedBox(height: 14),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                decoration: BoxDecoration(
+                    color: const Color(0xFFF5F3F6),
+                    borderRadius: BorderRadius.circular(10)),
+                child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _datoMovil('Venta', '\$${fila.venta.toStringAsFixed(2)}'),
+                      _datoMovil('Tot. abono',
+                          '\$${fila.totalAbonos.toStringAsFixed(2)}',
+                          color: const Color(0xFF3F8158)),
+                      _datoMovil('Saldo', '\$${fila.saldo.toStringAsFixed(2)}',
+                          color: const Color(0xFF7A1F3D)),
+                    ]),
+              ),
+            ]),
+          ),
+        ),
+      ]),
+    );
+  }
+
+  Widget _textoCampoMovil(String etiqueta, String valor) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(etiqueta.toUpperCase(),
+              style: const TextStyle(
+                  color: Color(0xFF8A7C89), fontSize: 10, letterSpacing: .6)),
+          const SizedBox(height: 3),
+          Text(valor, maxLines: 2, overflow: TextOverflow.ellipsis),
+        ]),
+      );
+
+  Widget _datoMovil(String etiqueta, String valor, {Color? color}) => SizedBox(
+        width: 88,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(etiqueta.toUpperCase(),
+              style: const TextStyle(
+                  color: Color(0xFF8A7C89), fontSize: 9, letterSpacing: .5)),
+          const SizedBox(height: 2),
+          Text(valor,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: color, fontWeight: FontWeight.w700)),
+        ]),
+      );
 
   Widget _barraSuperior() => Container(
         height: 64,
