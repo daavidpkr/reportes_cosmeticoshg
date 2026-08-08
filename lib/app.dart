@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/login_screen.dart';
@@ -27,6 +28,7 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
   final _auth = Supabase.instance.client.auth;
   late final StreamSubscription<AuthState> _authSubscription;
   late bool _sesionIniciada;
+  ThemeMode _themeMode = ThemeMode.light;
 
   @override
   void initState() {
@@ -38,6 +40,7 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
         setState(() => _sesionIniciada = estado.session != null);
       }
     });
+    _cargarTema();
   }
 
   @override
@@ -48,11 +51,26 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
 
   Future<void> _cerrarSesion() => _auth.signOut();
 
+  Future<void> _cargarTema() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted && (prefs.getBool('modo_oscuro') ?? false)) {
+      setState(() => _themeMode = ThemeMode.dark);
+    }
+  }
+
+  Future<void> _cambiarTema() async {
+    final oscuro = _themeMode != ThemeMode.dark;
+    setState(() => _themeMode = oscuro ? ThemeMode.dark : ThemeMode.light);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('modo_oscuro', oscuro);
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Cosméticos HG - Reportes',
       debugShowCheckedModeBanner: false,
+      themeMode: _themeMode,
       theme: ThemeData(
         colorScheme: const ColorScheme.light(
           primary: _burgundy,
@@ -164,8 +182,42 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
         ),
         useMaterial3: true,
       ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFD8A8B9),
+          onPrimary: Color(0xFF3B0D20),
+          secondary: Color(0xFFD3B3DE),
+          surface: Color(0xFF201A1F),
+          onSurface: Color(0xFFF3EAF0),
+          outline: Color(0xFF63565F),
+          error: Color(0xFFFFB4AB),
+        ),
+        scaffoldBackgroundColor: const Color(0xFF171216),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF3D1026),
+          foregroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+        ),
+        cardTheme: const CardThemeData(color: Color(0xFF241E23)),
+        inputDecorationTheme: const InputDecorationTheme(
+          filled: true,
+          fillColor: Color(0xFF2B242A),
+          border: OutlineInputBorder(),
+        ),
+        navigationBarTheme: const NavigationBarThemeData(
+          backgroundColor: Color(0xFF211A20),
+          indicatorColor: Color(0xFF553043),
+        ),
+        dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF241E23)),
+        useMaterial3: true,
+      ),
       home: _sesionIniciada
-          ? ReporteScreen(onCerrarSesion: _cerrarSesion)
+          ? ReporteScreen(
+              onCerrarSesion: _cerrarSesion,
+              onCambiarTema: _cambiarTema,
+              modoOscuro: _themeMode == ThemeMode.dark,
+            )
           : const LoginScreen(),
     );
   }

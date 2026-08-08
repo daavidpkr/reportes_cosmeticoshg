@@ -61,7 +61,7 @@ class ReporteExporter {
     final rosa = PdfColor.fromHex('#B71157');
     // Equivale a Colors.green (#4CAF50) con 12 % de opacidad sobre blanco,
     // que es el color usado para las filas pagadas en la tabla de la app.
-    final verdePagada = PdfColor.fromHex('#EAF5EA');
+    final verdePagada = PdfColor.fromHex('#DCEEDC');
 
     documento.addPage(
       pw.MultiPage(
@@ -91,7 +91,7 @@ class ReporteExporter {
             data: filasConDatos
                 .map((fila) => [
                       fila.numero,
-                      fila.referencia,
+                      _referenciaParaPdf(fila.referencia),
                       fila.cliente,
                       fila.nombreComercial,
                       fila.fecha,
@@ -250,4 +250,11 @@ class ReporteExporter {
       );
 
   String _dinero(double valor) => '\$${valor.toStringAsFixed(2)}';
+
+  /// Solo modifica la presentación. Las referencias alfanuméricas se conservan.
+  String _referenciaParaPdf(String valor) {
+    final limpio = valor.trim();
+    if (!RegExp(r'^\d+$').hasMatch(limpio)) return valor;
+    return limpio.replaceFirst(RegExp(r'^0+(?=\d)'), '');
+  }
 }

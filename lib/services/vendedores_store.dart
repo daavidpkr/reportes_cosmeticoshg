@@ -168,6 +168,37 @@ class VendedoresStore {
     vendedores.remove(vendedor);
   }
 
+  Future<bool> editar(
+    Vendedor anterior,
+    String codigo,
+    String nombre,
+  ) async {
+    final codigoLimpio = codigo.trim().toUpperCase();
+    final nombreLimpio = nombre.trim();
+    if (codigoLimpio.isEmpty || nombreLimpio.isEmpty) return false;
+    if (vendedores.any((item) =>
+        !identical(item, anterior) &&
+        (item.codigo.toLowerCase() == codigoLimpio.toLowerCase() ||
+            item.nombre.toLowerCase() == nombreLimpio.toLowerCase()))) {
+      return false;
+    }
+    try {
+      await _client.from('vendedores').update({
+        'codigo': codigoLimpio,
+        'nombre': nombreLimpio,
+      }).eq('codigo', anterior.codigo);
+      final indice = vendedores.indexOf(anterior);
+      if (indice >= 0) {
+        vendedores[indice] =
+            Vendedor(codigo: codigoLimpio, nombre: nombreLimpio);
+      }
+      _ordenar();
+      return true;
+    } on PostgrestException {
+      return false;
+    }
+  }
+
   void _ordenar() {
     vendedores.sort(
       (a, b) => a.codigo.toLowerCase().compareTo(

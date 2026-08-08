@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/fila_venta.dart';
 import '../services/facturas_store.dart';
@@ -12,11 +13,18 @@ import '../services/reportes_store.dart';
 import '../services/supabase_reportes_service.dart';
 import '../services/vendedores_store.dart';
 import 'carga_facturas_screen.dart';
+import 'vendedores_screen.dart';
 
 class ReporteScreen extends StatefulWidget {
-  const ReporteScreen({this.onCerrarSesion, super.key});
+  const ReporteScreen(
+      {this.onCerrarSesion,
+      this.onCambiarTema,
+      this.modoOscuro = false,
+      super.key});
 
   final VoidCallback? onCerrarSesion;
+  final VoidCallback? onCambiarTema;
+  final bool modoOscuro;
 
   @override
   State<ReporteScreen> createState() => _ReporteScreenState();
@@ -37,7 +45,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   final Map<String, String> _filtrosColumnas = {};
   String? _ordenColumna;
   bool _ordenAscendente = true;
-  double _zoom = 1;
+  double _zoom = .85;
   bool _vistaGeneral = false;
   int _seccionMovil = 0;
   final _busquedaController = TextEditingController();
@@ -45,6 +53,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   Timer? _busquedaFacturaTimer;
   int _versionBusqueda = 0;
   final Set<int> _filasExpandidas = {};
+  bool _actualizando = false;
 
   // La antigua vista al 90% es ahora la escala base (100%).
   double get _escalaReporte => _zoom * .99;
@@ -126,6 +135,29 @@ class _ReporteScreenState extends State<ReporteScreen> {
       _mostrarErrorNube(
         'No se pudieron cargar los reportes: $error',
       );
+    }
+  }
+
+  Future<void> _actualizarDesdeSupabase() async {
+    if (_actualizando) return;
+    setState(() => _actualizando = true);
+    try {
+      final auth = Supabase.instance.client.auth;
+      if (auth.currentSession == null) {
+        throw const AuthException('La sesión ya no está activa.');
+      }
+      await auth.refreshSession();
+      await _vendedores.cargar();
+      await _cargarReportes();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Sesión y datos actualizados correctamente.')),
+      );
+    } catch (error) {
+      _mostrarErrorNube('No se pudo actualizar: $error');
+    } finally {
+      if (mounted) setState(() => _actualizando = false);
     }
   }
 
@@ -490,6 +522,22 @@ class _ReporteScreenState extends State<ReporteScreen> {
     montoController.dispose();
     comentarioController.dispose();
     if (!mounted) return;
+    if (resultado != null) {
+      final totalPropuesto = fila.totalAbonos - abono.valor + resultado.$1;
+      if (resultado.$1 < 0 || totalPropuesto > fila.venta + 0.005) {
+        if (nuevo) setState(() => fila.abonos.removeAt(indice));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.orange.shade800,
+            content: Text(
+              'El total de abonos (\$${totalPropuesto.toStringAsFixed(2)}) '
+              'supera el valor de la factura (\$${fila.venta.toStringAsFixed(2)}).',
+            ),
+          ),
+        );
+        return;
+      }
+    }
     setState(() {
       if (resultado == null) {
         if (nuevo) fila.abonos.removeAt(indice);
@@ -559,6 +607,16 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   Future<void> _gestionarVendedores() async {
+    await Navigator.push<void>(
+      context,
+      MaterialPageRoute(builder: (_) => VendedoresScreen(store: _vendedores)),
+    );
+    if (mounted) setState(() {});
+  }
+
+  // Conservado temporalmente como referencia de la interfaz anterior.
+  // ignore: unused_element
+  Future<void> _gestionarVendedoresAnterior() async {
     final codigoController = TextEditingController();
     final nombreController = TextEditingController();
     Future<void> guardar(StateSetter actualizar) async {
@@ -1413,6 +1471,23 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ),
           ]),
           actions: [
+            IconButton(
+              tooltip: 'Actualizar datos',
+              onPressed: _actualizando ? null : _actualizarDesdeSupabase,
+              icon: _actualizando
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.refresh),
+            ),
+            IconButton(
+              tooltip: widget.modoOscuro ? 'Modo claro' : 'Modo oscuro',
+              onPressed: widget.onCambiarTema,
+              icon: Icon(widget.modoOscuro
+                  ? Icons.light_mode_outlined
+                  : Icons.dark_mode_outlined),
+            ),
             Padding(
               padding: const EdgeInsets.only(right: 10),
               child: IconButton.filled(
@@ -2114,6 +2189,23 @@ class _ReporteScreenState extends State<ReporteScreen> {
           _pestana('Estadísticas', false,
               () => setState(() => _vistaGeneral = true)),
           const Spacer(),
+          IconButton(
+              tooltip: 'Actualizar datos',
+              onPressed: _actualizando ? null : _actualizarDesdeSupabase,
+              icon: _actualizando
+                  ? const SizedBox.square(
+                      dimension: 17,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.refresh, color: Colors.white70)),
+          IconButton(
+              tooltip: widget.modoOscuro ? 'Modo claro' : 'Modo oscuro',
+              onPressed: widget.onCambiarTema,
+              icon: Icon(
+                  widget.modoOscuro
+                      ? Icons.light_mode_outlined
+                      : Icons.dark_mode_outlined,
+                  color: Colors.white70)),
           IconButton(
               tooltip: 'Cerrar sesión',
               onPressed: widget.onCerrarSesion,

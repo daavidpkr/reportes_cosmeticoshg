@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 typedef AutenticarUsuario = Future<void> Function(
@@ -59,6 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
           password: contrasena,
         );
       }
+      TextInput.finishAutofillContext(shouldSave: true);
     } on AuthException catch (error) {
       if (mounted) setState(() => _errorAcceso = _mensajeAuth(error));
     } catch (_) {
@@ -159,55 +161,57 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(32, 36, 32, 36),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildLockIcon(),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'COSMÉTICOS HG',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: _plum,
-                      fontSize: 21,
-                      height: 1.15,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: .5,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Inicia sesión para acceder a los reportes',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: _inkSoft,
-                      fontSize: 13,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 26),
-                  _buildEmailField(),
-                  const SizedBox(height: 14),
-                  _buildPasswordField(),
-                  if (_errorAcceso != null) ...[
-                    const SizedBox(height: 14),
-                    Semantics(
-                      liveRegion: true,
-                      child: Text(
-                        _errorAcceso!,
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: Color(0xFFB3261E),
-                          fontSize: 13,
-                        ),
+            child: AutofillGroup(
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildLockIcon(),
+                    const SizedBox(height: 18),
+                    const Text(
+                      'COSMÉTICOS HG',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _plum,
+                        fontSize: 21,
+                        height: 1.15,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: .5,
                       ),
                     ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Inicia sesión para acceder a los reportes',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: _inkSoft,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 26),
+                    _buildEmailField(),
+                    const SizedBox(height: 14),
+                    _buildPasswordField(),
+                    if (_errorAcceso != null) ...[
+                      const SizedBox(height: 14),
+                      Semantics(
+                        liveRegion: true,
+                        child: Text(
+                          _errorAcceso!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Color(0xFFB3261E),
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 22),
+                    _buildLoginButton(),
                   ],
-                  const SizedBox(height: 22),
-                  _buildLoginButton(),
-                ],
+                ),
               ),
             ),
           ),
@@ -247,7 +251,7 @@ class _LoginScreenState extends State<LoginScreen> {
       autofocus: true,
       keyboardType: TextInputType.emailAddress,
       textInputAction: TextInputAction.next,
-      autofillHints: const [AutofillHints.email],
+      autofillHints: const [AutofillHints.username, AutofillHints.email],
       style: const TextStyle(color: _ink, fontSize: 13.5),
       decoration: _fieldDecoration(
         hintText: 'Correo electrónico',
