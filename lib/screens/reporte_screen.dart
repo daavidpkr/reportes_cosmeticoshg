@@ -2382,8 +2382,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
               'Subir facturas (${_facturas.cantidad})', _abrirCargaFacturas),
           const SizedBox(width: 8),
           _botonBarra(Icons.person_remove_outlined, 'Eliminar cliente',
-              _eliminarReporteCliente,
-              borde: true),
+              _eliminarReporteCliente),
           const SizedBox(width: 8),
           FilledButton.icon(
               onPressed: _guardar,
@@ -2828,6 +2827,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         child: DropdownButtonFormField<String>(
           initialValue: fila.vendedor.isEmpty ? null : fila.vendedor,
           isExpanded: true,
+          icon: const SizedBox.shrink(),
           hint: const Text('Escoger'),
           decoration: const InputDecoration(
             isDense: true,
