@@ -411,7 +411,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
           content: Text(
             'La factura ${facturaEncontrada.secuencial} ya fue agregada en la fila ${repetida.value.numero}.',
           ),
-          backgroundColor: Colors.orange.shade800,
+          backgroundColor: context.hg.warning,
         ),
       );
       return;
@@ -460,7 +460,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   void _mostrarErrorNube(String mensaje) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje), backgroundColor: Colors.red.shade700),
+      SnackBar(content: Text(mensaje), backgroundColor: context.hg.danger),
     );
   }
 
@@ -549,7 +549,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         if (nuevo) setState(() => fila.abonos.removeAt(indice));
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            backgroundColor: Colors.orange.shade800,
+            backgroundColor: context.hg.warning,
             content: Text(
               'El total de abonos (\$${totalPropuesto.toStringAsFixed(2)}) '
               'supera el valor de la factura (\$${fila.venta.toStringAsFixed(2)}).',
@@ -714,7 +714,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                           leading: CircleAvatar(
                             child: Text(
                               vendedor.codigo.isEmpty ? '—' : vendedor.codigo,
-                              style: TextStyle(fontSize: 10),
+                              style: const TextStyle(fontSize: 10),
                             ),
                           ),
                           title: Text(vendedor.nombre),
@@ -1032,7 +1032,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
               onPressed: confirmacionController.text.trim() == nombre
                   ? () => Navigator.pop(context, true)
                   : null,
-              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              style: FilledButton.styleFrom(backgroundColor: context.hg.danger),
               child: const Text('Eliminar definitivamente'),
             ),
           ],
@@ -1165,7 +1165,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(backgroundColor: context.hg.danger),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Sí, eliminar'),
           ),
@@ -1527,7 +1527,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: _guardar,
-          backgroundColor: const Color(0xFF7A1F3D),
+          backgroundColor: context.hg.burgundy,
           foregroundColor: Colors.white,
           elevation: 5,
           icon: const Icon(Icons.download, size: 19),
@@ -1575,20 +1575,20 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   Row(children: [
                     Text(_vistaGeneral ? 'Todos los registros' : 'Clientes',
                         style: TextStyle(
-                            color: Color(0xFF3D1A4A),
+                            color: context.hg.plum,
                             fontSize: 13,
                             fontWeight: FontWeight.w700)),
                     const Spacer(),
                     Text(
                         '${_vistaGeneral ? _filasGenerales.length : _filasVisibles.length} registros',
-                        style:
-                            TextStyle(color: Color(0xFF8A7C89), fontSize: 11)),
+                        style: TextStyle(
+                            color: context.hg.mutedText, fontSize: 11)),
                   ]),
                   if (_descripcionFiltro.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(_descripcionFiltro,
-                        style:
-                            TextStyle(color: Color(0xFF8A7C89), fontSize: 12)),
+                        style: TextStyle(
+                            color: context.hg.mutedText, fontSize: 12)),
                   ],
                 ]),
               ),
@@ -1627,13 +1627,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(_vistaGeneral ? 'Reporte general' : 'Reporte de ventas',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Text(
                   _vistaGeneral
                       ? 'Consolidado de todos los meses'
                       : 'Facturas, abonos y saldos por cliente',
-                  style: TextStyle(color: Color(0xFF8A7C89), fontSize: 11)),
+                  style: TextStyle(color: context.hg.mutedText, fontSize: 11)),
             ],
           )),
           const SizedBox(width: 10),
@@ -1673,9 +1673,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
         childAspectRatio: 1.75,
         children: [
           _kpiMovil('TOTAL ESMALTES', '$_totalEsmaltes', Icons.brush_outlined,
-              const Color(0xFF3D1A4A)),
+              context.hg.plum),
           _kpiMovil('VENTAS', '\$${_totalVentas.toStringAsFixed(2)}',
-              Icons.payments_outlined, const Color(0xFF7A1F3D)),
+              Icons.payments_outlined, context.hg.burgundy),
           _kpiMovil('COBROS', '\$${_totalCobros.toStringAsFixed(2)}',
               Icons.check_circle_outline, context.hg.positive,
               fondo: context.hg.positiveContainer),
@@ -1686,62 +1686,62 @@ class _ReporteScreenState extends State<ReporteScreen> {
       );
 
   Widget _kpiMovil(String titulo, String valor, IconData icono, Color color,
-          {Color fondo = Colors.white}) =>
-      Container(
-        padding: const EdgeInsets.fromLTRB(13, 12, 10, 12),
-        decoration: BoxDecoration(
-          color: fondo,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-              color: fondo == Colors.white
-                  ? Theme.of(context).colorScheme.outlineVariant
-                  : Colors.transparent),
-        ),
-        child: Stack(children: [
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(right: 28),
-                child: Text(titulo,
-                    style: TextStyle(
-                        color: Color(0xFF8A7C89),
-                        fontSize: 9.5,
-                        letterSpacing: .8)),
-              ),
-              const SizedBox(height: 5),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(valor,
-                    style: TextStyle(
-                        color: color,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700)),
-              ),
-            ],
-          ),
-          Positioned(
-            top: 0,
-            right: 0,
-            child: Container(
-              width: 24,
-              height: 24,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: .10),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icono, size: 13, color: color),
+      {Color? fondo}) {
+    final colorFondo = fondo ?? context.hg.panel;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(13, 12, 10, 12),
+      decoration: BoxDecoration(
+        color: colorFondo,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+            color: fondo == null
+                ? Theme.of(context).colorScheme.outlineVariant
+                : Colors.transparent),
+      ),
+      child: Stack(children: [
+        Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(right: 28),
+              child: Text(titulo,
+                  style: TextStyle(
+                      color: context.hg.mutedText,
+                      fontSize: 9.5,
+                      letterSpacing: .8)),
             ),
+            const SizedBox(height: 5),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(valor,
+                  style: TextStyle(
+                      color: color, fontSize: 17, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+        Positioned(
+          top: 0,
+          right: 0,
+          child: Container(
+            width: 24,
+            height: 24,
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: .10),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icono, size: 13, color: color),
           ),
-        ]),
-      );
+        ),
+      ]),
+    );
+  }
 
   Widget _controlesMoviles() => Column(children: [
         Container(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.hg.panel,
             borderRadius: BorderRadius.circular(12),
             border:
                 Border.all(color: Theme.of(context).colorScheme.outlineVariant),
@@ -1787,9 +1787,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
           child: OutlinedButton.icon(
             onPressed: _eliminarReporteCliente,
             style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF3D1A4A),
-              backgroundColor: Colors.white,
-              side: BorderSide(color: Color(0xFFEAE3EA)),
+              foregroundColor: context.hg.plum,
+              backgroundColor: context.hg.panel,
+              side: BorderSide(
+                  color: Theme.of(context).colorScheme.outlineVariant),
               padding: const EdgeInsets.symmetric(vertical: 11),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(999)),
@@ -1801,10 +1802,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
       ]);
 
   ButtonStyle get _estiloAccionMovil => FilledButton.styleFrom(
-        foregroundColor: const Color(0xFF3D1A4A),
+        foregroundColor: context.hg.plum,
         backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
-        textStyle: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+        textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       );
 
@@ -1813,9 +1814,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
         onChanged: (valor) => setState(() => _filtro = valor.trim()),
         decoration: InputDecoration(
           hintText: 'Buscar factura, cliente o vendedor',
-          hintStyle: TextStyle(color: Color(0xFF8A7C89), fontSize: 13),
-          prefixIcon: const Icon(Icons.search_rounded,
-              size: 20, color: Color(0xFF7A1F3D)),
+          hintStyle: TextStyle(color: context.hg.mutedText, fontSize: 13),
+          prefixIcon: Icon(Icons.search_rounded,
+              size: 20, color: context.hg.burgundy),
           suffixIcon: _filtro.isEmpty
               ? null
               : IconButton(
@@ -1827,7 +1828,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   icon: const Icon(Icons.close_rounded, size: 18),
                 ),
           filled: true,
-          fillColor: Colors.white,
+          fillColor: context.hg.input,
           isDense: true,
           contentPadding: const EdgeInsets.symmetric(vertical: 14),
           border: InputBorder.none,
@@ -1896,7 +1897,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
     final expandida = _filasExpandidas.contains(fila.numero);
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.hg.panel,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
@@ -1921,7 +1922,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 ),
                 child: Text('${fila.numero}',
                     style: TextStyle(
-                        color: Color(0xFF3D1A4A),
+                        color: context.hg.plum,
                         fontSize: 12,
                         fontWeight: FontWeight.w700)),
               ),
@@ -1933,7 +1934,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     Text(fila.cliente,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: const TextStyle(
                             fontSize: 13.5, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 1),
                     Text(
@@ -1944,7 +1945,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(color: Color(0xFF8A7C89), fontSize: 11),
+                      style:
+                          TextStyle(color: context.hg.mutedText, fontSize: 11),
                     ),
                   ],
                 ),
@@ -1952,18 +1954,19 @@ class _ReporteScreenState extends State<ReporteScreen> {
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text('\$${fila.saldo.toStringAsFixed(2)}',
                     style: TextStyle(
-                        color: Color(0xFF7A1F3D),
+                        color: context.hg.burgundy,
                         fontSize: 14,
                         fontWeight: FontWeight.w700)),
-                const Text('saldo',
-                    style: TextStyle(color: Color(0xFF8A7C89), fontSize: 10.5)),
+                Text('saldo',
+                    style:
+                        TextStyle(color: context.hg.mutedText, fontSize: 10.5)),
               ]),
               const SizedBox(width: 6),
               AnimatedRotation(
                 turns: expandida ? .5 : 0,
                 duration: const Duration(milliseconds: 180),
-                child: const Icon(Icons.keyboard_arrow_down,
-                    size: 19, color: Color(0xFF8A7C89)),
+                child: Icon(Icons.keyboard_arrow_down,
+                    size: 19, color: context.hg.mutedText),
               ),
             ]),
           ),
@@ -1976,8 +1979,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
           secondChild: Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFFEAE3EA))),
+            decoration: BoxDecoration(
+              border: Border(
+                  top: BorderSide(
+                      color: Theme.of(context).colorScheme.outlineVariant)),
             ),
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -2008,9 +2013,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
               ]),
               if (!_vistaGeneral) ...[
                 const SizedBox(height: 12),
-                const Text('VENDEDOR / REFERENCIA',
+                Text('VENDEDOR / REFERENCIA',
                     style: TextStyle(
-                        color: Color(0xFF8A7C89),
+                        color: context.hg.mutedText,
                         fontSize: 10,
                         letterSpacing: .6)),
                 const SizedBox(height: 5),
@@ -2026,9 +2031,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   )),
                 ]),
                 const SizedBox(height: 12),
-                const Text('ESMALTES',
+                Text('ESMALTES',
                     style: TextStyle(
-                        color: Color(0xFF8A7C89),
+                        color: context.hg.mutedText,
                         fontSize: 10,
                         letterSpacing: .6)),
                 const SizedBox(height: 5),
@@ -2042,9 +2047,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   Expanded(child: _entradaEntera(fila)),
                 ]),
                 const SizedBox(height: 12),
-                const Text('VENTA',
+                Text('VENTA',
                     style: TextStyle(
-                        color: Color(0xFF8A7C89),
+                        color: context.hg.mutedText,
                         fontSize: 10,
                         letterSpacing: .6)),
                 const SizedBox(height: 5),
@@ -2063,9 +2068,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   },
                 ),
                 const SizedBox(height: 12),
-                const Text('ABONOS',
+                Text('ABONOS',
                     style: TextStyle(
-                        color: Color(0xFF8A7C89),
+                        color: context.hg.mutedText,
                         fontSize: 10,
                         letterSpacing: .6)),
                 const SizedBox(height: 5),
@@ -2091,7 +2096,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                           '\$${fila.totalAbonos.toStringAsFixed(2)}',
                           color: context.hg.positive),
                       _datoMovil('Saldo', '\$${fila.saldo.toStringAsFixed(2)}',
-                          color: const Color(0xFF7A1F3D)),
+                          color: context.hg.burgundy),
                     ]),
               ),
               if (!_vistaGeneral) ...[
@@ -2102,7 +2107,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     onPressed: _eliminarReporteCliente,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: context.hg.danger,
-                      side: BorderSide(color: Color(0xFFA8425A)),
+                      side: const BorderSide(color: Color(0xFFA8425A)),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -2124,7 +2129,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(etiqueta.toUpperCase(),
               style: TextStyle(
-                  color: Color(0xFF8A7C89), fontSize: 10, letterSpacing: .6)),
+                  color: context.hg.mutedText,
+                  fontSize: 10,
+                  letterSpacing: .6)),
           const SizedBox(height: 3),
           Text(valor, maxLines: 2, overflow: TextOverflow.ellipsis),
         ]),
@@ -2140,7 +2147,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(etiqueta.toUpperCase(),
             style: TextStyle(
-                color: Color(0xFF8A7C89), fontSize: 10, letterSpacing: .6)),
+                color: context.hg.mutedText, fontSize: 10, letterSpacing: .6)),
         const SizedBox(height: 5),
         TextFormField(
           initialValue: valor,
@@ -2167,7 +2174,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(etiqueta.toUpperCase(),
               style: TextStyle(
-                  color: Color(0xFF8A7C89), fontSize: 9, letterSpacing: .5)),
+                  color: context.hg.mutedText, fontSize: 9, letterSpacing: .5)),
           const SizedBox(height: 2),
           Text(valor,
               overflow: TextOverflow.ellipsis,
@@ -2264,13 +2271,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
               style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF241420))),
+                  color: Theme.of(context).colorScheme.onSurface)),
           const SizedBox(height: 4),
           Text(
               _vistaGeneral
                   ? 'Consolidado de ventas y cobros de todos los meses'
                   : 'Registro mensual de facturas, abonos y saldos por cliente',
-              style: TextStyle(fontSize: 12.5, color: Color(0xFF8A7C89))),
+              style: TextStyle(fontSize: 12.5, color: context.hg.mutedText)),
         ]),
         const Spacer(),
         SizedBox(
@@ -2286,7 +2293,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   .map((r) => DropdownMenuItem(
                       value: r.id,
                       child: Text(r.nombre,
-                          style: TextStyle(fontWeight: FontWeight.w600))))
+                          style: const TextStyle(fontWeight: FontWeight.w600))))
                   .toList(),
               onChanged: (id) async {
                 if (id == null) return;
@@ -2299,9 +2306,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   Widget _tarjetasResumen() => Row(children: [
         _kpi('TOTAL ESMALTES', '$_totalEsmaltes', Icons.brush_outlined,
-            const Color(0xFF3D1A4A), Colors.white),
+            context.hg.plum, context.hg.panel),
         _kpi('TOTAL VENTAS', '\$${_totalVentas.toStringAsFixed(2)}',
-            Icons.payments_outlined, const Color(0xFF7A1F3D), Colors.white),
+            Icons.payments_outlined, context.hg.burgundy, context.hg.panel),
         _kpi(
             'TOTAL COBROS',
             '\$${_totalCobros.toStringAsFixed(2)}',
@@ -2324,7 +2331,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
               color: fondo,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                  color: fondo == Colors.white
+                  color: fondo == context.hg.panel
                       ? Theme.of(context).colorScheme.outlineVariant
                       : Colors.transparent)),
           child: Row(children: [
@@ -2336,7 +2343,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       style: TextStyle(
                           fontSize: 10.5,
                           letterSpacing: 1.1,
-                          color: Color(0xFF8A7C89))),
+                          color: context.hg.mutedText)),
                   const SizedBox(height: 6),
                   Text(valor,
                       style: TextStyle(
@@ -2358,7 +2365,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   Widget _barraRedisenada() => Container(
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.hg.panel,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
                 color: Theme.of(context).colorScheme.outlineVariant)),
@@ -2413,7 +2420,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   },
                   icon: const Icon(Icons.close, size: 18)),
           filled: true,
-          fillColor: context.hg.tableHeader,
+          fillColor: context.hg.input,
           isDense: true,
         ),
       );
@@ -2462,7 +2469,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
             backgroundColor: borde
                 ? Colors.white
                 : Theme.of(context).colorScheme.secondaryContainer,
-            foregroundColor: const Color(0xFF3D1A4A),
+            foregroundColor: context.hg.plum,
             side: BorderSide(
                 color: borde
                     ? Theme.of(context).colorScheme.outlineVariant
@@ -2472,7 +2479,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   Widget _tarjetaTabla() => Container(
         decoration: BoxDecoration(
-            color: Colors.white,
+            color: context.hg.panel,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
                 color: Theme.of(context).colorScheme.outlineVariant)),
@@ -2674,7 +2681,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     dataRowMinHeight: 38 * _escalaReporte,
                     dataRowMaxHeight: 58 * _escalaReporte,
                     headingRowHeight: 46 * _escalaReporte,
-                    headingRowColor: WidgetStatePropertyAll(Color(0xFFF5F3F6)),
+                    headingRowColor:
+                        WidgetStatePropertyAll(context.hg.tableHeader),
                     headingTextStyle: TextStyle(
                       color: context.hg.mutedText,
                       fontWeight: FontWeight.w600,
@@ -2727,9 +2735,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
           scrollDirection: Axis.horizontal,
           child: SingleChildScrollView(
             child: DataTable(
-              headingRowColor: WidgetStatePropertyAll(Color(0xFFF5F3F6)),
+              headingRowColor: WidgetStatePropertyAll(context.hg.tableHeader),
               headingTextStyle: TextStyle(
-                  color: Color(0xFF8A7C89), fontWeight: FontWeight.w600),
+                  color: context.hg.mutedText, fontWeight: FontWeight.w600),
               columns: const [
                 DataColumn(label: Text('CLIENTE')),
                 DataColumn(label: Text('NOMBRE COMERCIAL')),
@@ -2745,7 +2753,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   .map((fila) => DataRow(
                         color: fila.pagada
                             ? WidgetStatePropertyAll(
-                                Colors.green.withValues(alpha: .12))
+                                context.hg.positive.withValues(alpha: .12))
                             : null,
                         cells: [
                           DataCell(Text(fila.cliente)),
@@ -2758,7 +2766,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                           DataCell(
                               Text('\$${fila.totalAbonos.toStringAsFixed(2)}')),
                           DataCell(Text('\$${fila.saldo.toStringAsFixed(2)}',
-                              style: TextStyle(fontWeight: FontWeight.bold))),
+                              style: const TextStyle(fontWeight: FontWeight.bold))),
                         ],
                       ))
                   .toList(),
@@ -2770,7 +2778,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
   DataRow _crearFila(int indice, FilaVenta fila) => DataRow(
         key: ValueKey(fila.numero),
         color: fila.pagada
-            ? WidgetStatePropertyAll(Colors.green.withValues(alpha: 0.12))
+            ? WidgetStatePropertyAll(
+                context.hg.positive.withValues(alpha: 0.12))
             : null,
         cells: [
           DataCell(Container(
@@ -2782,7 +2791,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 borderRadius: BorderRadius.circular(6)),
             child: Text('${fila.numero}',
                 style: TextStyle(
-                    color: Color(0xFF3D1A4A), fontWeight: FontWeight.w700)),
+                    color: context.hg.plum, fontWeight: FontWeight.w700)),
           )),
           DataCell(_entrada(
             _refSinCeros(fila.referencia),
@@ -2809,7 +2818,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
           DataCell(Text('\$${fila.totalAbonos.toStringAsFixed(2)}')),
           DataCell(Text(
             '\$${fila.saldo.toStringAsFixed(2)}',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            style: const TextStyle(fontWeight: FontWeight.bold),
           )),
         ],
       );
@@ -2949,7 +2958,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     radius: 8,
                     child: Text(
                       '${fila.abonos.length - 2}',
-                      style: TextStyle(fontSize: 9),
+                      style: const TextStyle(fontSize: 9),
                     ),
                   ),
                 ),
@@ -2973,19 +2982,20 @@ class _ReporteScreenState extends State<ReporteScreen> {
               Text(
                 'Total cobros: \$${_totalCobros.toStringAsFixed(2)}',
                 style: TextStyle(
-                  color: Colors.green,
+                  color: context.hg.positive,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               Text(
                 'Total por cobrar: \$${_totalPorCobrar.toStringAsFixed(2)}',
                 style: TextStyle(
-                    color: Colors.orange, fontWeight: FontWeight.bold),
+                    color: context.hg.warning, fontWeight: FontWeight.bold),
               ),
               if (!_vistaGeneral) ...[
                 FilledButton.icon(
                   onPressed: _reiniciar,
-                  style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                  style: FilledButton.styleFrom(
+                      backgroundColor: context.hg.danger),
                   icon: const Icon(Icons.delete),
                   label: const Text('Eliminar reporte'),
                 ),

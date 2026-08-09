@@ -23,13 +23,8 @@ class _LoginScreenState extends State<LoginScreen> {
   static const _burgundy = Color(0xFF7A1F3D);
   static const _burgundyDark = Color(0xFF591530);
   static const _plum = Color(0xFF3D1A4A);
-  static const _lilac = Color(0xFFC9A8D4);
   static const _gold = Color(0xFFC9A24C);
   static const _goldSoft = Color(0xFFF1E4C0);
-  static const _background = Color(0xFFF5F3F6);
-  static const _ink = Color(0xFF241420);
-  static const _inkSoft = Color(0xFF8A7C89);
-  static const _line = Color(0xFFEAE3EA);
 
   final _formKey = GlobalKey<FormState>();
   final _correoController = TextEditingController();
@@ -141,7 +136,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 : const Color(0x243D1A4A),
             blurRadius: 60,
             spreadRadius: -20,
-            offset: Offset(0, 28),
+            offset: const Offset(0, 28),
           ),
         ],
       ),
