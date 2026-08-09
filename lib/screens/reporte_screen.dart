@@ -15,6 +15,7 @@ import '../services/vendedores_store.dart';
 import '../theme/hg_theme.dart';
 import 'carga_facturas_screen.dart';
 import 'cobros_mensuales_view.dart';
+import 'estadisticas_screen.dart';
 import 'vendedores_screen.dart';
 
 class ReporteScreen extends StatefulWidget {
@@ -50,6 +51,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   double _zoom = .85;
   bool _vistaGeneral = false;
   bool _vistaCobrosMensuales = false;
+  bool _vistaEstadisticas = false;
   int _seccionMovil = 0;
   final _busquedaController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
@@ -1431,22 +1433,24 @@ class _ReporteScreenState extends State<ReporteScreen> {
           child: Column(children: [
             _barraSuperior(),
             Expanded(
-              child: _vistaCobrosMensuales
-                  ? CobrosMensualesView(
-                      key: ValueKey(_versionCobrosMensuales),
-                    )
-                  : Padding(
-                      padding: const EdgeInsets.fromLTRB(28, 22, 28, 28),
-                      child: Column(children: [
-                        _encabezadoPagina(),
-                        const SizedBox(height: 18),
-                        _tarjetasResumen(),
-                        const SizedBox(height: 18),
-                        _barraRedisenada(),
-                        const SizedBox(height: 14),
-                        Expanded(child: _tarjetaTabla()),
-                      ]),
-                    ),
+              child: _vistaEstadisticas
+                  ? const EstadisticasScreen()
+                  : _vistaCobrosMensuales
+                      ? CobrosMensualesView(
+                          key: ValueKey(_versionCobrosMensuales),
+                        )
+                      : Padding(
+                          padding: const EdgeInsets.fromLTRB(28, 22, 28, 28),
+                          child: Column(children: [
+                            _encabezadoPagina(),
+                            const SizedBox(height: 18),
+                            _tarjetasResumen(),
+                            const SizedBox(height: 18),
+                            _barraRedisenada(),
+                            const SizedBox(height: 14),
+                            Expanded(child: _tarjetaTabla()),
+                          ]),
+                        ),
             ),
           ]),
         ),
@@ -1535,7 +1539,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ),
           ],
         ),
-        floatingActionButton: _vistaCobrosMensuales
+        floatingActionButton: _vistaCobrosMensuales || _vistaEstadisticas
             ? null
             : FloatingActionButton.extended(
                 onPressed: _guardar,
@@ -1557,7 +1561,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
               setState(() {
                 _seccionMovil = indice;
                 _vistaCobrosMensuales = indice == 2;
-                _vistaGeneral = indice == 1 || indice == 4;
+                _vistaEstadisticas = indice == 4;
+                _vistaGeneral = indice == 1;
               });
             }
           },
@@ -1575,75 +1580,81 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 icon: Icon(Icons.insights_outlined), label: 'Estadísticas'),
           ],
         ),
-        body: _vistaCobrosMensuales
-            ? SafeArea(
-                child: CobrosMensualesView(
-                  key: ValueKey(_versionCobrosMensuales),
-                ),
-              )
-            : SafeArea(
-                child: CustomScrollView(
-                  keyboardDismissBehavior:
-                      ScrollViewKeyboardDismissBehavior.onDrag,
-                  slivers: [
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
-                      sliver: SliverList.list(children: [
-                        _encabezadoMovil(),
-                        const SizedBox(height: 14),
-                        _resumenMovil(),
-                        const SizedBox(height: 14),
-                        _controlesMoviles(),
-                        const SizedBox(height: 16),
-                        Row(children: [
-                          Text(
-                              _vistaGeneral
-                                  ? 'Todos los registros'
-                                  : 'Clientes',
-                              style: TextStyle(
-                                  color: context.hg.plum,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w700)),
-                          const Spacer(),
-                          Text(
-                              '${_vistaGeneral ? _filasGenerales.length : _filasVisibles.length} registros',
-                              style: TextStyle(
-                                  color: context.hg.mutedText, fontSize: 11)),
-                        ]),
-                        if (_descripcionFiltro.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(_descripcionFiltro,
-                              style: TextStyle(
-                                  color: context.hg.mutedText, fontSize: 12)),
-                        ],
-                      ]),
+        body: _vistaEstadisticas
+            ? const SafeArea(child: EstadisticasScreen())
+            : _vistaCobrosMensuales
+                ? SafeArea(
+                    child: CobrosMensualesView(
+                      key: ValueKey(_versionCobrosMensuales),
                     ),
-                    _listaMovil(),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(14, 4, 14, 110),
-                        child: Column(children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: _reiniciar,
-                              style: FilledButton.styleFrom(
-                                backgroundColor: context.hg.danger,
-                                foregroundColor: Colors.white,
-                                padding: const EdgeInsets.all(13),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12)),
+                  )
+                : SafeArea(
+                    child: CustomScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
+                          sliver: SliverList.list(children: [
+                            _encabezadoMovil(),
+                            const SizedBox(height: 14),
+                            _resumenMovil(),
+                            const SizedBox(height: 14),
+                            _controlesMoviles(),
+                            const SizedBox(height: 16),
+                            Row(children: [
+                              Text(
+                                  _vistaGeneral
+                                      ? 'Todos los registros'
+                                      : 'Clientes',
+                                  style: TextStyle(
+                                      color: context.hg.plum,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700)),
+                              const Spacer(),
+                              Text(
+                                  '${_vistaGeneral ? _filasGenerales.length : _filasVisibles.length} registros',
+                                  style: TextStyle(
+                                      color: context.hg.mutedText,
+                                      fontSize: 11)),
+                            ]),
+                            if (_descripcionFiltro.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(_descripcionFiltro,
+                                  style: TextStyle(
+                                      color: context.hg.mutedText,
+                                      fontSize: 12)),
+                            ],
+                          ]),
+                        ),
+                        _listaMovil(),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(14, 4, 14, 110),
+                            child: Column(children: [
+                              SizedBox(
+                                width: double.infinity,
+                                child: FilledButton.icon(
+                                  onPressed: _reiniciar,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: context.hg.danger,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.all(13),
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12)),
+                                  ),
+                                  icon: const Icon(Icons.delete_outline,
+                                      size: 18),
+                                  label: const Text('Eliminar reporte'),
+                                ),
                               ),
-                              icon: const Icon(Icons.delete_outline, size: 18),
-                              label: const Text('Eliminar reporte'),
-                            ),
+                            ]),
                           ),
-                        ]),
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ),
+                  ),
       );
 
   Widget _encabezadoMovil() => Row(
@@ -2246,26 +2257,33 @@ class _ReporteScreenState extends State<ReporteScreen> {
           const Spacer(),
           _pestana(
               'Reporte de ventas',
-              !_vistaGeneral && !_vistaCobrosMensuales,
+              !_vistaGeneral && !_vistaCobrosMensuales && !_vistaEstadisticas,
               () => setState(() {
                     _vistaGeneral = false;
                     _vistaCobrosMensuales = false;
+                    _vistaEstadisticas = false;
                   })),
           _pestana(
               'Reporte general',
-              _vistaGeneral && !_vistaCobrosMensuales,
+              _vistaGeneral && !_vistaCobrosMensuales && !_vistaEstadisticas,
               () => setState(() {
                     _vistaGeneral = true;
                     _vistaCobrosMensuales = false;
+                    _vistaEstadisticas = false;
                   })),
-          _pestana('Reporte de Cobros Mensuales', _vistaCobrosMensuales,
-              () => setState(() => _vistaCobrosMensuales = true)),
+          _pestana(
+              'Reporte de Cobros Mensuales',
+              _vistaCobrosMensuales,
+              () => setState(() {
+                    _vistaCobrosMensuales = true;
+                    _vistaEstadisticas = false;
+                  })),
           _pestana('Vendedores', false, _gestionarVendedores),
           _pestana(
               'Estadísticas',
-              false,
+              _vistaEstadisticas,
               () => setState(() {
-                    _vistaGeneral = true;
+                    _vistaEstadisticas = true;
                     _vistaCobrosMensuales = false;
                   })),
           const Spacer(),
