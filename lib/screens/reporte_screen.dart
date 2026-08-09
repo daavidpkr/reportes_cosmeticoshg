@@ -12,6 +12,7 @@ import '../services/reporte_exporter.dart';
 import '../services/reportes_store.dart';
 import '../services/supabase_reportes_service.dart';
 import '../services/vendedores_store.dart';
+import '../theme/hg_theme.dart';
 import 'carga_facturas_screen.dart';
 import 'vendedores_screen.dart';
 
@@ -164,6 +165,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   void _activarReporte(ReporteMensual reporte, {bool guardar = true}) {
     _reportes.activo = reporte;
     _filas = reporte.filas;
+    _normalizarFilas();
     _facturas
       ..mesPermitido = reporte.mes
       ..anioPermitido = reporte.anio
@@ -220,9 +222,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         }
         _filas = porNumero.values.toList()
           ..sort((a, b) => a.numero.compareTo(b.numero));
-        while (_filas.length < 15) {
-          _filas.add(FilaVenta(numero: _filas.length + 1));
-        }
+        _normalizarFilas();
         setState(() {});
       },
       onError: (Object error) => _mostrarErrorNube(
@@ -360,7 +360,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       ][mes - 1];
 
   void _crearFilas() {
-    _filas = List.generate(15, (indice) => FilaVenta(numero: indice + 1));
+    _filas = [FilaVenta(numero: 1)];
   }
 
   void _buscarFactura(int indice, String referencia) {
@@ -369,6 +369,15 @@ class _ReporteScreenState extends State<ReporteScreen> {
     _busquedaFacturaTimer = Timer(const Duration(milliseconds: 350), () {
       _buscarFacturaAhora(indice, referencia, version);
     });
+  }
+
+  void _cambiarReferencia(FilaVenta fila, String referencia) {
+    setState(() {
+      fila.referencia = referencia;
+      _asegurarFilaVacia();
+    });
+    final indice = _filas.indexOf(fila);
+    if (indice >= 0) _buscarFactura(indice, referencia);
   }
 
   Future<void> _buscarFacturaAhora(
@@ -440,6 +449,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   Future<void> _guardarFilaNube(FilaVenta fila) async {
+    if (!fila.tieneDatos) return;
     try {
       await _supabaseReportes.guardarFila(fila, _reportes.activo.nombre);
     } catch (error) {
@@ -454,9 +464,20 @@ class _ReporteScreenState extends State<ReporteScreen> {
     );
   }
 
+  void _normalizarFilas() {
+    final filasConDatos = _filas.where((fila) => fila.tieneDatos).toList();
+    for (var indice = 0; indice < filasConDatos.length; indice++) {
+      filasConDatos[indice].numero = indice + 1;
+    }
+    _filas = [
+      ...filasConDatos,
+      FilaVenta(numero: filasConDatos.length + 1),
+    ];
+    _reportes.activo.filas = _filas;
+  }
+
   void _asegurarFilaVacia() {
-    if (_filas.any((fila) => !fila.tieneDatos)) return;
-    _filas.add(FilaVenta(numero: _filas.length + 1));
+    _normalizarFilas();
   }
 
   Future<void> _editarAbono(
@@ -544,6 +565,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       } else {
         abono.valor = resultado.$1;
         abono.comentario = resultado.$2;
+        _asegurarFilaVacia();
       }
     });
     _guardarProgreso();
@@ -692,7 +714,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                           leading: CircleAvatar(
                             child: Text(
                               vendedor.codigo.isEmpty ? '—' : vendedor.codigo,
-                              style: const TextStyle(fontSize: 10),
+                              style: TextStyle(fontSize: 10),
                             ),
                           ),
                           title: Text(vendedor.nombre),
@@ -1159,7 +1181,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
       if (!mounted) return;
       _facturas.eliminar(seleccionada.numeroFactura);
       final indice = _filas.indexOf(seleccionada);
-      setState(() => _filas[indice] = FilaVenta(numero: seleccionada.numero));
+      setState(() {
+        _filas[indice] = FilaVenta(numero: seleccionada.numero);
+        _normalizarFilas();
+      });
       await _guardarProgreso();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1512,7 +1537,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         bottomNavigationBar: NavigationBar(
           height: 68,
           selectedIndex: _seccionMovil,
-          indicatorColor: const Color(0xFFF2E9F4),
+          indicatorColor: Theme.of(context).colorScheme.secondaryContainer,
           onDestinationSelected: (indice) {
             if (indice == 2) {
               _gestionarVendedores();
@@ -1549,21 +1574,21 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   const SizedBox(height: 16),
                   Row(children: [
                     Text(_vistaGeneral ? 'Todos los registros' : 'Clientes',
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: Color(0xFF3D1A4A),
                             fontSize: 13,
                             fontWeight: FontWeight.w700)),
                     const Spacer(),
                     Text(
                         '${_vistaGeneral ? _filasGenerales.length : _filasVisibles.length} registros',
-                        style: const TextStyle(
-                            color: Color(0xFF8A7C89), fontSize: 11)),
+                        style:
+                            TextStyle(color: Color(0xFF8A7C89), fontSize: 11)),
                   ]),
                   if (_descripcionFiltro.isNotEmpty) ...[
                     const SizedBox(height: 4),
                     Text(_descripcionFiltro,
-                        style: const TextStyle(
-                            color: Color(0xFF8A7C89), fontSize: 12)),
+                        style:
+                            TextStyle(color: Color(0xFF8A7C89), fontSize: 12)),
                   ],
                 ]),
               ),
@@ -1577,7 +1602,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       child: FilledButton.icon(
                         onPressed: _reiniciar,
                         style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFFA8425A),
+                          backgroundColor: context.hg.danger,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.all(13),
                           shape: RoundedRectangleBorder(
@@ -1602,15 +1627,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(_vistaGeneral ? 'Reporte general' : 'Reporte de ventas',
-                  style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.w700)),
+                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Text(
                   _vistaGeneral
                       ? 'Consolidado de todos los meses'
                       : 'Facturas, abonos y saldos por cliente',
-                  style:
-                      const TextStyle(color: Color(0xFF8A7C89), fontSize: 11)),
+                  style: TextStyle(color: Color(0xFF8A7C89), fontSize: 11)),
             ],
           )),
           const SizedBox(width: 10),
@@ -1654,11 +1677,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
           _kpiMovil('VENTAS', '\$${_totalVentas.toStringAsFixed(2)}',
               Icons.payments_outlined, const Color(0xFF7A1F3D)),
           _kpiMovil('COBROS', '\$${_totalCobros.toStringAsFixed(2)}',
-              Icons.check_circle_outline, const Color(0xFF3F8158),
-              fondo: const Color(0xFFE5F2E9)),
+              Icons.check_circle_outline, context.hg.positive,
+              fondo: context.hg.positiveContainer),
           _kpiMovil('POR COBRAR', '\$${_totalPorCobrar.toStringAsFixed(2)}',
-              Icons.schedule, const Color(0xFFB8863B),
-              fondo: const Color(0xFFFBF0DC)),
+              Icons.schedule, context.hg.warning,
+              fondo: context.hg.warningContainer),
         ],
       );
 
@@ -1671,7 +1694,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
               color: fondo == Colors.white
-                  ? const Color(0xFFEAE3EA)
+                  ? Theme.of(context).colorScheme.outlineVariant
                   : Colors.transparent),
         ),
         child: Stack(children: [
@@ -1682,7 +1705,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
               Padding(
                 padding: const EdgeInsets.only(right: 28),
                 child: Text(titulo,
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: Color(0xFF8A7C89),
                         fontSize: 9.5,
                         letterSpacing: .8)),
@@ -1720,7 +1743,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFFEAE3EA)),
+            border:
+                Border.all(color: Theme.of(context).colorScheme.outlineVariant),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x0A3D1A4A),
@@ -1765,7 +1789,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF3D1A4A),
               backgroundColor: Colors.white,
-              side: const BorderSide(color: Color(0xFFEAE3EA)),
+              side: BorderSide(color: Color(0xFFEAE3EA)),
               padding: const EdgeInsets.symmetric(vertical: 11),
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(999)),
@@ -1778,9 +1802,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   ButtonStyle get _estiloAccionMovil => FilledButton.styleFrom(
         foregroundColor: const Color(0xFF3D1A4A),
-        backgroundColor: const Color(0xFFF2E9F4),
+        backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 11),
-        textStyle: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
+        textStyle: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
       );
 
@@ -1789,7 +1813,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         onChanged: (valor) => setState(() => _filtro = valor.trim()),
         decoration: InputDecoration(
           hintText: 'Buscar factura, cliente o vendedor',
-          hintStyle: const TextStyle(color: Color(0xFF8A7C89), fontSize: 13),
+          hintStyle: TextStyle(color: Color(0xFF8A7C89), fontSize: 13),
           prefixIcon: const Icon(Icons.search_rounded,
               size: 20, color: Color(0xFF7A1F3D)),
           suffixIcon: _filtro.isEmpty
@@ -1874,7 +1898,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFEAE3EA)),
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: Column(children: [
         InkWell(
@@ -1892,11 +1916,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 height: 26,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF2E9F4),
+                  color: Theme.of(context).colorScheme.secondaryContainer,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text('${fila.numero}',
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: Color(0xFF3D1A4A),
                         fontSize: 12,
                         fontWeight: FontWeight.w700)),
@@ -1909,7 +1933,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     Text(fila.cliente,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 13.5, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 1),
                     Text(
@@ -1920,15 +1944,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       ].join(' · '),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                          color: Color(0xFF8A7C89), fontSize: 11),
+                      style: TextStyle(color: Color(0xFF8A7C89), fontSize: 11),
                     ),
                   ],
                 ),
               ),
               Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Text('\$${fila.saldo.toStringAsFixed(2)}',
-                    style: const TextStyle(
+                    style: TextStyle(
                         color: Color(0xFF7A1F3D),
                         fontSize: 14,
                         fontWeight: FontWeight.w700)),
@@ -1998,7 +2021,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       child: _entrada(
                     _refSinCeros(fila.referencia),
                     double.infinity,
-                    (valor) => _buscarFactura(_filas.indexOf(fila), valor),
+                    (valor) => _cambiarReferencia(fila, valor),
                     enviar: true,
                   )),
                 ]),
@@ -2031,7 +2054,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   (valor) {
                     final limpio =
                         valor.replaceAll(',', '.').replaceAll('\$', '');
-                    setState(() => fila.venta = double.tryParse(limpio) ?? 0);
+                    setState(() {
+                      fila.venta = double.tryParse(limpio) ?? 0;
+                      _asegurarFilaVacia();
+                    });
                     _guardarProgreso();
                     _guardarFilaNube(fila);
                   },
@@ -2055,7 +2081,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
                 decoration: BoxDecoration(
-                    color: const Color(0xFFF5F3F6),
+                    color: context.hg.tableHeader,
                     borderRadius: BorderRadius.circular(10)),
                 child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -2063,7 +2089,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       _datoMovil('Venta', '\$${fila.venta.toStringAsFixed(2)}'),
                       _datoMovil('Tot. abono',
                           '\$${fila.totalAbonos.toStringAsFixed(2)}',
-                          color: const Color(0xFF3F8158)),
+                          color: context.hg.positive),
                       _datoMovil('Saldo', '\$${fila.saldo.toStringAsFixed(2)}',
                           color: const Color(0xFF7A1F3D)),
                     ]),
@@ -2075,8 +2101,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   child: OutlinedButton(
                     onPressed: _eliminarReporteCliente,
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFA8425A),
-                      side: const BorderSide(color: Color(0xFFA8425A)),
+                      foregroundColor: context.hg.danger,
+                      side: BorderSide(color: Color(0xFFA8425A)),
                       padding: const EdgeInsets.symmetric(vertical: 10),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10)),
@@ -2097,7 +2123,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         padding: const EdgeInsets.only(bottom: 10),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(etiqueta.toUpperCase(),
-              style: const TextStyle(
+              style: TextStyle(
                   color: Color(0xFF8A7C89), fontSize: 10, letterSpacing: .6)),
           const SizedBox(height: 3),
           Text(valor, maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -2113,7 +2139,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   ) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text(etiqueta.toUpperCase(),
-            style: const TextStyle(
+            style: TextStyle(
                 color: Color(0xFF8A7C89), fontSize: 10, letterSpacing: .6)),
         const SizedBox(height: 5),
         TextFormField(
@@ -2126,7 +2152,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
           ),
           onChanged: (texto) {
-            setState(() => asignar(texto));
+            setState(() {
+              asignar(texto);
+              _asegurarFilaVacia();
+            });
             _guardarProgreso();
             _guardarFilaNube(fila);
           },
@@ -2137,7 +2166,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         width: 88,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(etiqueta.toUpperCase(),
-              style: const TextStyle(
+              style: TextStyle(
                   color: Color(0xFF8A7C89), fontSize: 9, letterSpacing: .5)),
           const SizedBox(height: 2),
           Text(valor,
@@ -2232,7 +2261,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(_vistaGeneral ? 'Reporte general' : 'Reporte de ventas',
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF241420))),
@@ -2241,7 +2270,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
               _vistaGeneral
                   ? 'Consolidado de ventas y cobros de todos los meses'
                   : 'Registro mensual de facturas, abonos y saldos por cliente',
-              style: const TextStyle(fontSize: 12.5, color: Color(0xFF8A7C89))),
+              style: TextStyle(fontSize: 12.5, color: Color(0xFF8A7C89))),
         ]),
         const Spacer(),
         SizedBox(
@@ -2257,7 +2286,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   .map((r) => DropdownMenuItem(
                       value: r.id,
                       child: Text(r.nombre,
-                          style: const TextStyle(fontWeight: FontWeight.w600))))
+                          style: TextStyle(fontWeight: FontWeight.w600))))
                   .toList(),
               onChanged: (id) async {
                 if (id == null) return;
@@ -2277,10 +2306,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
             'TOTAL COBROS',
             '\$${_totalCobros.toStringAsFixed(2)}',
             Icons.check_circle_outline,
-            const Color(0xFF3F8158),
-            const Color(0xFFE5F2E9)),
+            context.hg.positive,
+            context.hg.positiveContainer),
         _kpi('POR COBRAR', '\$${_totalPorCobrar.toStringAsFixed(2)}',
-            Icons.schedule, const Color(0xFFB8863B), const Color(0xFFFBF0DC),
+            Icons.schedule, context.hg.warning, context.hg.warningContainer,
             ultimo: true),
       ]);
 
@@ -2296,7 +2325,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                   color: fondo == Colors.white
-                      ? const Color(0xFFEAE3EA)
+                      ? Theme.of(context).colorScheme.outlineVariant
                       : Colors.transparent)),
           child: Row(children: [
             Expanded(
@@ -2304,7 +2333,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                   Text(titulo,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 10.5,
                           letterSpacing: 1.1,
                           color: Color(0xFF8A7C89))),
@@ -2331,7 +2360,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
         decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFEAE3EA))),
+            border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant)),
         child: Row(children: [
           Expanded(child: _campoBusquedaRedisenado()),
           const SizedBox(width: 10),
@@ -2383,7 +2413,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   },
                   icon: const Icon(Icons.close, size: 18)),
           filled: true,
-          fillColor: const Color(0xFFF5F3F6),
+          fillColor: context.hg.tableHeader,
           isDense: true,
         ),
       );
@@ -2429,10 +2459,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
         icon: Icon(icono, size: 17),
         label: Text(texto),
         style: OutlinedButton.styleFrom(
-            backgroundColor: borde ? Colors.white : const Color(0xFFF2E9F4),
+            backgroundColor: borde
+                ? Colors.white
+                : Theme.of(context).colorScheme.secondaryContainer,
             foregroundColor: const Color(0xFF3D1A4A),
             side: BorderSide(
-                color: borde ? const Color(0xFFEAE3EA) : Colors.transparent),
+                color: borde
+                    ? Theme.of(context).colorScheme.outlineVariant
+                    : Colors.transparent),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11)),
       );
 
@@ -2440,7 +2474,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
         decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFFEAE3EA))),
+            border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant)),
         clipBehavior: Clip.antiAlias,
         child: _vistaGeneral ? _tablaGeneral() : _tabla(),
       );
@@ -2639,10 +2674,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     dataRowMinHeight: 38 * _escalaReporte,
                     dataRowMaxHeight: 58 * _escalaReporte,
                     headingRowHeight: 46 * _escalaReporte,
-                    headingRowColor:
-                        const WidgetStatePropertyAll(Color(0xFFF5F3F6)),
+                    headingRowColor: WidgetStatePropertyAll(Color(0xFFF5F3F6)),
                     headingTextStyle: TextStyle(
-                      color: const Color(0xFF8A7C89),
+                      color: context.hg.mutedText,
                       fontWeight: FontWeight.w600,
                       letterSpacing: .7,
                       fontSize: 11 * _escalaReporte,
@@ -2674,7 +2708,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     child: FilledButton.icon(
                       onPressed: _reiniciar,
                       style: FilledButton.styleFrom(
-                        backgroundColor: const Color(0xFFA8425A),
+                        backgroundColor: context.hg.danger,
                         visualDensity: VisualDensity.compact,
                       ),
                       icon: const Icon(Icons.delete_outline, size: 18),
@@ -2693,8 +2727,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
           scrollDirection: Axis.horizontal,
           child: SingleChildScrollView(
             child: DataTable(
-              headingRowColor: const WidgetStatePropertyAll(Color(0xFFF5F3F6)),
-              headingTextStyle: const TextStyle(
+              headingRowColor: WidgetStatePropertyAll(Color(0xFFF5F3F6)),
+              headingTextStyle: TextStyle(
                   color: Color(0xFF8A7C89), fontWeight: FontWeight.w600),
               columns: const [
                 DataColumn(label: Text('CLIENTE')),
@@ -2724,8 +2758,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                           DataCell(
                               Text('\$${fila.totalAbonos.toStringAsFixed(2)}')),
                           DataCell(Text('\$${fila.saldo.toStringAsFixed(2)}',
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold))),
+                              style: TextStyle(fontWeight: FontWeight.bold))),
                         ],
                       ))
                   .toList(),
@@ -2745,16 +2778,16 @@ class _ReporteScreenState extends State<ReporteScreen> {
             height: 24 * _escalaReporte,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-                color: const Color(0xFFF2E9F4),
+                color: Theme.of(context).colorScheme.secondaryContainer,
                 borderRadius: BorderRadius.circular(6)),
             child: Text('${fila.numero}',
-                style: const TextStyle(
+                style: TextStyle(
                     color: Color(0xFF3D1A4A), fontWeight: FontWeight.w700)),
           )),
           DataCell(_entrada(
             _refSinCeros(fila.referencia),
             72 * _escalaReporte,
-            (valor) => _buscarFactura(indice, valor),
+            (valor) => _cambiarReferencia(fila, valor),
             enviar: true,
           )),
           DataCell(SizedBox(
@@ -2776,7 +2809,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
           DataCell(Text('\$${fila.totalAbonos.toStringAsFixed(2)}')),
           DataCell(Text(
             '\$${fila.saldo.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            style: TextStyle(fontWeight: FontWeight.bold),
           )),
         ],
       );
@@ -2818,7 +2851,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ),
           ]).toList(),
           onChanged: (valor) {
-            setState(() => fila.vendedor = valor ?? '');
+            setState(() {
+              fila.vendedor = valor ?? '';
+              _asegurarFilaVacia();
+            });
             _guardarProgreso();
             _guardarFilaNube(fila);
           },
@@ -2836,7 +2872,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
             border: OutlineInputBorder(),
           ),
           onChanged: (texto) {
-            setState(() => fila.esmalte = int.tryParse(texto) ?? 0);
+            setState(() {
+              fila.esmalte = int.tryParse(texto) ?? 0;
+              _asegurarFilaVacia();
+            });
             _guardarProgreso();
             _guardarFilaNube(fila);
           },
@@ -2910,7 +2949,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     radius: 8,
                     child: Text(
                       '${fila.abonos.length - 2}',
-                      style: const TextStyle(fontSize: 9),
+                      style: TextStyle(fontSize: 9),
                     ),
                   ),
                 ),
@@ -2933,14 +2972,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
               Text('Total ventas: \$${_totalVentas.toStringAsFixed(2)}'),
               Text(
                 'Total cobros: \$${_totalCobros.toStringAsFixed(2)}',
-                style: const TextStyle(
+                style: TextStyle(
                   color: Colors.green,
                   fontWeight: FontWeight.bold,
                 ),
               ),
               Text(
                 'Total por cobrar: \$${_totalPorCobrar.toStringAsFixed(2)}',
-                style: const TextStyle(
+                style: TextStyle(
                     color: Colors.orange, fontWeight: FontWeight.bold),
               ),
               if (!_vistaGeneral) ...[

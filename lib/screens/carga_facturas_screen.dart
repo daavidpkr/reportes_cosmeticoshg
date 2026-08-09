@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../services/facturas_store.dart';
 import '../services/supabase_reportes_service.dart';
+import '../theme/hg_theme.dart';
 
 class CargaFacturasScreen extends StatefulWidget {
   const CargaFacturasScreen({super.key, required this.mes, required this.anio});
@@ -98,7 +99,7 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
           SnackBar(
             content:
                 Text('No se pudieron guardar las facturas en la nube: $error'),
-            backgroundColor: Colors.red.shade700,
+            backgroundColor: context.hg.danger,
           ),
         );
       }
@@ -114,7 +115,7 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('$procesados archivo(s) procesado(s)$detalle'),
-        backgroundColor: otroMes > 0 ? Colors.orange.shade800 : null,
+        backgroundColor: otroMes > 0 ? context.hg.warning : null,
       ),
     );
   }
@@ -134,11 +135,11 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
             width: double.infinity,
             height: double.infinity,
             decoration: BoxDecoration(
-              color: _arrastrando
-                  ? Colors.pink.withValues(alpha: 0.12)
-                  : Colors.transparent,
+              color: _arrastrando ? context.hg.hover : Colors.transparent,
               border: Border.all(
-                color: _arrastrando ? Colors.pink : Colors.pink.shade200,
+                color: _arrastrando
+                    ? context.hg.burgundy
+                    : Theme.of(context).colorScheme.outline,
                 width: _arrastrando ? 3 : 2,
               ),
               borderRadius: BorderRadius.circular(16),
@@ -147,7 +148,8 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.cloud_upload, size: 80, color: Colors.pink),
+                  Icon(Icons.cloud_upload,
+                      size: 80, color: context.hg.burgundy),
                   const SizedBox(height: 20),
                   Text(
                     'Facturas de ${widget.mes.toString().padLeft(2, '0')}/${widget.anio}',
@@ -165,7 +167,7 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
                         ? 'Suelta aquí los archivos'
                         : 'Arrastra y suelta aquí tus facturas',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.pink.shade800,
+                          color: context.hg.burgundy,
                           fontWeight: FontWeight.bold,
                         ),
                   ),

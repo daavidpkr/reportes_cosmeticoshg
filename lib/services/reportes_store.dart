@@ -9,7 +9,7 @@ class ReporteMensual {
       required this.mes,
       List<FilaVenta>? filas,
       List<Factura>? facturas})
-      : filas = filas ?? List.generate(15, (i) => FilaVenta(numero: i + 1)),
+      : filas = filas ?? [FilaVenta(numero: 1)],
         facturas = facturas ?? [];
 
   final int anio;

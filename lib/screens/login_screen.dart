@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../theme/hg_theme.dart';
+
 typedef AutenticarUsuario = Future<void> Function(
   String correo,
   String contrasena,
@@ -84,13 +86,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final oscuro = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       body: DecoratedBox(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFFF8F5F9), Color(0xFFEFE9F0)],
+            colors: oscuro
+                ? const [Color(0xFF171217), Color(0xFF1D161E)]
+                : const [Color(0xFFF8F5F9), Color(0xFFEFE9F0)],
           ),
         ),
         child: Stack(
@@ -126,12 +131,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildCard(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.hg.panel,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: _line),
-        boxShadow: const [
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        boxShadow: [
           BoxShadow(
-            color: Color(0x243D1A4A),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? const Color(0x99000000)
+                : const Color(0x243D1A4A),
             blurRadius: 60,
             spreadRadius: -20,
             offset: Offset(0, 28),
@@ -169,11 +176,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   children: [
                     _buildLockIcon(),
                     const SizedBox(height: 18),
-                    const Text(
+                    Text(
                       'COSMÉTICOS HG',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: _plum,
+                        color: context.hg.plum,
                         fontSize: 21,
                         height: 1.15,
                         fontWeight: FontWeight.w800,
@@ -181,11 +188,11 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'Inicia sesión para acceder a los reportes',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color: _inkSoft,
+                        color: context.hg.mutedText,
                         fontSize: 13,
                         height: 1.4,
                       ),
@@ -252,7 +259,8 @@ class _LoginScreenState extends State<LoginScreen> {
       keyboardType: TextInputType.emailAddress,
       textInputAction: TextInputAction.next,
       autofillHints: const [AutofillHints.username, AutofillHints.email],
-      style: const TextStyle(color: _ink, fontSize: 13.5),
+      style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurface, fontSize: 13.5),
       decoration: _fieldDecoration(
         hintText: 'Correo electrónico',
         prefixIcon: Icons.email_outlined,
@@ -275,7 +283,8 @@ class _LoginScreenState extends State<LoginScreen> {
       textInputAction: TextInputAction.done,
       autofillHints: const [AutofillHints.password],
       onFieldSubmitted: (_) => _iniciarSesion(),
-      style: const TextStyle(color: _ink, fontSize: 13.5),
+      style: TextStyle(
+          color: Theme.of(context).colorScheme.onSurface, fontSize: 13.5),
       decoration: _fieldDecoration(
         hintText: 'Contraseña',
         prefixIcon: Icons.key_outlined,
@@ -290,7 +299,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ? Icons.visibility_outlined
                 : Icons.visibility_off_outlined,
             size: 19,
-            color: _inkSoft,
+            color: context.hg.mutedText,
           ),
         ),
       ),
@@ -312,16 +321,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
     return InputDecoration(
       hintText: hintText,
-      hintStyle: const TextStyle(color: _inkSoft, fontSize: 13.5),
-      prefixIcon: Icon(prefixIcon, color: _burgundy, size: 19),
+      hintStyle: TextStyle(color: context.hg.disabledText, fontSize: 13.5),
+      prefixIcon: Icon(prefixIcon, color: context.hg.burgundy, size: 19),
       suffixIcon: suffix,
       filled: true,
-      fillColor: _background,
+      fillColor: context.hg.input,
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
-      border: border(_line),
-      enabledBorder: border(_line),
-      focusedBorder: border(_lilac, 1.5),
+      border: border(Theme.of(context).colorScheme.outlineVariant),
+      enabledBorder: border(Theme.of(context).colorScheme.outlineVariant),
+      focusedBorder: border(context.hg.burgundy, 1.5),
       errorBorder: border(const Color(0xFFB3261E)),
       focusedErrorBorder: border(const Color(0xFFB3261E), 1.5),
       errorStyle: const TextStyle(fontSize: 11.5),

@@ -25,7 +25,7 @@ class FilaVenta {
     List<Abono>? abonos,
   }) : abonos = abonos ?? [Abono(), Abono()];
 
-  final int numero;
+  int numero;
   String referencia;
   String cliente;
   String nombreComercial;
@@ -40,7 +40,16 @@ class FilaVenta {
   double get saldo => venta - totalAbonos;
   bool get pagada => venta > 0 && saldo <= 0.005;
   bool get tieneDatos =>
-      venta > 0 || cliente.isNotEmpty || referencia.isNotEmpty;
+      referencia.trim().isNotEmpty ||
+      cliente.trim().isNotEmpty ||
+      nombreComercial.trim().isNotEmpty ||
+      fecha.trim().isNotEmpty ||
+      numeroFactura.trim().isNotEmpty ||
+      vendedor.trim().isNotEmpty ||
+      esmalte != 0 ||
+      venta != 0 ||
+      abonos.any(
+          (abono) => abono.valor != 0 || abono.comentario.trim().isNotEmpty);
 
   Map<String, dynamic> toJson() => {
         'numero': numero,

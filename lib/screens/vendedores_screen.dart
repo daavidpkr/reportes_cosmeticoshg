@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/vendedores_store.dart';
+import '../theme/hg_theme.dart';
 
 class VendedoresScreen extends StatefulWidget {
   const VendedoresScreen({required this.store, super.key});
@@ -145,7 +146,8 @@ class _VendedoresScreenState extends State<VendedoresScreen> {
                               await widget.store.eliminar(vendedor);
                               if (mounted) setState(() {});
                             },
-                            icon: const Icon(Icons.delete_outline)),
+                            icon: Icon(Icons.delete_outline,
+                                color: context.hg.danger)),
                       ]),
                     ))),
             ]),

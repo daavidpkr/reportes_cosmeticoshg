@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/reporte_screen.dart';
+import 'theme/hg_theme.dart';
 
 class CosmeticosHGApp extends StatefulWidget {
   const CosmeticosHGApp({super.key});
@@ -180,36 +181,150 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
           backgroundColor: _plum,
           contentTextStyle: TextStyle(color: Colors.white),
         ),
+        extensions: const [HgThemeColors.light],
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFD8A8B9),
-          onPrimary: Color(0xFF3B0D20),
-          secondary: Color(0xFFD3B3DE),
-          surface: Color(0xFF201A1F),
-          onSurface: Color(0xFFF3EAF0),
-          outline: Color(0xFF63565F),
-          error: Color(0xFFFFB4AB),
+          primary: Color(0xFFA84D70),
+          onPrimary: Colors.white,
+          primaryContainer: Color(0xFF482232),
+          onPrimaryContainer: Color(0xFFF5EFF4),
+          secondary: Color(0xFFC9A8D4),
+          onSecondary: Color(0xFF2B162F),
+          secondaryContainer: Color(0xFF3A293E),
+          onSecondaryContainer: Color(0xFFF5EFF4),
+          surface: Color(0xFF251C26),
+          onSurface: Color(0xFFF5EFF4),
+          surfaceContainerHighest: Color(0xFF2D232E),
+          onSurfaceVariant: Color(0xFFBBAFBA),
+          outline: Color(0xFF493A49),
+          outlineVariant: Color(0xFF493A49),
+          error: Color(0xFFE17A91),
+          onError: Color(0xFF2D0B14),
         ),
-        scaffoldBackgroundColor: const Color(0xFF171216),
+        scaffoldBackgroundColor: const Color(0xFF171217),
+        canvasColor: const Color(0xFF1D161E),
+        dividerColor: const Color(0xFF493A49),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Color(0xFF3D1026),
+          backgroundColor: Color(0xFF3B1027),
           foregroundColor: Colors.white,
           surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Color(0xFF3B1027),
+            statusBarIconBrightness: Brightness.light,
+            statusBarBrightness: Brightness.dark,
+            systemNavigationBarColor: Color(0xFF1D161E),
+            systemNavigationBarIconBrightness: Brightness.light,
+          ),
         ),
-        cardTheme: const CardThemeData(color: Color(0xFF241E23)),
+        cardTheme: const CardThemeData(
+          elevation: 0,
+          color: Color(0xFF251C26),
+          surfaceTintColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            side: BorderSide(color: Color(0xFF493A49)),
+          ),
+        ),
         inputDecorationTheme: const InputDecorationTheme(
           filled: true,
-          fillColor: Color(0xFF2B242A),
-          border: OutlineInputBorder(),
+          fillColor: Color(0xFF2D232E),
+          hintStyle: TextStyle(color: Color(0xFF81747F)),
+          labelStyle: TextStyle(color: Color(0xFFBBAFBA)),
+          floatingLabelStyle: TextStyle(color: Color(0xFFC9A8D4)),
+          iconColor: Color(0xFFC9A8D4),
+          prefixIconColor: Color(0xFFC9A8D4),
+          suffixIconColor: Color(0xFFBBAFBA),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderSide: BorderSide(color: Color(0xFF493A49)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderSide: BorderSide(color: Color(0xFF493A49)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            borderSide: BorderSide(color: Color(0xFFA84D70), width: 1.5),
+          ),
         ),
-        navigationBarTheme: const NavigationBarThemeData(
-          backgroundColor: Color(0xFF211A20),
-          indicatorColor: Color(0xFF553043),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: const Color(0xFF1D161E),
+          indicatorColor: const Color(0xFF482232),
+          surfaceTintColor: Colors.transparent,
+          labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+                color: states.contains(WidgetState.selected)
+                    ? const Color(0xFFC9A8D4)
+                    : const Color(0xFFBBAFBA),
+                fontSize: 9.5,
+                fontWeight: FontWeight.w600,
+              )),
+          iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+                color: states.contains(WidgetState.selected)
+                    ? const Color(0xFFC9A8D4)
+                    : const Color(0xFFBBAFBA),
+                size: 20,
+              )),
         ),
-        dialogTheme: const DialogThemeData(backgroundColor: Color(0xFF241E23)),
+        dialogTheme: const DialogThemeData(
+          backgroundColor: Color(0xFF251C26),
+          surfaceTintColor: Colors.transparent,
+        ),
+        dropdownMenuTheme: const DropdownMenuThemeData(
+          menuStyle: MenuStyle(
+            backgroundColor: WidgetStatePropertyAll(Color(0xFF251C26)),
+            surfaceTintColor: WidgetStatePropertyAll(Colors.transparent),
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF7A1F3D),
+            foregroundColor: Colors.white,
+            disabledBackgroundColor: const Color(0xFF493A49),
+            disabledForegroundColor: const Color(0xFF81747F),
+          ),
+        ),
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(foregroundColor: const Color(0xFFC9A8D4)),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFC9A8D4),
+            side: const BorderSide(color: Color(0xFF493A49)),
+          ),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFF7A1F3D),
+          foregroundColor: Colors.white,
+        ),
+        progressIndicatorTheme:
+            const ProgressIndicatorThemeData(color: Color(0xFFA84D70)),
+        snackBarTheme: const SnackBarThemeData(
+          backgroundColor: Color(0xFF3D1A4A),
+          contentTextStyle: TextStyle(color: Colors.white),
+        ),
+        dataTableTheme: DataTableThemeData(
+          headingRowColor: const WidgetStatePropertyAll(Color(0xFF211922)),
+          headingTextStyle: const TextStyle(
+            color: Color(0xFFBBAFBA),
+            fontWeight: FontWeight.w600,
+          ),
+          dataTextStyle: const TextStyle(color: Color(0xFFF5EFF4)),
+          dividerThickness: .7,
+          dataRowColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected) ||
+                states.contains(WidgetState.hovered)) {
+              return const Color(0x2EA84D70);
+            }
+            return Colors.transparent;
+          }),
+        ),
+        iconTheme: const IconThemeData(color: Color(0xFFBBAFBA)),
+        extensions: const [HgThemeColors.dark],
         useMaterial3: true,
       ),
       home: _sesionIniciada
