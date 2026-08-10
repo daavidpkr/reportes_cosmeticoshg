@@ -1,90 +1,490 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { SignJWT, importPKCS8 } from "https://deno.land/x/jose@v5.9.6/index.ts";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { importPKCS8, SignJWT } from "jose";
 
-const TIME_ZONE = "America/Guayaquil";
-const PROJECT_ID = Deno.env.get("FIREBASE_PROJECT_ID") ?? "";
+import {
+  buildFcmPayload,
+  classifyFcmError,
+  classifyThrownError,
+  DEVICE_CONCURRENCY,
+  dueDateForNotice,
+  emptySummary,
+  guayaquilDate,
+  mapLimit,
+  MAX_ATTEMPTS,
+  nextRetryAt,
+  type Notice,
+  type OperationalSummary,
+  PAGE_SIZE,
+  parseOAuthResponse,
+  processingRecoveryCutoff,
+  requireDeviceQuery,
+  retryBlockReason,
+  type RuntimeConfig,
+  type ServiceAccount,
+  validateRuntimeConfig,
+} from "./core.ts";
 
-type Notice = "three_days" | "one_day";
-type ServiceAccount = { client_email: string; private_key: string };
+type Reminder = {
+  id: string;
+  user_id: string;
+  factura_id: string;
+  schedule_version: string;
+  payment_date: string;
+  active?: boolean;
+  notify_three_days?: boolean;
+  notify_one_day?: boolean;
+};
 
-export function guayaquilDate(now = new Date()): string {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
-}
+type Device = { id: string; user_id?: string; token: string; active?: boolean };
+type ClaimedEvent = { event_id: string; attempt_count: number };
+type RetryEvent = {
+  id: string;
+  reminder_id: string;
+  schedule_version: string;
+  device_id: string;
+  notice_type: Notice;
+  scheduled_for: string;
+  attempt_count: number;
+};
 
-export function addDays(date: string, days: number): string {
-  const value = new Date(`${date}T12:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-
-async function accessToken(account: ServiceAccount): Promise<string> {
+async function fetchAccessToken(account: ServiceAccount): Promise<string> {
   const key = await importPKCS8(account.private_key, "RS256");
   const now = Math.floor(Date.now() / 1000);
-  const assertion = await new SignJWT({ scope: "https://www.googleapis.com/auth/firebase.messaging" })
-    .setProtectedHeader({ alg: "RS256", typ: "JWT" }).setIssuer(account.client_email)
-    .setSubject(account.client_email).setAudience("https://oauth2.googleapis.com/token")
-    .setIssuedAt(now).setExpirationTime(now + 3600).sign(key);
+  const assertion = await new SignJWT({
+    scope: "https://www.googleapis.com/auth/firebase.messaging",
+  })
+    .setProtectedHeader({ alg: "RS256", typ: "JWT" })
+    .setIssuer(account.client_email)
+    .setSubject(account.client_email)
+    .setAudience("https://oauth2.googleapis.com/token")
+    .setIssuedAt(now)
+    .setExpirationTime(now + 3600)
+    .sign(key);
   const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion,
+    }),
   });
-  if (!response.ok) throw new Error(`oauth_${response.status}`);
-  return (await response.json()).access_token;
+  const body = await response.json().catch(() => null);
+  return parseOAuthResponse(response.status, body).accessToken;
 }
 
-function content(notice: Notice) {
-  return notice === "three_days"
-    ? { title: "Próximo pago", body: "Tienes un pago programado dentro de 3 días." }
-    : { title: "Pago programado para mañana", body: "Recuerda revisar el pago pendiente." };
+function environment() {
+  return {
+    CRON_SECRET: Deno.env.get("CRON_SECRET"),
+    FIREBASE_PROJECT_ID: Deno.env.get("FIREBASE_PROJECT_ID"),
+    FIREBASE_SERVICE_ACCOUNT_JSON: Deno.env.get(
+      "FIREBASE_SERVICE_ACCOUNT_JSON",
+    ),
+    SUPABASE_URL: Deno.env.get("SUPABASE_URL"),
+    SUPABASE_SERVICE_ROLE_KEY: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),
+  };
 }
 
-function permanentFcmError(code: string) {
-  return ["UNREGISTERED", "INVALID_ARGUMENT", "SENDER_ID_MISMATCH"].some((value) => code.includes(value));
+async function claimEvent(
+  db: SupabaseClient,
+  reminder: Reminder,
+  device: Device,
+  notice: Notice,
+  scheduledFor: string,
+  summary: OperationalSummary,
+): Promise<ClaimedEvent | null> {
+  const { data, error } = await db.rpc("claim_payment_notification_event", {
+    p_reminder_id: reminder.id,
+    p_schedule_version: reminder.schedule_version,
+    p_device_id: device.id,
+    p_notice_type: notice,
+    p_scheduled_for: scheduledFor,
+  });
+  if (error) {
+    summary.administrativeErrors++;
+    return null;
+  }
+  return (data?.[0] as ClaimedEvent | undefined) ?? null;
 }
 
-Deno.serve(async (request) => {
-  const expected = Deno.env.get("CRON_SECRET") ?? "";
-  if (!expected || request.headers.get("authorization") !== `Bearer ${expected}`) return new Response("Unauthorized", { status: 401 });
-  const url = Deno.env.get("SUPABASE_URL")!;
-  const role = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const rawAccount = Deno.env.get("FIREBASE_SERVICE_ACCOUNT_JSON") ?? "";
-  if (!url || !role || !PROJECT_ID || !rawAccount) return Response.json({ error: "missing_server_configuration" }, { status: 500 });
-  const db = createClient(url, role, { auth: { persistSession: false } });
-  const account = JSON.parse(rawAccount) as ServiceAccount;
-  const token = await accessToken(account);
+async function updateFailure(
+  db: SupabaseClient,
+  event: ClaimedEvent,
+  decision: ReturnType<typeof classifyFcmError>,
+  device: Device,
+  summary: OperationalSummary,
+) {
+  const attempts = event.attempt_count + 1;
+  const exhausted = attempts >= MAX_ATTEMPTS;
+  const permanent = decision.permanent || exhausted;
+  const retryAt = permanent ? null : nextRetryAt(attempts)?.toISOString();
+  const { error } = await db.from("payment_notification_events").update({
+    status: permanent ? "permanent_failure" : "temporary_failure",
+    attempt_count: attempts,
+    last_error_code: (exhausted ? "MAX_ATTEMPTS" : decision.code).slice(0, 120),
+    next_retry_at: retryAt,
+    updated_at: new Date().toISOString(),
+  }).eq("id", event.event_id);
+  if (error) summary.administrativeErrors++;
+
+  if (permanent) summary.permanentFailures++;
+  else summary.temporaryFailures++;
+
+  if (decision.deactivateDevice) {
+    const { error: deviceError } = await db.from("fcm_devices").update({
+      active: false,
+      updated_at: new Date().toISOString(),
+    }).eq("id", device.id);
+    if (deviceError) summary.administrativeErrors++;
+  }
+}
+
+async function deliver(
+  db: SupabaseClient,
+  config: RuntimeConfig,
+  getAccessToken: () => Promise<string>,
+  reminder: Reminder,
+  device: Device,
+  notice: Notice,
+  event: ClaimedEvent,
+  summary: OperationalSummary,
+) {
+  try {
+    const accessToken = await getAccessToken();
+    const response = await fetch(
+      `https://fcm.googleapis.com/v1/projects/${config.firebaseProjectId}/messages:send`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(buildFcmPayload({
+          deviceToken: device.token,
+          facturaId: reminder.factura_id,
+          reminderId: reminder.id,
+          notice,
+        })),
+      },
+    );
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      await updateFailure(
+        db,
+        event,
+        classifyFcmError(response.status, result),
+        device,
+        summary,
+      );
+      return;
+    }
+
+    summary.sent++;
+    const messageName = typeof result?.name === "string" ? result.name : null;
+    const { error } = await db.from("payment_notification_events").update({
+      status: "sent",
+      attempt_count: event.attempt_count + 1,
+      fcm_message_id: messageName,
+      sent_at: new Date().toISOString(),
+      last_error_code: null,
+      next_retry_at: null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", event.event_id);
+    if (error) summary.administrativeErrors++;
+  } catch {
+    await updateFailure(
+      db,
+      event,
+      classifyThrownError(),
+      device,
+      summary,
+    );
+  }
+}
+
+async function processReminder(
+  db: SupabaseClient,
+  config: RuntimeConfig,
+  getAccessToken: () => Promise<string>,
+  reminder: Reminder,
+  notice: Notice,
+  scheduledFor: string,
+  summary: OperationalSummary,
+) {
+  summary.processed++;
+  const result = await db.from("fcm_devices").select("id,user_id,token,active")
+    .eq("user_id", reminder.user_id).eq("active", true);
+  let devices: Device[];
+  try {
+    devices = requireDeviceQuery(result.data as Device[] | null, result.error);
+  } catch {
+    summary.administrativeErrors++;
+    return;
+  }
+
+  if (devices.length === 0) {
+    const { error } = await db.from("payment_notification_events").insert({
+      reminder_id: reminder.id,
+      schedule_version: reminder.schedule_version,
+      device_id: null,
+      notice_type: notice,
+      scheduled_for: scheduledFor,
+      status: "no_devices",
+    });
+    if (error && error.code !== "23505") summary.administrativeErrors++;
+    summary.noDevices++;
+    return;
+  }
+
+  await mapLimit(
+    devices,
+    DEVICE_CONCURRENCY,
+    async (device) => {
+      const event = await claimEvent(
+        db,
+        reminder,
+        device,
+        notice,
+        scheduledFor,
+        summary,
+      );
+      if (!event) return;
+      await deliver(
+        db,
+        config,
+        getAccessToken,
+        reminder,
+        device,
+        notice,
+        event,
+        summary,
+      );
+    },
+    () => summary.administrativeErrors++,
+  );
+}
+
+async function processNewNotices(
+  db: SupabaseClient,
+  config: RuntimeConfig,
+  getAccessToken: () => Promise<string>,
+  summary: OperationalSummary,
+) {
   const today = guayaquilDate();
-  const summary = { reminders: 0, sent: 0, temporaryFailures: 0, permanentFailures: 0, noDevices: 0, skipped: 0 };
-
-  for (const [notice, offset, flag] of [["three_days", 3, "notify_three_days"], ["one_day", 1, "notify_one_day"]] as const) {
-    const due = addDays(today, offset);
-    const { data: reminders, error } = await db.from("payment_reminders").select("id,user_id,factura_id,schedule_version,payment_date").eq("active", true).eq(flag, true).eq("payment_date", due);
-    if (error) throw error;
-    for (const reminder of reminders ?? []) {
-      summary.reminders++;
-      const { data: devices } = await db.from("fcm_devices").select("id,token").eq("user_id", reminder.user_id).eq("active", true);
-      if (!devices?.length) {
-        await db.from("payment_notification_events").insert({ reminder_id: reminder.id, schedule_version: reminder.schedule_version, device_id: null, notice_type: notice, scheduled_for: due, status: "no_devices" });
-        summary.noDevices++;
-        continue;
+  for (
+    const [notice, flag] of [
+      ["three_days", "notify_three_days"],
+      ["one_day", "notify_one_day"],
+    ] as const
+  ) {
+    const due = dueDateForNotice(today, notice);
+    let cursor: string | null = null;
+    while (true) {
+      let query = db.from("payment_reminders")
+        .select("id,user_id,factura_id,schedule_version,payment_date")
+        .eq("active", true).eq(flag, true).eq("payment_date", due)
+        .order("id", { ascending: true }).limit(PAGE_SIZE);
+      if (cursor) query = query.gt("id", cursor);
+      const { data, error } = await query;
+      if (error) {
+        summary.administrativeErrors++;
+        break;
       }
-      for (const device of devices) {
-        const { data: claims, error: claimError } = await db.rpc("claim_payment_notification_event", { p_reminder_id: reminder.id, p_schedule_version: reminder.schedule_version, p_device_id: device.id, p_notice_type: notice, p_scheduled_for: due });
-        const event = claims?.[0];
-        if (claimError || !event) { summary.skipped++; continue; }
-        const visible = content(notice as Notice);
-        const response = await fetch(`https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:send`, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json" }, body: JSON.stringify({ message: { token: device.token, notification: visible, data: { type: "recordatorio_pago", factura_id: reminder.factura_id, recordatorio_id: reminder.id }, android: { priority: "high", notification: { channel_id: "recordatorios_pago" } } } }) });
-        const result = await response.json().catch(() => ({}));
-        if (response.ok) {
-          await db.from("payment_notification_events").update({ status: "sent", attempt_count: (event.attempt_count ?? 0) + 1, fcm_message_id: result.name ?? null, sent_at: new Date().toISOString(), last_error_code: null }).eq("id", event.event_id); summary.sent++;
-        } else {
-          const fcmDetail = result?.error?.details?.find?.((detail: Record<string, unknown>) => String(detail["@type"] ?? "").includes("FcmError"));
-          const code = String(fcmDetail?.errorCode ?? result?.error?.status ?? `HTTP_${response.status}`);
-          const permanent = permanentFcmError(code);
-          await db.from("payment_notification_events").update({ status: permanent ? "permanent_failure" : "temporary_failure", attempt_count: (event.attempt_count ?? 0) + 1, last_error_code: code.slice(0, 120), next_retry_at: permanent ? null : new Date(Date.now() + 30 * 60_000).toISOString() }).eq("id", event.event_id);
-          if (permanent) { await db.from("fcm_devices").update({ active: false, updated_at: new Date().toISOString() }).eq("id", device.id); summary.permanentFailures++; } else summary.temporaryFailures++;
-        }
+      const reminders = (data ?? []) as Reminder[];
+      for (const reminder of reminders) {
+        await processReminder(
+          db,
+          config,
+          getAccessToken,
+          reminder,
+          notice,
+          due,
+          summary,
+        );
       }
+      if (reminders.length < PAGE_SIZE) break;
+      cursor = reminders.at(-1)!.id;
     }
   }
-  return Response.json(summary);
-});
+}
+
+async function markUnusableRetry(
+  db: SupabaseClient,
+  eventId: string,
+  code: string,
+  summary: OperationalSummary,
+) {
+  const { error } = await db.from("payment_notification_events").update({
+    status: "permanent_failure",
+    last_error_code: code,
+    next_retry_at: null,
+    updated_at: new Date().toISOString(),
+  }).eq("id", eventId);
+  if (error) summary.administrativeErrors++;
+  else summary.permanentFailures++;
+}
+
+async function processRetry(
+  db: SupabaseClient,
+  config: RuntimeConfig,
+  getAccessToken: () => Promise<string>,
+  retry: RetryEvent,
+  summary: OperationalSummary,
+) {
+  summary.processed++;
+  const [reminderResult, deviceResult] = await Promise.all([
+    db.from("payment_reminders")
+      .select(
+        "id,user_id,factura_id,schedule_version,payment_date,active,notify_three_days,notify_one_day",
+      )
+      .eq("id", retry.reminder_id).maybeSingle(),
+    db.from("fcm_devices").select("id,user_id,token,active")
+      .eq("id", retry.device_id).maybeSingle(),
+  ]);
+  if (reminderResult.error || deviceResult.error) {
+    summary.administrativeErrors++;
+    return;
+  }
+  const reminder = reminderResult.data as Reminder | null;
+  const device = deviceResult.data as Device | null;
+  if (!reminder) {
+    await markUnusableRetry(db, retry.id, "REMINDER_MISSING", summary);
+    return;
+  }
+  const blockReason = retryBlockReason({
+    active: reminder.active ?? false,
+    currentScheduleVersion: reminder.schedule_version,
+    eventScheduleVersion: retry.schedule_version,
+    notice: retry.notice_type,
+    notifyThreeDays: reminder.notify_three_days ?? false,
+    notifyOneDay: reminder.notify_one_day ?? false,
+  });
+  if (blockReason) {
+    await markUnusableRetry(db, retry.id, blockReason, summary);
+    return;
+  }
+  if (!device || !device.active || device.user_id !== reminder.user_id) {
+    await markUnusableRetry(db, retry.id, "DEVICE_INACTIVE", summary);
+    return;
+  }
+  const event = await claimEvent(
+    db,
+    reminder,
+    device,
+    retry.notice_type,
+    retry.scheduled_for,
+    summary,
+  );
+  if (!event) return;
+  await deliver(
+    db,
+    config,
+    getAccessToken,
+    reminder,
+    device,
+    retry.notice_type,
+    event,
+    summary,
+  );
+}
+
+async function processRetries(
+  db: SupabaseClient,
+  config: RuntimeConfig,
+  getAccessToken: () => Promise<string>,
+  summary: OperationalSummary,
+) {
+  const now = new Date();
+  const queues = [
+    {
+      status: "temporary_failure",
+      dueColumn: "next_retry_at",
+      cutoff: now.toISOString(),
+    },
+    {
+      status: "processing",
+      dueColumn: "claimed_at",
+      cutoff: processingRecoveryCutoff(now).toISOString(),
+    },
+  ] as const;
+  for (const queue of queues) {
+    let cursor: string | null = null;
+    while (true) {
+      let query = db.from("payment_notification_events")
+        .select(
+          "id,reminder_id,schedule_version,device_id,notice_type,scheduled_for,attempt_count",
+        )
+        .eq("status", queue.status).lte(queue.dueColumn, queue.cutoff)
+        .lt("attempt_count", MAX_ATTEMPTS).not("device_id", "is", null)
+        .order("id", { ascending: true }).limit(PAGE_SIZE);
+      if (cursor) query = query.gt("id", cursor);
+      const { data, error } = await query;
+      if (error) {
+        summary.administrativeErrors++;
+        break;
+      }
+      const retries = (data ?? []) as RetryEvent[];
+      await mapLimit(
+        retries,
+        DEVICE_CONCURRENCY,
+        (retry) =>
+          processRetry(
+            db,
+            config,
+            getAccessToken,
+            retry,
+            summary,
+          ),
+        () => summary.administrativeErrors++,
+      );
+      if (retries.length < PAGE_SIZE) break;
+      cursor = retries.at(-1)!.id;
+    }
+  }
+}
+
+export async function handler(request: Request): Promise<Response> {
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: { allow: "POST" },
+    });
+  }
+
+  let config: RuntimeConfig;
+  try {
+    config = validateRuntimeConfig(environment());
+  } catch {
+    return Response.json({ ...emptySummary(), administrativeErrors: 1 }, {
+      status: 500,
+    });
+  }
+  if (
+    request.headers.get("authorization") !== `Bearer ${config.cronSecret}`
+  ) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const summary = emptySummary();
+  const db = createClient(
+    config.supabaseUrl,
+    config.supabaseServiceRoleKey,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+  let tokenPromise: Promise<string> | null = null;
+  const getAccessToken = () =>
+    tokenPromise ??= fetchAccessToken(config.serviceAccount);
+
+  try {
+    // Entrega "al menos una vez": los processing abandonados se recuperan.
+    // Si FCM aceptó un mensaje pero falló status=sent, puede ocurrir un
+    // duplicado excepcional; se prioriza no perder la notificación.
+    await processNewNotices(db, config, getAccessToken, summary);
+    await processRetries(db, config, getAccessToken, summary);
+    return Response.json(summary);
+  } catch {
+    summary.administrativeErrors++;
+    return Response.json(summary, { status: 500 });
+  }
+}
+
+if (import.meta.main) Deno.serve(handler);
