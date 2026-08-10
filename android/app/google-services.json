@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "243956170479",
+    "project_id": "cosmeticoshg-reportes",
+    "storage_bucket": "cosmeticoshg-reportes.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:243956170479:android:3342d7d18e438ccf72651a",
+        "android_client_info": {
+          "package_name": "com.example.reportes_cosmeticoshg"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFmS8VShDc72_xXZn-XhkVKdKn3tljDJg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
