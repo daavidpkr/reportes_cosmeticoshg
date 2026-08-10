@@ -9,8 +9,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'notification_open_request.dart';
 
 typedef FcmTokenCallback = FutureOr<void> Function(String token);
-typedef NotificationOpenCallback =
-    FutureOr<void> Function(NotificationOpenRequest request);
+typedef NotificationOpenCallback = FutureOr<void> Function(
+    NotificationOpenRequest request);
 
 class FirebaseMessagingService {
   FirebaseMessagingService._();
@@ -40,6 +40,7 @@ class FirebaseMessagingService {
   StreamSubscription<String>? _tokenSubscription;
   FcmTokenCallback? _onTokenChanged;
   NotificationOpenCallback? _onOpen;
+  final List<NotificationOpenRequest> _pendingOpenings = [];
   String? _token;
   bool _initialized = false;
 
@@ -55,6 +56,13 @@ class FirebaseMessagingService {
   }) async {
     _onTokenChanged = onTokenChanged ?? _onTokenChanged;
     _onOpen = onOpen ?? _onOpen;
+    if (_onOpen != null && _pendingOpenings.isNotEmpty) {
+      final pending = List<NotificationOpenRequest>.of(_pendingOpenings);
+      _pendingOpenings.clear();
+      for (final request in pending) {
+        await _deliverOpening(request);
+      }
+    }
     if (!isSupported || _initialized) return;
     _initialized = true;
 
@@ -66,10 +74,8 @@ class FirebaseMessagingService {
         settings: settings,
         onDidReceiveNotificationResponse: _handleLocalResponse,
       );
-      final android = _localNotifications
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
+      final android = _localNotifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
       await android?.createNotificationChannel(channel);
 
       _foregroundSubscription = FirebaseMessaging.onMessage.listen(
@@ -161,8 +167,7 @@ class FirebaseMessagingService {
     }
     try {
       await _localNotifications.show(
-        id:
-            message.messageId?.hashCode ??
+        id: message.messageId?.hashCode ??
             DateTime.now().millisecondsSinceEpoch,
         title: title?.trim().isEmpty ?? true ? 'Recordatorio de pago' : title,
         body: body,
@@ -200,9 +205,9 @@ class FirebaseMessagingService {
   }
 
   Future<void> _handleRemoteOpening(RemoteMessage message) => _processOpening(
-    NotificationOpenRequest.fromData(message.data),
-    message.messageId ?? 'remote:${jsonEncode(message.data)}',
-  );
+        NotificationOpenRequest.fromData(message.data),
+        message.messageId ?? 'remote:${jsonEncode(message.data)}',
+      );
 
   void _handleLocalResponse(NotificationResponse response) {
     unawaited(
@@ -219,6 +224,14 @@ class FirebaseMessagingService {
   ) async {
     if (request == null || !_openingGuard.markIfNew(deduplicationKey)) return;
     _openings.add(request);
+    if (_onOpen == null) {
+      _pendingOpenings.add(request);
+      return;
+    }
+    await _deliverOpening(request);
+  }
+
+  Future<void> _deliverOpening(NotificationOpenRequest request) async {
     try {
       await _onOpen?.call(request);
     } catch (error, stackTrace) {

@@ -16,6 +16,7 @@ import '../theme/hg_theme.dart';
 import 'carga_facturas_screen.dart';
 import 'cobros_mensuales_view.dart';
 import 'estadisticas_screen.dart';
+import 'payment_reminders_screen.dart';
 import 'vendedores_screen.dart';
 
 class ReporteScreen extends StatefulWidget {
@@ -86,6 +87,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
   void _cambiarZoom(double cambio) {
     setState(() => _zoom = (_zoom + cambio).clamp(0.65, 1.25));
   }
+
+  Future<void> _abrirRecordatorios() => Navigator.push<void>(
+    context,
+    MaterialPageRoute(builder: (_) => const PaymentRemindersScreen()),
+  );
 
   KeyEventResult _atajoZoom(FocusNode node, KeyEvent evento) {
     if (evento is! KeyDownEvent ||
@@ -1561,6 +1567,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
       ),
       actions: [
         IconButton(
+          tooltip: 'Recordatorios de pago',
+          onPressed: _abrirRecordatorios,
+          icon: const Icon(Icons.notifications_active_outlined),
+        ),
+        IconButton(
           tooltip: 'Actualizar datos',
           onPressed: _actualizando ? null : _actualizarDesdeSupabase,
           icon: _actualizando
@@ -2535,6 +2546,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
           }),
         ),
         const Spacer(),
+        IconButton(
+          tooltip: 'Recordatorios de pago',
+          onPressed: _abrirRecordatorios,
+          icon: const Icon(
+            Icons.notifications_active_outlined,
+            color: Colors.white70,
+          ),
+        ),
         IconButton(
           tooltip: 'Actualizar datos',
           onPressed: _actualizando ? null : _actualizarDesdeSupabase,

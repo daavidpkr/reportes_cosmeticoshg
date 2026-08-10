@@ -7,6 +7,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/reporte_screen.dart';
+import 'screens/payment_reminders_screen.dart';
+import 'services/fcm_device_repository.dart';
+import 'services/firebase_messaging_service.dart';
+import 'services/notification_open_request.dart';
 import 'theme/hg_theme.dart';
 
 class CosmeticosHGApp extends StatefulWidget {
@@ -27,7 +31,9 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
   static const _line = Color(0xFFEAE3EA);
 
   final _auth = Supabase.instance.client.auth;
+  final _navigatorKey = GlobalKey<NavigatorState>();
   late final StreamSubscription<AuthState> _authSubscription;
+  late final FcmDeviceCoordinator _deviceCoordinator;
   late bool _sesionIniciada;
   ThemeMode _themeMode = ThemeMode.light;
 
@@ -36,7 +42,21 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
     super.initState();
     // Supabase restaura automáticamente la sesión guardada al inicializarse.
     _sesionIniciada = _auth.currentSession != null;
+    _deviceCoordinator =
+        FcmDeviceCoordinator(repository: FcmDeviceRepository());
+    FirebaseMessagingService.instance.initialize(
+      onTokenChanged: _deviceCoordinator.onTokenChanged,
+      onOpen: _openNotification,
+    );
+    if (_sesionIniciada) {
+      unawaited(_deviceCoordinator.onSignedIn());
+      unawaited(FirebaseMessagingService.instance.refreshToken());
+    }
     _authSubscription = _auth.onAuthStateChange.listen((estado) {
+      if (estado.session != null) {
+        unawaited(_deviceCoordinator.onSignedIn());
+        unawaited(FirebaseMessagingService.instance.refreshToken());
+      }
       if (mounted) {
         setState(() => _sesionIniciada = estado.session != null);
       }
@@ -47,10 +67,28 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
   @override
   void dispose() {
     _authSubscription.cancel();
+    _deviceCoordinator.dispose();
     super.dispose();
   }
 
-  Future<void> _cerrarSesion() => _auth.signOut();
+  Future<void> _cerrarSesion() async {
+    await _deviceCoordinator.onSignedOut();
+    await _auth.signOut();
+  }
+
+  Future<void> _openNotification(NotificationOpenRequest request) async {
+    if (_auth.currentSession == null) return;
+    for (var attempt = 0;
+        attempt < 20 && _navigatorKey.currentState == null;
+        attempt++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null || _auth.currentSession == null) return;
+    await navigator.push<void>(MaterialPageRoute(
+        builder: (_) =>
+            PaymentRemindersScreen(initialFacturaId: request.facturaId)));
+  }
 
   Future<void> _cargarTema() async {
     final prefs = await SharedPreferences.getInstance();
@@ -69,6 +107,7 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'Cosméticos HG - Reportes',
       debugShowCheckedModeBanner: false,
       themeMode: _themeMode,
@@ -143,18 +182,16 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
           elevation: 0,
           labelTextStyle: WidgetStateProperty.resolveWith(
             (estados) => TextStyle(
-              color: estados.contains(WidgetState.selected)
-                  ? _burgundy
-                  : _inkSoft,
+              color:
+                  estados.contains(WidgetState.selected) ? _burgundy : _inkSoft,
               fontSize: 9.5,
               fontWeight: FontWeight.w600,
             ),
           ),
           iconTheme: WidgetStateProperty.resolveWith(
             (estados) => IconThemeData(
-              color: estados.contains(WidgetState.selected)
-                  ? _burgundy
-                  : _inkSoft,
+              color:
+                  estados.contains(WidgetState.selected) ? _burgundy : _inkSoft,
               size: 20,
             ),
           ),
