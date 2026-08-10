@@ -4,50 +4,38 @@ import '../models/factura.dart';
 import '../models/fila_venta.dart';
 
 class ReporteMensual {
-  ReporteMensual(
-      {required this.anio,
-      required this.mes,
-      List<FilaVenta>? filas,
-      List<Factura>? facturas})
-      : filas = filas ?? [FilaVenta(numero: 1)],
-        facturas = facturas ?? [];
+  ReporteMensual({
+    required this.anio,
+    required this.mes,
+    List<FilaVenta>? filas,
+    List<Factura>? facturas,
+  }) : filas = filas ?? [FilaVenta(numero: 1)],
+       facturas = facturas ?? [];
 
   final int anio;
   final int mes;
   List<FilaVenta> filas;
   List<Factura> facturas;
   String get id => '$anio-${mes.toString().padLeft(2, '0')}';
-  String get nombre => '${const [
-        'Enero',
-        'Febrero',
-        'Marzo',
-        'Abril',
-        'Mayo',
-        'Junio',
-        'Julio',
-        'Agosto',
-        'Septiembre',
-        'Octubre',
-        'Noviembre',
-        'Diciembre'
-      ][mes - 1]} $anio';
+  String get nombre =>
+      '${const ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][mes - 1]} $anio';
 
   Map<String, dynamic> toJson() => {
-        'anio': anio,
-        'mes': mes,
-        'filas': filas.map((e) => e.toJson()).toList(),
-        'facturas': facturas.map((e) => e.toJson()).toList()
-      };
+    'anio': anio,
+    'mes': mes,
+    'filas': filas.map((e) => e.toJson()).toList(),
+    'facturas': facturas.map((e) => e.toJson()).toList(),
+  };
   factory ReporteMensual.fromJson(Map<String, dynamic> json) => ReporteMensual(
-        anio: json['anio'] as int,
-        mes: json['mes'] as int,
-        filas: (json['filas'] as List)
-            .map((e) => FilaVenta.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        facturas: (json['facturas'] as List? ?? const [])
-            .map((e) => Factura.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    anio: json['anio'] as int,
+    mes: json['mes'] as int,
+    filas: (json['filas'] as List)
+        .map((e) => FilaVenta.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    facturas: (json['facturas'] as List? ?? const [])
+        .map((e) => Factura.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class ReportesStore {
@@ -55,9 +43,7 @@ class ReportesStore {
   final List<ReporteMensual> reportes = [];
   late ReporteMensual activo;
 
-  Future<void> cargarDesdeNube(
-    List<Map<String, dynamic>> datos,
-  ) async {
+  Future<void> cargarDesdeNube(List<Map<String, dynamic>> datos) async {
     final prefs = await SharedPreferences.getInstance();
 
     reportes.clear();
@@ -68,12 +54,7 @@ class ReportesStore {
 
       if (anio == null || mes == null) continue;
 
-      reportes.add(
-        ReporteMensual(
-          anio: anio,
-          mes: mes,
-        ),
-      );
+      reportes.add(ReporteMensual(anio: anio, mes: mes));
     }
 
     reportes.sort((a, b) => a.id.compareTo(b.id));
@@ -81,12 +62,7 @@ class ReportesStore {
     if (reportes.isEmpty) {
       final ahora = DateTime.now();
 
-      reportes.add(
-        ReporteMensual(
-          anio: ahora.year,
-          mes: ahora.month,
-        ),
-      );
+      reportes.add(ReporteMensual(anio: ahora.year, mes: ahora.month));
     }
 
     final idActivo = prefs.getString(_claveActivo);
@@ -108,9 +84,7 @@ class ReportesStore {
     reportes.remove(eliminado);
     if (reportes.isEmpty) {
       final siguiente = DateTime(eliminado.anio, eliminado.mes + 1);
-      reportes.add(
-        ReporteMensual(anio: siguiente.year, mes: siguiente.month),
-      );
+      reportes.add(ReporteMensual(anio: siguiente.year, mes: siguiente.month));
     }
     activo = reportes.last;
     return eliminado;

@@ -16,9 +16,7 @@ const nombresMeses = <String>[
 ];
 
 class PeriodoEstadisticas {
-  const PeriodoEstadisticas.todo()
-      : anio = null,
-        mes = null;
+  const PeriodoEstadisticas.todo() : anio = null, mes = null;
   const PeriodoEstadisticas.anio(this.anio) : mes = null;
   const PeriodoEstadisticas.mes(this.anio, this.mes);
   final int? anio;
@@ -27,26 +25,27 @@ class PeriodoEstadisticas {
   String get id => esTodo
       ? 'todo'
       : mes == null
-          ? '$anio'
-          : '$anio-${mes!.toString().padLeft(2, '0')}';
+      ? '$anio'
+      : '$anio-${mes!.toString().padLeft(2, '0')}';
   String get etiqueta => esTodo
       ? 'Todo el histórico'
       : mes == null
-          ? '$anio'
-          : '${nombresMeses[mes! - 1]} $anio';
+      ? '$anio'
+      : '${nombresMeses[mes! - 1]} $anio';
 }
 
 class RegistroEstadistico {
-  const RegistroEstadistico(
-      {required this.anio,
-      required this.mes,
-      required this.referencia,
-      required this.cliente,
-      required this.fecha,
-      required this.vendedor,
-      required this.esmaltes,
-      required this.venta,
-      required this.cobrado});
+  const RegistroEstadistico({
+    required this.anio,
+    required this.mes,
+    required this.referencia,
+    required this.cliente,
+    required this.fecha,
+    required this.vendedor,
+    required this.esmaltes,
+    required this.venta,
+    required this.cobrado,
+  });
   final int anio, mes, esmaltes;
   final String referencia, cliente, fecha, vendedor;
   final double venta, cobrado;
@@ -55,13 +54,14 @@ class RegistroEstadistico {
 }
 
 class ResumenEstadisticas {
-  const ResumenEstadisticas(
-      {required this.ventas,
-      required this.cobrado,
-      required this.porCobrar,
-      required this.facturas,
-      required this.clientes,
-      required this.esmaltes});
+  const ResumenEstadisticas({
+    required this.ventas,
+    required this.cobrado,
+    required this.porCobrar,
+    required this.facturas,
+    required this.clientes,
+    required this.esmaltes,
+  });
   final double ventas, cobrado, porCobrar;
   final int facturas, clientes, esmaltes;
   double get ticketPromedio => facturas == 0 ? 0 : ventas / facturas;
@@ -108,25 +108,28 @@ class EstadisticasData {
   final List<RegistroEstadistico> registros;
 
   List<RegistroEstadistico> filtrar(PeriodoEstadisticas periodo) => registros
-      .where((r) =>
-          periodo.esTodo ||
-          (r.anio == periodo.anio &&
-              (periodo.mes == null || r.mes == periodo.mes)))
+      .where(
+        (r) =>
+            periodo.esTodo ||
+            (r.anio == periodo.anio &&
+                (periodo.mes == null || r.mes == periodo.mes)),
+      )
       .toList();
 
   ResumenEstadisticas resumen(PeriodoEstadisticas p) {
     final filas = filtrar(p);
     return ResumenEstadisticas(
-        ventas: filas.fold(0, (s, r) => s + r.venta),
-        cobrado: filas.fold(0, (s, r) => s + r.cobrado),
-        porCobrar: filas.fold(0, (s, r) => s + r.porCobrar),
-        facturas: filas.length,
-        clientes: filas
-            .map((r) => _clave(r.cliente))
-            .where((e) => e.isNotEmpty)
-            .toSet()
-            .length,
-        esmaltes: filas.fold(0, (s, r) => s + r.esmaltes));
+      ventas: filas.fold(0, (s, r) => s + r.venta),
+      cobrado: filas.fold(0, (s, r) => s + r.cobrado),
+      porCobrar: filas.fold(0, (s, r) => s + r.porCobrar),
+      facturas: filas.length,
+      clientes: filas
+          .map((r) => _clave(r.cliente))
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .length,
+      esmaltes: filas.fold(0, (s, r) => s + r.esmaltes),
+    );
   }
 
   PeriodoEstadisticas? anterior(PeriodoEstadisticas p) {
@@ -142,21 +145,25 @@ class EstadisticasData {
     final mapa = <String, PuntoMensual>{};
     for (final r in filtrar(p)) {
       final punto = mapa.putIfAbsent(
-          '${r.anio}-${r.mes}', () => PuntoMensual(r.anio, r.mes));
+        '${r.anio}-${r.mes}',
+        () => PuntoMensual(r.anio, r.mes),
+      );
       punto.ventas += r.venta;
       punto.cobros += r.cobrado;
     }
     final lista = mapa.values.toList()
       ..sort(
-          (a, b) => DateTime(a.anio, a.mes).compareTo(DateTime(b.anio, b.mes)));
+        (a, b) => DateTime(a.anio, a.mes).compareTo(DateTime(b.anio, b.mes)),
+      );
     return lista;
   }
 
   List<ResumenVendedor> vendedores(PeriodoEstadisticas p) {
     final mapa = <String, ResumenVendedor>{};
     for (final r in filtrar(p)) {
-      final nombre =
-          r.vendedor.trim().isEmpty ? 'Sin vendedor' : r.vendedor.trim();
+      final nombre = r.vendedor.trim().isEmpty
+          ? 'Sin vendedor'
+          : r.vendedor.trim();
       final v = mapa.putIfAbsent(nombre, () => ResumenVendedor(nombre));
       v.ventas += r.venta;
       v.cobrado += r.cobrado;
@@ -166,21 +173,26 @@ class EstadisticasData {
     return mapa.values.toList()..sort((a, b) => b.ventas.compareTo(a.ventas));
   }
 
-  List<ResumenCliente> clientesTop(PeriodoEstadisticas p,
-      {bool porDeuda = false}) {
+  List<ResumenCliente> clientesTop(
+    PeriodoEstadisticas p, {
+    bool porDeuda = false,
+  }) {
     final mapa = <String, ResumenCliente>{};
     for (final r in filtrar(p)) {
-      final nombre =
-          r.cliente.trim().isEmpty ? 'Sin cliente' : r.cliente.trim();
+      final nombre = r.cliente.trim().isEmpty
+          ? 'Sin cliente'
+          : r.cliente.trim();
       final c = mapa.putIfAbsent(_clave(nombre), () => ResumenCliente(nombre));
       c.compras += r.venta;
       c.porCobrar += r.porCobrar;
       c.facturas++;
     }
     final lista = mapa.values.toList()
-      ..sort((a, b) => porDeuda
-          ? b.porCobrar.compareTo(a.porCobrar)
-          : b.compras.compareTo(a.compras));
+      ..sort(
+        (a, b) => porDeuda
+            ? b.porCobrar.compareTo(a.porCobrar)
+            : b.compras.compareTo(a.compras),
+      );
     return lista.take(10).toList();
   }
 
@@ -196,9 +208,12 @@ class EstadisticasData {
     }
     const dias = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
     return List.generate(
-        7,
-        (i) => PromedioDia(
-            dias[i], fechas[i].isEmpty ? 0 : totales[i] / fechas[i].length));
+      7,
+      (i) => PromedioDia(
+        dias[i],
+        fechas[i].isEmpty ? 0 : totales[i] / fechas[i].length,
+      ),
+    );
   }
 
   RegistroEstadistico? mayorVenta(PeriodoEstadisticas p) {
@@ -227,16 +242,17 @@ class EstadisticasData {
           .reduce((a, b) => a.isAfter(b) ? a : b);
     } else if (p.mes != null) {
       inicio = DateTime(p.anio!, p.mes!);
-      referencia =
-          DateTime(p.anio!, p.mes! + 1).subtract(const Duration(days: 1));
+      referencia = DateTime(
+        p.anio!,
+        p.mes! + 1,
+      ).subtract(const Duration(days: 1));
     } else {
       inicio = DateTime(p.anio!);
       referencia = DateTime(p.anio! + 1).subtract(const Duration(days: 1));
     }
-    final compradores = filtrar(p)
-        .map((r) => _clave(r.cliente))
-        .where((e) => e.isNotEmpty)
-        .toSet();
+    final compradores = filtrar(
+      p,
+    ).map((r) => _clave(r.cliente)).where((e) => e.isNotEmpty).toSet();
     var nuevos = 0, recurrentes = 0, inactivos = 0;
     for (final e in porCliente.entries) {
       e.value.sort();
@@ -275,27 +291,37 @@ DateTime? parsearFechaFactura(String valor) {
 
 class EstadisticasService {
   EstadisticasService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+    : _client = client ?? Supabase.instance.client;
   final SupabaseClient _client;
   Future<EstadisticasData> cargar() async {
     final datos = await Future.wait([
-      _paginar((d, h) =>
-          _client.from('reportes_mensuales').select('anio, mes').range(d, h)),
-      _paginar((d, h) => _client
-          .from('reportes_ventas')
-          .select('mes_reporte, ref_fact, vendedor, esmaltes, abonos')
-          .range(d, h)),
-      _paginar((d, h) => _client
-          .from('facturas_maestras')
-          .select('ref_fact, cliente, fecha, venta')
-          .range(d, h)),
+      _paginar(
+        (d, h) =>
+            _client.from('reportes_mensuales').select('anio, mes').range(d, h),
+      ),
+      _paginar(
+        (d, h) => _client
+            .from('reportes_ventas')
+            .select('mes_reporte, ref_fact, vendedor, esmaltes, abonos')
+            .range(d, h),
+      ),
+      _paginar(
+        (d, h) => _client
+            .from('facturas_maestras')
+            .select('ref_fact, cliente, fecha, venta')
+            .range(d, h),
+      ),
     ]);
     return construirEstadisticas(
-        reportes: datos[0], filas: datos[1], facturas: datos[2]);
+      reportes: datos[0],
+      filas: datos[1],
+      facturas: datos[2],
+    );
   }
 
   Future<List<Map<String, dynamic>>> _paginar(
-      Future<List<Map<String, dynamic>>> Function(int, int) consulta) async {
+    Future<List<Map<String, dynamic>>> Function(int, int) consulta,
+  ) async {
     const n = 1000;
     final todos = <Map<String, dynamic>>[];
     while (true) {
@@ -306,10 +332,11 @@ class EstadisticasService {
   }
 }
 
-EstadisticasData construirEstadisticas(
-    {required List<Map<String, dynamic>> reportes,
-    required List<Map<String, dynamic>> filas,
-    required List<Map<String, dynamic>> facturas}) {
+EstadisticasData construirEstadisticas({
+  required List<Map<String, dynamic>> reportes,
+  required List<Map<String, dynamic>> filas,
+  required List<Map<String, dynamic>> facturas,
+}) {
   final periodos = <PeriodoEstadisticas>[];
   final porNombre = <String, PeriodoEstadisticas>{};
   for (final r in reportes) {
@@ -321,7 +348,7 @@ EstadisticasData construirEstadisticas(
   }
   periodos.sort((a, b) => a.id.compareTo(b.id));
   final fm = {
-    for (final f in facturas) f['ref_fact']?.toString().trim() ?? '': f
+    for (final f in facturas) f['ref_fact']?.toString().trim() ?? '': f,
   };
   final registros = <RegistroEstadistico>[];
   for (final fila in filas) {
@@ -332,7 +359,8 @@ EstadisticasData construirEstadisticas(
     final double cobrado = ab is List
         ? ab.fold<double>(0, (s, v) => s + ((v as num?)?.toDouble() ?? 0))
         : 0.0;
-    registros.add(RegistroEstadistico(
+    registros.add(
+      RegistroEstadistico(
         anio: p.anio!,
         mes: p.mes!,
         referencia: ref,
@@ -341,7 +369,9 @@ EstadisticasData construirEstadisticas(
         vendedor: fila['vendedor']?.toString() ?? '',
         esmaltes: (fila['esmaltes'] as num?)?.toInt() ?? 0,
         venta: (f?['venta'] as num?)?.toDouble() ?? 0,
-        cobrado: cobrado));
+        cobrado: cobrado,
+      ),
+    );
   }
   return EstadisticasData(periodos, registros);
 }

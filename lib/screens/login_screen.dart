@@ -4,10 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/hg_theme.dart';
 
-typedef AutenticarUsuario = Future<void> Function(
-  String correo,
-  String contrasena,
-);
+typedef AutenticarUsuario =
+    Future<void> Function(String correo, String contrasena);
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({this.autenticar, super.key});
@@ -241,8 +239,11 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ],
       ),
-      child: const Icon(Icons.lock_outline_rounded,
-          color: _burgundyDark, size: 28),
+      child: const Icon(
+        Icons.lock_outline_rounded,
+        color: _burgundyDark,
+        size: 28,
+      ),
     );
   }
 
@@ -255,7 +256,9 @@ class _LoginScreenState extends State<LoginScreen> {
       textInputAction: TextInputAction.next,
       autofillHints: const [AutofillHints.username, AutofillHints.email],
       style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurface, fontSize: 13.5),
+        color: Theme.of(context).colorScheme.onSurface,
+        fontSize: 13.5,
+      ),
       decoration: _fieldDecoration(
         hintText: 'Correo electrónico',
         prefixIcon: Icons.email_outlined,
@@ -279,16 +282,18 @@ class _LoginScreenState extends State<LoginScreen> {
       autofillHints: const [AutofillHints.password],
       onFieldSubmitted: (_) => _iniciarSesion(),
       style: TextStyle(
-          color: Theme.of(context).colorScheme.onSurface, fontSize: 13.5),
+        color: Theme.of(context).colorScheme.onSurface,
+        fontSize: 13.5,
+      ),
       decoration: _fieldDecoration(
         hintText: 'Contraseña',
         prefixIcon: Icons.key_outlined,
         suffix: IconButton(
-          tooltip:
-              _ocultarContrasena ? 'Mostrar contraseña' : 'Ocultar contraseña',
-          onPressed: () => setState(
-            () => _ocultarContrasena = !_ocultarContrasena,
-          ),
+          tooltip: _ocultarContrasena
+              ? 'Mostrar contraseña'
+              : 'Ocultar contraseña',
+          onPressed: () =>
+              setState(() => _ocultarContrasena = !_ocultarContrasena),
           icon: Icon(
             _ocultarContrasena
                 ? Icons.visibility_outlined
@@ -368,8 +373,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   )
                 else
-                  const Icon(Icons.login_rounded,
-                      color: Colors.white, size: 18),
+                  const Icon(
+                    Icons.login_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
                 const SizedBox(width: 9),
                 Text(
                   _iniciandoSesion ? 'Iniciando…' : 'Iniciar sesión',
@@ -396,11 +404,11 @@ class _Glow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(colors: [color, color.withAlpha(0)]),
-        ),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(
+      shape: BoxShape.circle,
+      gradient: RadialGradient(colors: [color, color.withAlpha(0)]),
+    ),
+  );
 }

@@ -89,26 +89,30 @@ class ReporteExporter {
               'SALDO',
             ],
             data: filasConDatos
-                .map((fila) => [
-                      fila.numero,
-                      _referenciaParaPdf(fila.referencia),
-                      fila.cliente,
-                      fila.nombreComercial,
-                      fila.fecha,
-                      fila.numeroFactura,
-                      nombresVendedores[fila.vendedor] ?? fila.vendedor,
-                      fila.esmalte,
-                      _dinero(fila.venta),
-                      fila.abonos
-                          .asMap()
-                          .entries
-                          .where((item) => item.value.valor != 0)
-                          .map((item) =>
-                              '${item.key + 1}: ${_dinero(item.value.valor)}')
-                          .join(' / '),
-                      _dinero(fila.totalAbonos),
-                      _dinero(fila.saldo),
-                    ])
+                .map(
+                  (fila) => [
+                    fila.numero,
+                    _referenciaParaPdf(fila.referencia),
+                    fila.cliente,
+                    fila.nombreComercial,
+                    fila.fecha,
+                    fila.numeroFactura,
+                    nombresVendedores[fila.vendedor] ?? fila.vendedor,
+                    fila.esmalte,
+                    _dinero(fila.venta),
+                    fila.abonos
+                        .asMap()
+                        .entries
+                        .where((item) => item.value.valor != 0)
+                        .map(
+                          (item) =>
+                              '${item.key + 1}: ${_dinero(item.value.valor)}',
+                        )
+                        .join(' / '),
+                    _dinero(fila.totalAbonos),
+                    _dinero(fila.saldo),
+                  ],
+                )
                 .toList(),
             headerDecoration: pw.BoxDecoration(color: rosa),
             headerStyle: pw.TextStyle(
@@ -138,22 +142,27 @@ class ReporteExporter {
             mainAxisAlignment: pw.MainAxisAlignment.end,
             children: [
               _total(
-                  'Total esmaltes',
-                  filas
-                      .fold(0, (suma, fila) => suma + fila.esmalte)
-                      .toDouble()),
+                'Total esmaltes',
+                filas.fold(0, (suma, fila) => suma + fila.esmalte).toDouble(),
+              ),
               pw.SizedBox(width: 24),
-              _total('Total ventas',
-                  filas.fold(0.0, (suma, fila) => suma + fila.venta),
-                  dinero: true),
+              _total(
+                'Total ventas',
+                filas.fold(0.0, (suma, fila) => suma + fila.venta),
+                dinero: true,
+              ),
               pw.SizedBox(width: 24),
-              _total('Total cobros',
-                  filas.fold(0.0, (suma, fila) => suma + fila.totalAbonos),
-                  dinero: true),
+              _total(
+                'Total cobros',
+                filas.fold(0.0, (suma, fila) => suma + fila.totalAbonos),
+                dinero: true,
+              ),
               pw.SizedBox(width: 24),
-              _total('Total por cobrar',
-                  filas.fold(0.0, (suma, fila) => suma + fila.saldo),
-                  dinero: true),
+              _total(
+                'Total por cobrar',
+                filas.fold(0.0, (suma, fila) => suma + fila.saldo),
+                dinero: true,
+              ),
             ],
           ),
         ],
@@ -187,8 +196,9 @@ class ReporteExporter {
               cellStyle: const pw.TextStyle(fontSize: 9),
               cellPadding: const pw.EdgeInsets.all(6),
               border: pw.TableBorder.all(color: PdfColors.grey400, width: .5),
-              oddRowDecoration:
-                  const pw.BoxDecoration(color: PdfColors.grey100),
+              oddRowDecoration: const pw.BoxDecoration(
+                color: PdfColors.grey100,
+              ),
             ),
           ],
         ),
@@ -218,30 +228,30 @@ class ReporteExporter {
   }
 
   pw.Widget _encabezado(String titulo, PdfColor color) => pw.Container(
-        margin: const pw.EdgeInsets.only(bottom: 14),
-        child: pw.Column(
-          children: [
-            pw.Text(
-              'COSMÉTICOS HG',
-              style: pw.TextStyle(
-                fontSize: 18,
-                fontWeight: pw.FontWeight.bold,
-                color: color,
-              ),
-            ),
-            pw.SizedBox(height: 3),
-            pw.Text(titulo, style: const pw.TextStyle(fontSize: 11)),
-          ],
+    margin: const pw.EdgeInsets.only(bottom: 14),
+    child: pw.Column(
+      children: [
+        pw.Text(
+          'COSMÉTICOS HG',
+          style: pw.TextStyle(
+            fontSize: 18,
+            fontWeight: pw.FontWeight.bold,
+            color: color,
+          ),
         ),
-      );
+        pw.SizedBox(height: 3),
+        pw.Text(titulo, style: const pw.TextStyle(fontSize: 11)),
+      ],
+    ),
+  );
 
   pw.Widget _piePagina(pw.Context context) => pw.Align(
-        alignment: pw.Alignment.centerRight,
-        child: pw.Text(
-          'Página ${context.pageNumber} de ${context.pagesCount}',
-          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-        ),
-      );
+    alignment: pw.Alignment.centerRight,
+    child: pw.Text(
+      'Página ${context.pageNumber} de ${context.pagesCount}',
+      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+    ),
+  );
 
   pw.Widget _total(String etiqueta, double valor, {bool dinero = false}) =>
       pw.Text(

@@ -6,9 +6,9 @@ class Abono {
 
   Map<String, dynamic> toJson() => {'valor': valor, 'comentario': comentario};
   factory Abono.fromJson(Map<String, dynamic> json) => Abono(
-        valor: (json['valor'] as num?)?.toDouble() ?? 0,
-        comentario: json['comentario'] as String? ?? '',
-      );
+    valor: (json['valor'] as num?)?.toDouble() ?? 0,
+    comentario: json['comentario'] as String? ?? '',
+  );
 }
 
 class FilaVenta {
@@ -49,33 +49,34 @@ class FilaVenta {
       esmalte != 0 ||
       venta != 0 ||
       abonos.any(
-          (abono) => abono.valor != 0 || abono.comentario.trim().isNotEmpty);
+        (abono) => abono.valor != 0 || abono.comentario.trim().isNotEmpty,
+      );
 
   Map<String, dynamic> toJson() => {
-        'numero': numero,
-        'referencia': referencia,
-        'cliente': cliente,
-        'nombreComercial': nombreComercial,
-        'fecha': fecha,
-        'numeroFactura': numeroFactura,
-        'vendedor': vendedor,
-        'esmalte': esmalte,
-        'venta': venta,
-        'abonos': abonos.map((item) => item.toJson()).toList(),
-      };
+    'numero': numero,
+    'referencia': referencia,
+    'cliente': cliente,
+    'nombreComercial': nombreComercial,
+    'fecha': fecha,
+    'numeroFactura': numeroFactura,
+    'vendedor': vendedor,
+    'esmalte': esmalte,
+    'venta': venta,
+    'abonos': abonos.map((item) => item.toJson()).toList(),
+  };
 
   factory FilaVenta.fromJson(Map<String, dynamic> json) => FilaVenta(
-        numero: json['numero'] as int? ?? 1,
-        referencia: json['referencia'] as String? ?? '',
-        cliente: json['cliente'] as String? ?? '',
-        nombreComercial: json['nombreComercial'] as String? ?? '',
-        fecha: json['fecha'] as String? ?? '',
-        numeroFactura: json['numeroFactura'] as String? ?? '',
-        vendedor: json['vendedor'] as String? ?? '',
-        esmalte: json['esmalte'] as int? ?? 0,
-        venta: (json['venta'] as num?)?.toDouble() ?? 0,
-        abonos: (json['abonos'] as List<dynamic>? ?? const [])
-            .map((item) => Abono.fromJson(item as Map<String, dynamic>))
-            .toList(),
-      );
+    numero: json['numero'] as int? ?? 1,
+    referencia: json['referencia'] as String? ?? '',
+    cliente: json['cliente'] as String? ?? '',
+    nombreComercial: json['nombreComercial'] as String? ?? '',
+    fecha: json['fecha'] as String? ?? '',
+    numeroFactura: json['numeroFactura'] as String? ?? '',
+    vendedor: json['vendedor'] as String? ?? '',
+    esmalte: json['esmalte'] as int? ?? 0,
+    venta: (json['venta'] as num?)?.toDouble() ?? 0,
+    abonos: (json['abonos'] as List<dynamic>? ?? const [])
+        .map((item) => Abono.fromJson(item as Map<String, dynamic>))
+        .toList(),
+  );
 }

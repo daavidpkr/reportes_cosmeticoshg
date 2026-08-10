@@ -9,9 +9,9 @@ class VendedoresScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Vendedores')),
-        body: VendedoresContent(store: store),
-      );
+    appBar: AppBar(title: const Text('Vendedores')),
+    body: VendedoresContent(store: store),
+  );
 }
 
 /// Contenido reutilizable de administración, sin Scaffold ni AppBar.
@@ -57,23 +57,29 @@ class _VendedoresContentState extends State<VendedoresContent> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Editar vendedor'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
               controller: codigo,
-              decoration: const InputDecoration(labelText: 'Código')),
-          const SizedBox(height: 12),
-          TextField(
+              decoration: const InputDecoration(labelText: 'Código'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
               controller: nombre,
-              decoration: const InputDecoration(labelText: 'Nombre')),
-        ]),
+              decoration: const InputDecoration(labelText: 'Nombre'),
+            ),
+          ],
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, (codigo.text, nombre.text)),
-              child: const Text('Guardar')),
+            onPressed: () => Navigator.pop(context, (codigo.text, nombre.text)),
+            child: const Text('Guardar'),
+          ),
         ],
       ),
     );
@@ -97,11 +103,13 @@ class _VendedoresContentState extends State<VendedoresContent> {
         content: Text('¿Deseas eliminar a ${vendedor.nombre}?'),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancelar')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Eliminar')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar'),
+          ),
         ],
       ),
     );
@@ -114,74 +122,101 @@ class _VendedoresContentState extends State<VendedoresContent> {
     }
   }
 
-  void _mensaje(String texto) => ScaffoldMessenger.of(context)
-      .showSnackBar(SnackBar(content: Text(texto)));
+  void _mensaje(String texto) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(texto)));
 
   @override
   Widget build(BuildContext context) => Center(
-          child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 900),
-        child: ListView(padding: const EdgeInsets.all(20), children: [
-          Text('Administración de vendedores',
-              style: Theme.of(context).textTheme.headlineSmall),
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 900),
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text(
+            'Administración de vendedores',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 16),
           Card(
-              child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        SizedBox(
-                            width: 220,
-                            child: TextField(
-                                controller: _codigo,
-                                textCapitalization:
-                                    TextCapitalization.characters,
-                                decoration: const InputDecoration(
-                                    labelText: 'Código del vendedor'))),
-                        SizedBox(
-                            width: 320,
-                            child: TextField(
-                                controller: _nombre,
-                                onSubmitted: (_) => _guardar(),
-                                decoration: const InputDecoration(
-                                    labelText: 'Nombre del vendedor'))),
-                        FilledButton.icon(
-                            onPressed: _guardando ? null : _guardar,
-                            icon: _guardando
-                                ? const SizedBox.square(
-                                    dimension: 16,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2))
-                                : const Icon(Icons.add),
-                            label: const Text('Crear')),
-                      ]))),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 220,
+                    child: TextField(
+                      controller: _codigo,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: const InputDecoration(
+                        labelText: 'Código del vendedor',
+                      ),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 320,
+                    child: TextField(
+                      controller: _nombre,
+                      onSubmitted: (_) => _guardar(),
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre del vendedor',
+                      ),
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _guardando ? null : _guardar,
+                    icon: _guardando
+                        ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.add),
+                    label: const Text('Crear'),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 16),
           if (widget.store.vendedores.isEmpty)
             const Card(
-                child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('Todavía no hay vendedores guardados.')))
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('Todavía no hay vendedores guardados.'),
+              ),
+            )
           else
-            ...widget.store.vendedores.map((vendedor) => Card(
-                    child: ListTile(
+            ...widget.store.vendedores.map(
+              (vendedor) => Card(
+                child: ListTile(
                   leading: CircleAvatar(child: Text(vendedor.codigo)),
                   title: Text(vendedor.nombre),
                   subtitle: Text('Código: ${vendedor.codigo}'),
-                  trailing: Wrap(children: [
-                    IconButton(
+                  trailing: Wrap(
+                    children: [
+                      IconButton(
                         tooltip: 'Editar',
                         onPressed: () => _editar(vendedor),
-                        icon: const Icon(Icons.edit_outlined)),
-                    IconButton(
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                      IconButton(
                         tooltip: 'Eliminar',
                         onPressed: () => _eliminar(vendedor),
-                        icon: Icon(Icons.delete_outline,
-                            color: context.hg.danger)),
-                  ]),
-                ))),
-        ]),
-      ));
+                        icon: Icon(
+                          Icons.delete_outline,
+                          color: context.hg.danger,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    ),
+  );
 }

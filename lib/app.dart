@@ -141,17 +141,20 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
           indicatorColor: Colors.transparent,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
-          labelTextStyle: WidgetStateProperty.resolveWith((estados) =>
-              TextStyle(
-                  color: estados.contains(WidgetState.selected)
-                      ? _burgundy
-                      : _inkSoft,
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w600)),
+          labelTextStyle: WidgetStateProperty.resolveWith(
+            (estados) => TextStyle(
+              color: estados.contains(WidgetState.selected)
+                  ? _burgundy
+                  : _inkSoft,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           iconTheme: WidgetStateProperty.resolveWith(
             (estados) => IconThemeData(
-              color:
-                  estados.contains(WidgetState.selected) ? _burgundy : _inkSoft,
+              color: estados.contains(WidgetState.selected)
+                  ? _burgundy
+                  : _inkSoft,
               size: 20,
             ),
           ),
@@ -175,8 +178,9 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
           backgroundColor: _burgundy,
           foregroundColor: Colors.white,
         ),
-        progressIndicatorTheme:
-            const ProgressIndicatorThemeData(color: _burgundy),
+        progressIndicatorTheme: const ProgressIndicatorThemeData(
+          color: _burgundy,
+        ),
         snackBarTheme: const SnackBarThemeData(
           backgroundColor: _plum,
           contentTextStyle: TextStyle(color: Colors.white),
@@ -256,19 +260,23 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
           backgroundColor: const Color(0xFF1D161E),
           indicatorColor: const Color(0xFF482232),
           surfaceTintColor: Colors.transparent,
-          labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
-                color: states.contains(WidgetState.selected)
-                    ? const Color(0xFFC9A8D4)
-                    : const Color(0xFFBBAFBA),
-                fontSize: 9.5,
-                fontWeight: FontWeight.w600,
-              )),
-          iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
-                color: states.contains(WidgetState.selected)
-                    ? const Color(0xFFC9A8D4)
-                    : const Color(0xFFBBAFBA),
-                size: 20,
-              )),
+          labelTextStyle: WidgetStateProperty.resolveWith(
+            (states) => TextStyle(
+              color: states.contains(WidgetState.selected)
+                  ? const Color(0xFFC9A8D4)
+                  : const Color(0xFFBBAFBA),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          iconTheme: WidgetStateProperty.resolveWith(
+            (states) => IconThemeData(
+              color: states.contains(WidgetState.selected)
+                  ? const Color(0xFFC9A8D4)
+                  : const Color(0xFFBBAFBA),
+              size: 20,
+            ),
+          ),
         ),
         dialogTheme: const DialogThemeData(
           backgroundColor: Color(0xFF251C26),
@@ -301,8 +309,9 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
           backgroundColor: Color(0xFF7A1F3D),
           foregroundColor: Colors.white,
         ),
-        progressIndicatorTheme:
-            const ProgressIndicatorThemeData(color: Color(0xFFA84D70)),
+        progressIndicatorTheme: const ProgressIndicatorThemeData(
+          color: Color(0xFFA84D70),
+        ),
         snackBarTheme: const SnackBarThemeData(
           backgroundColor: Color(0xFF3D1A4A),
           contentTextStyle: TextStyle(color: Colors.white),

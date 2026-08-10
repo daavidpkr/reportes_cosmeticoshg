@@ -13,21 +13,21 @@ void main() {
         'ref_fact': '1',
         'vendedor': '01 - Ana',
         'esmaltes': 2,
-        'abonos': [100]
+        'abonos': [100],
       },
       {
         'mes_reporte': 'Agosto 2026',
         'ref_fact': '2',
         'vendedor': '01 - Ana',
         'esmaltes': 4,
-        'abonos': [100, 33.68, 200]
+        'abonos': [100, 33.68, 200],
       },
       {
         'mes_reporte': 'Agosto 2026',
         'ref_fact': '3',
         'vendedor': '02 - Luz',
         'esmaltes': 1,
-        'abonos': [50]
+        'abonos': [50],
       },
     ],
     facturas: const [
@@ -35,19 +35,19 @@ void main() {
         'ref_fact': '1',
         'cliente': 'Ruth Sánchez',
         'fecha': '07/07/2026',
-        'venta': 200
+        'venta': 200,
       },
       {
         'ref_fact': '2',
         'cliente': 'Ruth Sánchez',
         'fecha': '05/08/2026',
-        'venta': 900
+        'venta': 900,
       },
       {
         'ref_fact': '3',
         'cliente': '  RUTH   SÁNCHEZ ',
         'fecha': '12/08/2026',
-        'venta': 100
+        'venta': 100,
       },
     ],
   );
@@ -67,7 +67,9 @@ void main() {
     expect(data.resumen(const PeriodoEstadisticas.anio(2026)).ventas, 1200);
     expect(data.resumen(const PeriodoEstadisticas.todo()).facturas, 3);
     expect(
-        data.anterior(const PeriodoEstadisticas.mes(2026, 8))!.id, '2026-07');
+      data.anterior(const PeriodoEstadisticas.mes(2026, 8))!.id,
+      '2026-07',
+    );
   });
 
   test('agrupa clientes, ordena vendedores y promedia fechas reales', () {

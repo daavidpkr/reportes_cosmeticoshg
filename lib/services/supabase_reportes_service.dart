@@ -15,20 +15,8 @@ class CobroMensual {
   final double valorPorCobrar;
 
   String get id => '$anio-${mes.toString().padLeft(2, '0')}';
-  String get nombre => '${const [
-        'Enero',
-        'Febrero',
-        'Marzo',
-        'Abril',
-        'Mayo',
-        'Junio',
-        'Julio',
-        'Agosto',
-        'Septiembre',
-        'Octubre',
-        'Noviembre',
-        'Diciembre',
-      ][mes - 1]} $anio';
+  String get nombre =>
+      '${const ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][mes - 1]} $anio';
 }
 
 List<CobroMensual> calcularCobrosMensuales({
@@ -51,12 +39,15 @@ List<CobroMensual> calcularCobrosMensuales({
       venta: ventasPorReferencia[referencia] ?? 0,
       abonos: abonos is List
           ? abonos
-              .map((valor) => Abono(valor: (valor as num?)?.toDouble() ?? 0))
-              .toList()
+                .map((valor) => Abono(valor: (valor as num?)?.toDouble() ?? 0))
+                .toList()
           : <Abono>[],
     );
-    saldosPorReporte.update(nombreReporte, (total) => total + fila.saldo,
-        ifAbsent: () => fila.saldo);
+    saldosPorReporte.update(
+      nombreReporte,
+      (total) => total + fila.saldo,
+      ifAbsent: () => fila.saldo,
+    );
   }
   return reportes.map((reporte) {
     final anio = (reporte['anio'] as num).toInt();
@@ -72,7 +63,7 @@ List<CobroMensual> calcularCobrosMensuales({
 
 class SupabaseReportesService {
   SupabaseReportesService({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+    : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
@@ -102,16 +93,20 @@ class SupabaseReportesService {
   }
 
   Future<List<Map<String, dynamic>>> _obtenerTodasLasFilas() =>
-      _obtenerEnPaginas((desde, hasta) => _client
-          .from('reportes_ventas')
-          .select('mes_reporte, ref_fact, abonos')
-          .range(desde, hasta));
+      _obtenerEnPaginas(
+        (desde, hasta) => _client
+            .from('reportes_ventas')
+            .select('mes_reporte, ref_fact, abonos')
+            .range(desde, hasta),
+      );
 
   Future<List<Map<String, dynamic>>> _obtenerTodasLasFacturas() =>
-      _obtenerEnPaginas((desde, hasta) => _client
-          .from('facturas_maestras')
-          .select('ref_fact, venta')
-          .range(desde, hasta));
+      _obtenerEnPaginas(
+        (desde, hasta) => _client
+            .from('facturas_maestras')
+            .select('ref_fact, venta')
+            .range(desde, hasta),
+      );
 
   Future<List<Map<String, dynamic>>> _obtenerEnPaginas(
     Future<List<Map<String, dynamic>>> Function(int, int) consulta,
@@ -128,14 +123,11 @@ class SupabaseReportesService {
   Future<void> guardarReporteMensual(int anio, int mes) async {
     final id = '$anio-${mes.toString().padLeft(2, '0')}';
 
-    await _client.from('reportes_mensuales').upsert(
-      {
-        'id': id,
-        'anio': anio,
-        'mes': mes,
-      },
-      onConflict: 'id',
-    );
+    await _client.from('reportes_mensuales').upsert({
+      'id': id,
+      'anio': anio,
+      'mes': mes,
+    }, onConflict: 'id');
   }
 
   Future<void> eliminarReporteMensual(int anio, int mes) async {
@@ -183,20 +175,21 @@ class SupabaseReportesService {
 
   Future<void> guardarFacturas(Iterable<Factura> facturas) async {
     final datos = facturas
-        .map((factura) => {
-              'ref_fact': factura.secuencial,
-              'cliente': factura.cliente,
-              'nombre_comercial': factura.nombreComercial,
-              'fecha': factura.fecha,
-              'nro_fact': factura.secuencial,
-              'venta': factura.total,
-            })
+        .map(
+          (factura) => {
+            'ref_fact': factura.secuencial,
+            'cliente': factura.cliente,
+            'nombre_comercial': factura.nombreComercial,
+            'fecha': factura.fecha,
+            'nro_fact': factura.secuencial,
+            'venta': factura.total,
+          },
+        )
         .toList();
     if (datos.isEmpty) return;
-    await _client.from('facturas_maestras').upsert(
-          datos,
-          onConflict: 'ref_fact',
-        );
+    await _client
+        .from('facturas_maestras')
+        .upsert(datos, onConflict: 'ref_fact');
   }
 
   Future<void> guardarFila(FilaVenta fila, String mesReporte) async {
@@ -214,19 +207,17 @@ class SupabaseReportesService {
       }, onConflict: 'ref_fact');
     }
 
-    await _client.from('reportes_ventas').upsert(
-      {
-        'nro_fila': fila.numero,
-        'ref_fact': referencia,
-        'vendedor': fila.vendedor,
-        'esmaltes': fila.esmalte,
-        'abonos': fila.abonos.map((abono) => abono.valor).toList(),
-        'comentarios_abonos':
-            fila.abonos.map((abono) => abono.comentario).toList(),
-        'mes_reporte': mesReporte,
-      },
-      onConflict: 'nro_fila,mes_reporte',
-    );
+    await _client.from('reportes_ventas').upsert({
+      'nro_fila': fila.numero,
+      'ref_fact': referencia,
+      'vendedor': fila.vendedor,
+      'esmaltes': fila.esmalte,
+      'abonos': fila.abonos.map((abono) => abono.valor).toList(),
+      'comentarios_abonos': fila.abonos
+          .map((abono) => abono.comentario)
+          .toList(),
+      'mes_reporte': mesReporte,
+    }, onConflict: 'nro_fila,mes_reporte');
   }
 
   Future<void> eliminarFila(int numeroFila, String mesReporte) => _client

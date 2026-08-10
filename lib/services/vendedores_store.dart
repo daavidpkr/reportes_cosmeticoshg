@@ -4,20 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class Vendedor {
-  const Vendedor({
-    required this.codigo,
-    required this.nombre,
-  });
+  const Vendedor({required this.codigo, required this.nombre});
 
   final String codigo;
   final String nombre;
 
   String get etiqueta => codigo.isEmpty ? nombre : '$codigo - $nombre';
 
-  Map<String, String> toJson() => {
-        'codigo': codigo,
-        'nombre': nombre,
-      };
+  Map<String, String> toJson() => {'codigo': codigo, 'nombre': nombre};
 }
 
 class VendedoresStore {
@@ -41,19 +35,14 @@ class VendedoresStore {
     if (!migracionRealizada) {
       await _migrarVendedoresLocales(preferencias);
 
-      await preferencias.setBool(
-        _claveMigracion,
-        true,
-      );
+      await preferencias.setBool(_claveMigracion, true);
     }
 
     // Desde este punto Supabase es la fuente principal.
     await _cargarDesdeSupabase();
   }
 
-  Future<void> _migrarVendedoresLocales(
-    SharedPreferences preferencias,
-  ) async {
+  Future<void> _migrarVendedoresLocales(SharedPreferences preferencias) async {
     final locales = <Vendedor>[];
 
     final guardados = preferencias.getStringList(_clave);
@@ -63,19 +52,15 @@ class VendedoresStore {
         try {
           final mapa = jsonDecode(dato) as Map<String, dynamic>;
 
-          final codigo =
-              (mapa['codigo']?.toString() ?? '').trim().toUpperCase();
+          final codigo = (mapa['codigo']?.toString() ?? '')
+              .trim()
+              .toUpperCase();
 
           final nombre = (mapa['nombre']?.toString() ?? '').trim();
 
           if (codigo.isEmpty || nombre.isEmpty) continue;
 
-          locales.add(
-            Vendedor(
-              codigo: codigo,
-              nombre: nombre,
-            ),
-          );
+          locales.add(Vendedor(codigo: codigo, nombre: nombre));
         } catch (_) {
           // Ignora registros locales dañados.
         }
@@ -89,7 +74,9 @@ class VendedoresStore {
     // Permanecen intactos en SharedPreferences.
     if (locales.isEmpty) return;
 
-    await _client.from('vendedores').upsert(
+    await _client
+        .from('vendedores')
+        .upsert(
           locales
               .map(
                 (vendedor) => {
@@ -122,10 +109,7 @@ class VendedoresStore {
     _ordenar();
   }
 
-  Future<bool> agregar(
-    String codigo,
-    String nombre,
-  ) async {
+  Future<bool> agregar(String codigo, String nombre) async {
     final codigoLimpio = codigo.trim().toUpperCase();
     final nombreLimpio = nombre.trim();
 
@@ -147,12 +131,7 @@ class VendedoresStore {
         'nombre': nombreLimpio,
       });
 
-      vendedores.add(
-        Vendedor(
-          codigo: codigoLimpio,
-          nombre: nombreLimpio,
-        ),
-      );
+      vendedores.add(Vendedor(codigo: codigoLimpio, nombre: nombreLimpio));
 
       _ordenar();
 
@@ -168,29 +147,29 @@ class VendedoresStore {
     vendedores.remove(vendedor);
   }
 
-  Future<bool> editar(
-    Vendedor anterior,
-    String codigo,
-    String nombre,
-  ) async {
+  Future<bool> editar(Vendedor anterior, String codigo, String nombre) async {
     final codigoLimpio = codigo.trim().toUpperCase();
     final nombreLimpio = nombre.trim();
     if (codigoLimpio.isEmpty || nombreLimpio.isEmpty) return false;
-    if (vendedores.any((item) =>
-        !identical(item, anterior) &&
-        (item.codigo.toLowerCase() == codigoLimpio.toLowerCase() ||
-            item.nombre.toLowerCase() == nombreLimpio.toLowerCase()))) {
+    if (vendedores.any(
+      (item) =>
+          !identical(item, anterior) &&
+          (item.codigo.toLowerCase() == codigoLimpio.toLowerCase() ||
+              item.nombre.toLowerCase() == nombreLimpio.toLowerCase()),
+    )) {
       return false;
     }
     try {
-      await _client.from('vendedores').update({
-        'codigo': codigoLimpio,
-        'nombre': nombreLimpio,
-      }).eq('codigo', anterior.codigo);
+      await _client
+          .from('vendedores')
+          .update({'codigo': codigoLimpio, 'nombre': nombreLimpio})
+          .eq('codigo', anterior.codigo);
       final indice = vendedores.indexOf(anterior);
       if (indice >= 0) {
-        vendedores[indice] =
-            Vendedor(codigo: codigoLimpio, nombre: nombreLimpio);
+        vendedores[indice] = Vendedor(
+          codigo: codigoLimpio,
+          nombre: nombreLimpio,
+        );
       }
       _ordenar();
       return true;
@@ -201,9 +180,7 @@ class VendedoresStore {
 
   void _ordenar() {
     vendedores.sort(
-      (a, b) => a.codigo.toLowerCase().compareTo(
-            b.codigo.toLowerCase(),
-          ),
+      (a, b) => a.codigo.toLowerCase().compareTo(b.codigo.toLowerCase()),
     );
   }
 }

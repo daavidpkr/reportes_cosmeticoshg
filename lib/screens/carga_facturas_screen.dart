@@ -97,8 +97,9 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text('No se pudieron guardar las facturas en la nube: $error'),
+            content: Text(
+              'No se pudieron guardar las facturas en la nube: $error',
+            ),
             backgroundColor: context.hg.danger,
           ),
         );
@@ -148,8 +149,11 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.cloud_upload,
-                      size: 80, color: context.hg.burgundy),
+                  Icon(
+                    Icons.cloud_upload,
+                    size: 80,
+                    color: context.hg.burgundy,
+                  ),
                   const SizedBox(height: 20),
                   Text(
                     'Facturas de ${widget.mes.toString().padLeft(2, '0')}/${widget.anio}',
@@ -167,9 +171,9 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
                         ? 'Suelta aquí los archivos'
                         : 'Arrastra y suelta aquí tus facturas',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: context.hg.burgundy,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      color: context.hg.burgundy,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   const Text('o selecciónalas manualmente'),

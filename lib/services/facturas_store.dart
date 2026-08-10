@@ -38,8 +38,9 @@ class FacturasStore {
     }
 
     final fecha = _extraer(texto, 'fechaEmision') ?? '';
-    final partes =
-        RegExp(r'^(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})').firstMatch(fecha);
+    final partes = RegExp(
+      r'^(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})',
+    ).firstMatch(fecha);
     if (mesPermitido != null || anioPermitido != null) {
       if (partes == null) return ResultadoFactura.invalida;
       final primero = int.tryParse(partes.group(1)!);
