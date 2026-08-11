@@ -228,30 +228,30 @@ class ReporteExporter {
   }
 
   pw.Widget _encabezado(String titulo, PdfColor color) => pw.Container(
-    margin: const pw.EdgeInsets.only(bottom: 14),
-    child: pw.Column(
-      children: [
-        pw.Text(
-          'COSMÉTICOS HG',
-          style: pw.TextStyle(
-            fontSize: 18,
-            fontWeight: pw.FontWeight.bold,
-            color: color,
-          ),
+        margin: const pw.EdgeInsets.only(bottom: 14),
+        child: pw.Column(
+          children: [
+            pw.Text(
+              'COSMÉTICOS HG',
+              style: pw.TextStyle(
+                fontSize: 18,
+                fontWeight: pw.FontWeight.bold,
+                color: color,
+              ),
+            ),
+            pw.SizedBox(height: 3),
+            pw.Text(titulo, style: const pw.TextStyle(fontSize: 11)),
+          ],
         ),
-        pw.SizedBox(height: 3),
-        pw.Text(titulo, style: const pw.TextStyle(fontSize: 11)),
-      ],
-    ),
-  );
+      );
 
   pw.Widget _piePagina(pw.Context context) => pw.Align(
-    alignment: pw.Alignment.centerRight,
-    child: pw.Text(
-      'Página ${context.pageNumber} de ${context.pagesCount}',
-      style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
-    ),
-  );
+        alignment: pw.Alignment.centerRight,
+        child: pw.Text(
+          'Página ${context.pageNumber} de ${context.pagesCount}',
+          style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
+        ),
+      );
 
   pw.Widget _total(String etiqueta, double valor, {bool dinero = false}) =>
       pw.Text(

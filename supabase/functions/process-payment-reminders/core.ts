@@ -33,6 +33,8 @@ export type OperationalSummary = {
   temporaryFailures: number;
   permanentFailures: number;
   administrativeErrors: number;
+  skippedStale: number;
+  skippedCancelled: number;
 };
 
 export function emptySummary(): OperationalSummary {
@@ -43,7 +45,45 @@ export function emptySummary(): OperationalSummary {
     temporaryFailures: 0,
     permanentFailures: 0,
     administrativeErrors: 0,
+    skippedStale: 0,
+    skippedCancelled: 0,
   };
+}
+
+export type FinalDeliveryState = {
+  eventExists: boolean;
+  eventStatus?: string;
+  eventScheduleVersion?: string;
+  eventScheduledFor?: string;
+  reminderExists: boolean;
+  reminderActive?: boolean;
+  reminderScheduleVersion?: string;
+  reminderPaymentDate?: string;
+};
+
+export function finalDeliveryBlockReason(
+  state: FinalDeliveryState,
+):
+  | "EVENT_MISSING"
+  | "EVENT_CANCELLED"
+  | "EVENT_NOT_PROCESSING"
+  | "REMINDER_MISSING"
+  | "REMINDER_INACTIVE"
+  | "SCHEDULE_CHANGED"
+  | "DATE_CHANGED"
+  | null {
+  if (!state.eventExists) return "EVENT_MISSING";
+  if (state.eventStatus === "cancelled") return "EVENT_CANCELLED";
+  if (state.eventStatus !== "processing") return "EVENT_NOT_PROCESSING";
+  if (!state.reminderExists) return "REMINDER_MISSING";
+  if (!state.reminderActive) return "REMINDER_INACTIVE";
+  if (state.eventScheduleVersion !== state.reminderScheduleVersion) {
+    return "SCHEDULE_CHANGED";
+  }
+  if (state.eventScheduledFor !== state.reminderPaymentDate) {
+    return "DATE_CHANGED";
+  }
+  return null;
 }
 
 export function guayaquilDate(now = new Date()): string {
@@ -299,6 +339,18 @@ export function requireDeviceQuery<T>(
 ): T[] {
   if (error) throw new Error("device_query_failed");
   return devices ?? [];
+}
+
+export function filterEnterpriseDevices<
+  T extends {
+    user_id?: string;
+    organization_id?: string;
+  },
+>(devices: T[], organizationId: string, activeUserIds: Set<string>): T[] {
+  return devices.filter((device) =>
+    device.organization_id === organizationId && device.user_id != null &&
+    activeUserIds.has(device.user_id)
+  );
 }
 
 export async function mapLimit<T>(

@@ -16,7 +16,9 @@ const nombresMeses = <String>[
 ];
 
 class PeriodoEstadisticas {
-  const PeriodoEstadisticas.todo() : anio = null, mes = null;
+  const PeriodoEstadisticas.todo()
+      : anio = null,
+        mes = null;
   const PeriodoEstadisticas.anio(this.anio) : mes = null;
   const PeriodoEstadisticas.mes(this.anio, this.mes);
   final int? anio;
@@ -25,13 +27,13 @@ class PeriodoEstadisticas {
   String get id => esTodo
       ? 'todo'
       : mes == null
-      ? '$anio'
-      : '$anio-${mes!.toString().padLeft(2, '0')}';
+          ? '$anio'
+          : '$anio-${mes!.toString().padLeft(2, '0')}';
   String get etiqueta => esTodo
       ? 'Todo el histórico'
       : mes == null
-      ? '$anio'
-      : '${nombresMeses[mes! - 1]} $anio';
+          ? '$anio'
+          : '${nombresMeses[mes! - 1]} $anio';
 }
 
 class RegistroEstadistico {
@@ -161,9 +163,8 @@ class EstadisticasData {
   List<ResumenVendedor> vendedores(PeriodoEstadisticas p) {
     final mapa = <String, ResumenVendedor>{};
     for (final r in filtrar(p)) {
-      final nombre = r.vendedor.trim().isEmpty
-          ? 'Sin vendedor'
-          : r.vendedor.trim();
+      final nombre =
+          r.vendedor.trim().isEmpty ? 'Sin vendedor' : r.vendedor.trim();
       final v = mapa.putIfAbsent(nombre, () => ResumenVendedor(nombre));
       v.ventas += r.venta;
       v.cobrado += r.cobrado;
@@ -179,9 +180,8 @@ class EstadisticasData {
   }) {
     final mapa = <String, ResumenCliente>{};
     for (final r in filtrar(p)) {
-      final nombre = r.cliente.trim().isEmpty
-          ? 'Sin cliente'
-          : r.cliente.trim();
+      final nombre =
+          r.cliente.trim().isEmpty ? 'Sin cliente' : r.cliente.trim();
       final c = mapa.putIfAbsent(_clave(nombre), () => ResumenCliente(nombre));
       c.compras += r.venta;
       c.porCobrar += r.porCobrar;
@@ -291,7 +291,7 @@ DateTime? parsearFechaFactura(String valor) {
 
 class EstadisticasService {
   EstadisticasService({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+      : _client = client ?? Supabase.instance.client;
   final SupabaseClient _client;
   Future<EstadisticasData> cargar() async {
     final datos = await Future.wait([

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'request_id.dart';
 
 class Vendedor {
   const Vendedor({required this.codigo, required this.nombre});
@@ -52,9 +53,8 @@ class VendedoresStore {
         try {
           final mapa = jsonDecode(dato) as Map<String, dynamic>;
 
-          final codigo = (mapa['codigo']?.toString() ?? '')
-              .trim()
-              .toUpperCase();
+          final codigo =
+              (mapa['codigo']?.toString() ?? '').trim().toUpperCase();
 
           final nombre = (mapa['nombre']?.toString() ?? '').trim();
 
@@ -74,19 +74,14 @@ class VendedoresStore {
     // Permanecen intactos en SharedPreferences.
     if (locales.isEmpty) return;
 
-    await _client
-        .from('vendedores')
-        .upsert(
-          locales
-              .map(
-                (vendedor) => {
-                  'codigo': vendedor.codigo,
-                  'nombre': vendedor.nombre,
-                },
-              )
-              .toList(),
-          onConflict: 'codigo',
-        );
+    for (final vendedor in locales) {
+      await _client.rpc('enterprise_save_seller', params: {
+        'p_request_id': newRequestId(),
+        'p_old_code': null,
+        'p_code': vendedor.codigo,
+        'p_name': vendedor.nombre,
+      });
+    }
   }
 
   Future<void> _cargarDesdeSupabase() async {
@@ -126,10 +121,13 @@ class VendedoresStore {
     }
 
     try {
-      await _client.from('vendedores').insert({
-        'codigo': codigoLimpio,
-        'nombre': nombreLimpio,
+      final saved = await _client.rpc('enterprise_save_seller', params: {
+        'p_request_id': newRequestId(),
+        'p_old_code': null,
+        'p_code': codigoLimpio,
+        'p_name': nombreLimpio,
       });
+      if (saved != true) return false;
 
       vendedores.add(Vendedor(codigo: codigoLimpio, nombre: nombreLimpio));
 
@@ -142,7 +140,10 @@ class VendedoresStore {
   }
 
   Future<void> eliminar(Vendedor vendedor) async {
-    await _client.from('vendedores').delete().eq('codigo', vendedor.codigo);
+    await _client.rpc('enterprise_delete_seller', params: {
+      'p_request_id': newRequestId(),
+      'p_code': vendedor.codigo,
+    });
 
     vendedores.remove(vendedor);
   }
@@ -160,10 +161,13 @@ class VendedoresStore {
       return false;
     }
     try {
-      await _client
-          .from('vendedores')
-          .update({'codigo': codigoLimpio, 'nombre': nombreLimpio})
-          .eq('codigo', anterior.codigo);
+      final saved = await _client.rpc('enterprise_save_seller', params: {
+        'p_request_id': newRequestId(),
+        'p_old_code': anterior.codigo,
+        'p_code': codigoLimpio,
+        'p_name': nombreLimpio,
+      });
+      if (saved != true) return false;
       final indice = vendedores.indexOf(anterior);
       if (indice >= 0) {
         vendedores[indice] = Vendedor(

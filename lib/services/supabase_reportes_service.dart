@@ -2,6 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/factura.dart';
 import '../models/fila_venta.dart';
+import '../models/billing_customer.dart';
+import 'request_id.dart';
 
 class CobroMensual {
   const CobroMensual({
@@ -15,8 +17,20 @@ class CobroMensual {
   final double valorPorCobrar;
 
   String get id => '$anio-${mes.toString().padLeft(2, '0')}';
-  String get nombre =>
-      '${const ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][mes - 1]} $anio';
+  String get nombre => '${const [
+        'Enero',
+        'Febrero',
+        'Marzo',
+        'Abril',
+        'Mayo',
+        'Junio',
+        'Julio',
+        'Agosto',
+        'Septiembre',
+        'Octubre',
+        'Noviembre',
+        'Diciembre'
+      ][mes - 1]} $anio';
 }
 
 List<CobroMensual> calcularCobrosMensuales({
@@ -39,8 +53,8 @@ List<CobroMensual> calcularCobrosMensuales({
       venta: ventasPorReferencia[referencia] ?? 0,
       abonos: abonos is List
           ? abonos
-                .map((valor) => Abono(valor: (valor as num?)?.toDouble() ?? 0))
-                .toList()
+              .map((valor) => Abono(valor: (valor as num?)?.toDouble() ?? 0))
+              .toList()
           : <Abono>[],
     );
     saldosPorReporte.update(
@@ -63,7 +77,7 @@ List<CobroMensual> calcularCobrosMensuales({
 
 class SupabaseReportesService {
   SupabaseReportesService({SupabaseClient? client})
-    : _client = client ?? Supabase.instance.client;
+      : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
@@ -121,26 +135,26 @@ class SupabaseReportesService {
   }
 
   Future<void> guardarReporteMensual(int anio, int mes) async {
-    final id = '$anio-${mes.toString().padLeft(2, '0')}';
-
-    await _client.from('reportes_mensuales').upsert({
-      'id': id,
-      'anio': anio,
-      'mes': mes,
-    }, onConflict: 'id');
+    await _client.rpc('enterprise_save_monthly_report', params: {
+      'p_request_id': newRequestId(),
+      'p_year': anio,
+      'p_month': mes,
+    });
   }
 
   Future<void> eliminarReporteMensual(int anio, int mes) async {
-    final id = '$anio-${mes.toString().padLeft(2, '0')}';
-
-    await _client.from('reportes_mensuales').delete().eq('id', id);
+    await _client.rpc('enterprise_delete_monthly_report', params: {
+      'p_request_id': newRequestId(),
+      'p_year': anio,
+      'p_month': mes,
+    });
   }
 
   Future<void> eliminarFilasReporte(String mesReporte) async {
-    await _client
-        .from('reportes_ventas')
-        .delete()
-        .eq('mes_reporte', mesReporte);
+    await _client.rpc('enterprise_delete_report_rows', params: {
+      'p_request_id': newRequestId(),
+      'p_report_name': mesReporte,
+    });
   }
 
   Future<Factura?> buscarFacturaPorRef(String referencia) async {
@@ -163,68 +177,43 @@ class SupabaseReportesService {
     );
   }
 
-  Future<void> guardarFactura(Factura factura) =>
-      _client.from('facturas_maestras').upsert({
-        'ref_fact': factura.secuencial,
-        'cliente': factura.cliente,
-        'nombre_comercial': factura.nombreComercial,
-        'fecha': factura.fecha,
-        'nro_fact': factura.secuencial,
-        'venta': factura.total,
-      }, onConflict: 'ref_fact');
+  Future<void> guardarFactura(Factura factura) => _guardarFacturaRpc(factura);
 
   Future<void> guardarFacturas(Iterable<Factura> facturas) async {
-    final datos = facturas
-        .map(
-          (factura) => {
-            'ref_fact': factura.secuencial,
-            'cliente': factura.cliente,
-            'nombre_comercial': factura.nombreComercial,
-            'fecha': factura.fecha,
-            'nro_fact': factura.secuencial,
-            'venta': factura.total,
-          },
-        )
-        .toList();
-    if (datos.isEmpty) return;
-    await _client
-        .from('facturas_maestras')
-        .upsert(datos, onConflict: 'ref_fact');
+    for (final factura in facturas) {
+      await _guardarFacturaRpc(factura);
+    }
   }
 
   Future<void> guardarFila(FilaVenta fila, String mesReporte) async {
     final referencia = fila.numeroFactura.trim();
 
-    // La factura maestra siempre se persiste antes que el reporte que la usa.
-    if (referencia.isNotEmpty) {
-      await _client.from('facturas_maestras').upsert({
-        'ref_fact': referencia,
-        'cliente': fila.cliente,
-        'nombre_comercial': fila.nombreComercial,
-        'fecha': fila.fecha,
-        'nro_fact': referencia,
-        'venta': fila.venta,
-      }, onConflict: 'ref_fact');
+    final date = parseInvoiceDate(fila.fecha);
+    if (referencia.isNotEmpty && date == null) {
+      throw const FormatException('Fecha de factura inválida.');
     }
-
-    await _client.from('reportes_ventas').upsert({
-      'nro_fila': fila.numero,
-      'ref_fact': referencia,
-      'vendedor': fila.vendedor,
-      'esmaltes': fila.esmalte,
-      'abonos': fila.abonos.map((abono) => abono.valor).toList(),
-      'comentarios_abonos': fila.abonos
-          .map((abono) => abono.comentario)
-          .toList(),
-      'mes_reporte': mesReporte,
-    }, onConflict: 'nro_fila,mes_reporte');
+    await _client.rpc('enterprise_save_report_row', params: {
+      'p_request_id': newRequestId(),
+      'p_row_number': fila.numero,
+      'p_report_name': mesReporte,
+      'p_ref_fact': referencia,
+      'p_cliente': fila.cliente,
+      'p_commercial_name': fila.nombreComercial,
+      'p_invoice_date': date?.toIso8601String().substring(0, 10),
+      'p_sale': fila.venta,
+      'p_seller': fila.vendedor,
+      'p_nail_polish': fila.esmalte,
+      'p_payments': fila.abonos.map((item) => item.valor).toList(),
+      'p_payment_comments': fila.abonos.map((item) => item.comentario).toList(),
+    });
   }
 
-  Future<void> eliminarFila(int numeroFila, String mesReporte) => _client
-      .from('reportes_ventas')
-      .delete()
-      .eq('nro_fila', numeroFila)
-      .eq('mes_reporte', mesReporte);
+  Future<void> eliminarFila(int numeroFila, String mesReporte) =>
+      _client.rpc('enterprise_delete_report_row', params: {
+        'p_request_id': newRequestId(),
+        'p_row_number': numeroFila,
+        'p_report_name': mesReporte,
+      });
 
   Future<void> eliminarFacturaMaestra(String referencia) async {
     final ref = referencia.trim();
@@ -232,7 +221,24 @@ class SupabaseReportesService {
       throw Exception('La referencia de la factura está vacía.');
     }
 
-    await _client.from('facturas_maestras').delete().eq('ref_fact', ref);
+    await _client.rpc('enterprise_delete_invoice', params: {
+      'p_request_id': newRequestId(),
+      'p_factura_id': ref,
+    });
+  }
+
+  Future<void> _guardarFacturaRpc(Factura factura) async {
+    final date = parseInvoiceDate(factura.fecha);
+    if (date == null) throw const FormatException('Fecha de factura inválida.');
+    await _client.rpc('enterprise_upsert_invoice', params: {
+      'p_request_id': newRequestId(),
+      'p_ref_fact': factura.secuencial,
+      'p_cliente': factura.cliente,
+      'p_nombre_comercial': factura.nombreComercial,
+      'p_fecha': date.toIso8601String().substring(0, 10),
+      'p_nro_fact': factura.secuencial,
+      'p_venta': factura.total,
+    });
   }
 
   Stream<List<Map<String, dynamic>>> observarFilas(String mesReporte) => _client

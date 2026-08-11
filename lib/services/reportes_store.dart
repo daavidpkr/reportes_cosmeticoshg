@@ -9,33 +9,45 @@ class ReporteMensual {
     required this.mes,
     List<FilaVenta>? filas,
     List<Factura>? facturas,
-  }) : filas = filas ?? [FilaVenta(numero: 1)],
-       facturas = facturas ?? [];
+  })  : filas = filas ?? [FilaVenta(numero: 1)],
+        facturas = facturas ?? [];
 
   final int anio;
   final int mes;
   List<FilaVenta> filas;
   List<Factura> facturas;
   String get id => '$anio-${mes.toString().padLeft(2, '0')}';
-  String get nombre =>
-      '${const ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][mes - 1]} $anio';
+  String get nombre => '${const [
+        'Enero',
+        'Febrero',
+        'Marzo',
+        'Abril',
+        'Mayo',
+        'Junio',
+        'Julio',
+        'Agosto',
+        'Septiembre',
+        'Octubre',
+        'Noviembre',
+        'Diciembre'
+      ][mes - 1]} $anio';
 
   Map<String, dynamic> toJson() => {
-    'anio': anio,
-    'mes': mes,
-    'filas': filas.map((e) => e.toJson()).toList(),
-    'facturas': facturas.map((e) => e.toJson()).toList(),
-  };
+        'anio': anio,
+        'mes': mes,
+        'filas': filas.map((e) => e.toJson()).toList(),
+        'facturas': facturas.map((e) => e.toJson()).toList(),
+      };
   factory ReporteMensual.fromJson(Map<String, dynamic> json) => ReporteMensual(
-    anio: json['anio'] as int,
-    mes: json['mes'] as int,
-    filas: (json['filas'] as List)
-        .map((e) => FilaVenta.fromJson(e as Map<String, dynamic>))
-        .toList(),
-    facturas: (json['facturas'] as List? ?? const [])
-        .map((e) => Factura.fromJson(e as Map<String, dynamic>))
-        .toList(),
-  );
+        anio: json['anio'] as int,
+        mes: json['mes'] as int,
+        filas: (json['filas'] as List)
+            .map((e) => FilaVenta.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        facturas: (json['facturas'] as List? ?? const [])
+            .map((e) => Factura.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
 }
 
 class ReportesStore {

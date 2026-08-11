@@ -8,6 +8,8 @@ import {
   DEVICE_CONCURRENCY,
   dueDateForNotice,
   emptySummary,
+  filterEnterpriseDevices,
+  finalDeliveryBlockReason,
   guayaquilDate,
   mapLimit,
   MAX_ATTEMPTS,
@@ -27,6 +29,7 @@ import {
 type Reminder = {
   id: string;
   user_id: string;
+  organization_id: string;
   factura_id: string;
   schedule_version: string;
   payment_date: string;
@@ -35,7 +38,13 @@ type Reminder = {
   notify_one_day?: boolean;
 };
 
-type Device = { id: string; user_id?: string; token: string; active?: boolean };
+type Device = {
+  id: string;
+  user_id?: string;
+  organization_id?: string;
+  token: string;
+  active?: boolean;
+};
 type ClaimedEvent = { event_id: string; attempt_count: number };
 type RetryEvent = {
   id: string;
@@ -148,6 +157,48 @@ async function deliver(
   event: ClaimedEvent,
   summary: OperationalSummary,
 ) {
+  const [eventResult, reminderResult] = await Promise.all([
+    db.from("payment_notification_events")
+      .select("id,status,schedule_version,scheduled_for")
+      .eq("id", event.event_id).maybeSingle(),
+    db.from("payment_reminders")
+      .select("id,active,schedule_version,payment_date")
+      .eq("id", reminder.id).maybeSingle(),
+  ]);
+  if (eventResult.error || reminderResult.error) {
+    summary.administrativeErrors++;
+    return;
+  }
+  const currentEvent = eventResult.data;
+  const currentReminder = reminderResult.data;
+  const blockReason = finalDeliveryBlockReason({
+    eventExists: currentEvent != null,
+    eventStatus: currentEvent?.status,
+    eventScheduleVersion: currentEvent?.schedule_version,
+    eventScheduledFor: currentEvent?.scheduled_for,
+    reminderExists: currentReminder != null,
+    reminderActive: currentReminder?.active,
+    reminderScheduleVersion: currentReminder?.schedule_version,
+    reminderPaymentDate: currentReminder?.payment_date,
+  });
+  if (blockReason != null) {
+    if (blockReason === "EVENT_CANCELLED") {
+      summary.skippedCancelled++;
+    } else {
+      summary.skippedStale++;
+      if (currentEvent?.status === "processing") {
+        const { error } = await db.from("payment_notification_events").update({
+          status: "cancelled",
+          last_error_code: blockReason,
+          next_retry_at: null,
+          updated_at: new Date().toISOString(),
+        }).eq("id", event.event_id).eq("status", "processing");
+        if (error) summary.administrativeErrors++;
+      }
+    }
+    return;
+  }
+
   try {
     const accessToken = await getAccessToken();
     const response = await fetch(
@@ -211,11 +262,28 @@ async function processReminder(
   summary: OperationalSummary,
 ) {
   summary.processed++;
-  const result = await db.from("fcm_devices").select("id,user_id,token,active")
-    .eq("user_id", reminder.user_id).eq("active", true);
+  const [deviceResult, memberResult] = await Promise.all([
+    db.from("fcm_devices").select("id,user_id,organization_id,token,active")
+      .eq("organization_id", reminder.organization_id).eq("active", true),
+    db.from("organization_members").select("user_id")
+      .eq("organization_id", reminder.organization_id).eq("active", true),
+  ]);
   let devices: Device[];
   try {
-    devices = requireDeviceQuery(result.data as Device[] | null, result.error);
+    const candidates = requireDeviceQuery(
+      deviceResult.data as Device[] | null,
+      deviceResult.error,
+    );
+    const members = requireDeviceQuery(
+      memberResult.data as { user_id: string }[] | null,
+      memberResult.error,
+    );
+    const activeUsers = new Set(members.map((member) => member.user_id));
+    devices = filterEnterpriseDevices(
+      candidates,
+      reminder.organization_id,
+      activeUsers,
+    );
   } catch {
     summary.administrativeErrors++;
     return;
@@ -280,7 +348,9 @@ async function processNewNotices(
     let cursor: string | null = null;
     while (true) {
       let query = db.from("payment_reminders")
-        .select("id,user_id,factura_id,schedule_version,payment_date")
+        .select(
+          "id,user_id,organization_id,factura_id,schedule_version,payment_date",
+        )
         .eq("active", true).eq(flag, true).eq("payment_date", due)
         .order("id", { ascending: true }).limit(PAGE_SIZE);
       if (cursor) query = query.gt("id", cursor);
@@ -334,10 +404,10 @@ async function processRetry(
   const [reminderResult, deviceResult] = await Promise.all([
     db.from("payment_reminders")
       .select(
-        "id,user_id,factura_id,schedule_version,payment_date,active,notify_three_days,notify_one_day",
+        "id,user_id,organization_id,factura_id,schedule_version,payment_date,active,notify_three_days,notify_one_day",
       )
       .eq("id", retry.reminder_id).maybeSingle(),
-    db.from("fcm_devices").select("id,user_id,token,active")
+    db.from("fcm_devices").select("id,user_id,organization_id,token,active")
       .eq("id", retry.device_id).maybeSingle(),
   ]);
   if (reminderResult.error || deviceResult.error) {
@@ -362,7 +432,19 @@ async function processRetry(
     await markUnusableRetry(db, retry.id, blockReason, summary);
     return;
   }
-  if (!device || !device.active || device.user_id !== reminder.user_id) {
+  const membership = device?.user_id
+    ? await db.from("organization_members").select("user_id")
+      .eq("organization_id", reminder.organization_id)
+      .eq("user_id", device.user_id).eq("active", true).maybeSingle()
+    : { data: null, error: null };
+  if (membership.error) {
+    summary.administrativeErrors++;
+    return;
+  }
+  if (
+    !device || !device.active ||
+    device.organization_id !== reminder.organization_id || !membership.data
+  ) {
     await markUnusableRetry(db, retry.id, "DEVICE_INACTIVE", summary);
     return;
   }

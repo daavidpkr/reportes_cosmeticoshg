@@ -16,6 +16,12 @@ PaymentReminder reminder(
         notifyOneDay: one);
 
 void main() {
+  test('ajusta únicamente sábados y domingos al lunes', () {
+    expect(effectiveBusinessDate(DateTime(2026, 8, 10)), DateTime(2026, 8, 10));
+    expect(effectiveBusinessDate(DateTime(2026, 8, 14)), DateTime(2026, 8, 14));
+    expect(effectiveBusinessDate(DateTime(2026, 8, 15)), DateTime(2026, 8, 17));
+    expect(effectiveBusinessDate(DateTime(2026, 8, 16)), DateTime(2026, 8, 17));
+  });
   final today = DateTime(2026, 8, 10);
   test('calcula el aviso de tres días', () {
     expect(

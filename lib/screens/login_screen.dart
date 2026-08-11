@@ -4,8 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/hg_theme.dart';
 
-typedef AutenticarUsuario =
-    Future<void> Function(String correo, String contrasena);
+typedef AutenticarUsuario = Future<void> Function(
+    String correo, String contrasena);
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({this.autenticar, super.key});
@@ -289,9 +289,8 @@ class _LoginScreenState extends State<LoginScreen> {
         hintText: 'Contraseña',
         prefixIcon: Icons.key_outlined,
         suffix: IconButton(
-          tooltip: _ocultarContrasena
-              ? 'Mostrar contraseña'
-              : 'Ocultar contraseña',
+          tooltip:
+              _ocultarContrasena ? 'Mostrar contraseña' : 'Ocultar contraseña',
           onPressed: () =>
               setState(() => _ocultarContrasena = !_ocultarContrasena),
           icon: Icon(
@@ -404,11 +403,11 @@ class _Glow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(
-      shape: BoxShape.circle,
-      gradient: RadialGradient(colors: [color, color.withAlpha(0)]),
-    ),
-  );
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(colors: [color, color.withAlpha(0)]),
+        ),
+      );
 }

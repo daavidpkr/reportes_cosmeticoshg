@@ -111,7 +111,9 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                         children: [
                           Text(
                             'Estadísticas',
-                            style: Theme.of(context).textTheme.headlineSmall
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
                                 ?.copyWith(
                                   fontWeight: FontWeight.w700,
                                   color: context.hg.plum,
@@ -159,8 +161,8 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                         crossAxisCount: k.maxWidth >= 1100
                             ? 4
                             : k.maxWidth >= 650
-                            ? 2
-                            : 1,
+                                ? 2
+                                : 1,
                         childAspectRatio: k.maxWidth >= 650 ? 2.35 : 3.2,
                         crossAxisSpacing: 12,
                         mainAxisSpacing: 12,
@@ -173,8 +175,8 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
                             Icons.trending_up,
                             detalle: variacion == null
                                 ? (p.esTodo
-                                      ? null
-                                      : 'Sin período anterior comparable')
+                                    ? null
+                                    : 'Sin período anterior comparable')
                                 : '${variacion >= 0 ? '↑' : '↓'} ${variacion.abs().toStringAsFixed(1)}% vs. ${anterior!.etiqueta}',
                             positivo: variacion != null && variacion >= 0,
                           ),
@@ -325,63 +327,63 @@ class _Kpi extends StatelessWidget {
   final bool positivo;
   @override
   Widget build(BuildContext c) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: c.hg.hover,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icono, color: c.hg.burgundy),
-          ),
-          const SizedBox(width: 13),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  titulo,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: c.hg.mutedText,
-                    letterSpacing: .4,
-                  ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: c.hg.hover,
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                const SizedBox(height: 5),
-                FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    valor,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
+                child: Icon(icono, color: c.hg.burgundy),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      titulo,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: c.hg.mutedText,
+                        letterSpacing: .4,
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 5),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        valor,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    if (detalle != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        detalle!,
+                        maxLines: 2,
+                        style: TextStyle(
+                          fontSize: 10.5,
+                          color: positivo ? c.hg.positive : c.hg.mutedText,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-                if (detalle != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    detalle!,
-                    maxLines: 2,
-                    style: TextStyle(
-                      fontSize: 10.5,
-                      color: positivo ? c.hg.positive : c.hg.mutedText,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 class _Mayor extends StatelessWidget {
@@ -409,32 +411,32 @@ class _Seccion extends StatelessWidget {
   final Widget? trailing;
   @override
   Widget build(BuildContext c) => Card(
-    child: Padding(
-      padding: const EdgeInsets.all(18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Wrap(
-            spacing: 12,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                titulo,
-                style: Theme.of(c).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: c.hg.plum,
-                ),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    titulo,
+                    style: Theme.of(c).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: c.hg.plum,
+                        ),
+                  ),
+                  if (trailing != null) trailing!,
+                ],
               ),
-              if (trailing != null) trailing!,
+              const SizedBox(height: 18),
+              child,
             ],
           ),
-          const SizedBox(height: 18),
-          child,
-        ],
-      ),
-    ),
-  );
+        ),
+      );
 }
 
 class _Cobranza extends StatelessWidget {
@@ -476,14 +478,14 @@ class _Dato extends StatelessWidget {
   final String t, v;
   @override
   Widget build(BuildContext c) => Column(
-    children: [
-      Text(t, style: TextStyle(fontSize: 11, color: c.hg.mutedText)),
-      const SizedBox(height: 4),
-      FittedBox(
-        child: Text(v, style: const TextStyle(fontWeight: FontWeight.w700)),
-      ),
-    ],
-  );
+        children: [
+          Text(t, style: TextStyle(fontSize: 11, color: c.hg.mutedText)),
+          const SizedBox(height: 4),
+          FittedBox(
+            child: Text(v, style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ],
+      );
 }
 
 class _IndicadoresClientes extends StatelessWidget {
@@ -491,12 +493,12 @@ class _IndicadoresClientes extends StatelessWidget {
   final IndicadoresClientes datos;
   @override
   Widget build(BuildContext context) => Row(
-    children: [
-      Expanded(child: _Dato('Nuevos', '${datos.nuevos}')),
-      Expanded(child: _Dato('Recurrentes', '${datos.recurrentes}')),
-      Expanded(child: _Dato('Inactivos (60 días)', '${datos.inactivos}')),
-    ],
-  );
+        children: [
+          Expanded(child: _Dato('Nuevos', '${datos.nuevos}')),
+          Expanded(child: _Dato('Recurrentes', '${datos.recurrentes}')),
+          Expanded(child: _Dato('Inactivos (60 días)', '${datos.inactivos}')),
+        ],
+      );
 }
 
 class _TablaVendedores extends StatelessWidget {
@@ -505,41 +507,41 @@ class _TablaVendedores extends StatelessWidget {
   final String Function(double) dinero;
   @override
   Widget build(BuildContext c) => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: DataTable(
-      columns: const [
-        DataColumn(label: Text('#')),
-        DataColumn(label: Text('Vendedor')),
-        DataColumn(label: Text('Ventas')),
-        DataColumn(label: Text('Facturas')),
-        DataColumn(label: Text('Cobrado')),
-        DataColumn(label: Text('Por cobrar')),
-        DataColumn(label: Text('% cobranza')),
-      ],
-      rows: List.generate(datos.length, (i) {
-        final v = datos[i];
-        return DataRow(
-          cells: [
-            DataCell(
-              Text(
-                '${i + 1}',
-                style: TextStyle(
-                  color: i < 3 ? c.hg.gold : null,
-                  fontWeight: i < 3 ? FontWeight.w800 : null,
-                ),
-              ),
-            ),
-            DataCell(Text(v.nombre)),
-            DataCell(Text(dinero(v.ventas))),
-            DataCell(Text('${v.facturas}')),
-            DataCell(Text(dinero(v.cobrado))),
-            DataCell(Text(dinero(v.porCobrar))),
-            DataCell(Text('${v.porcentajeCobranza.toStringAsFixed(1)}%')),
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columns: const [
+            DataColumn(label: Text('#')),
+            DataColumn(label: Text('Vendedor')),
+            DataColumn(label: Text('Ventas')),
+            DataColumn(label: Text('Facturas')),
+            DataColumn(label: Text('Cobrado')),
+            DataColumn(label: Text('Por cobrar')),
+            DataColumn(label: Text('% cobranza')),
           ],
-        );
-      }),
-    ),
-  );
+          rows: List.generate(datos.length, (i) {
+            final v = datos[i];
+            return DataRow(
+              cells: [
+                DataCell(
+                  Text(
+                    '${i + 1}',
+                    style: TextStyle(
+                      color: i < 3 ? c.hg.gold : null,
+                      fontWeight: i < 3 ? FontWeight.w800 : null,
+                    ),
+                  ),
+                ),
+                DataCell(Text(v.nombre)),
+                DataCell(Text(dinero(v.ventas))),
+                DataCell(Text('${v.facturas}')),
+                DataCell(Text(dinero(v.cobrado))),
+                DataCell(Text(dinero(v.porCobrar))),
+                DataCell(Text('${v.porcentajeCobranza.toStringAsFixed(1)}%')),
+              ],
+            );
+          }),
+        ),
+      );
 }
 
 class _TablaClientes extends StatelessWidget {
@@ -548,33 +550,33 @@ class _TablaClientes extends StatelessWidget {
   final String Function(double) dinero;
   @override
   Widget build(BuildContext c) => SingleChildScrollView(
-    scrollDirection: Axis.horizontal,
-    child: DataTable(
-      columns: const [
-        DataColumn(label: Text('Cliente')),
-        DataColumn(label: Text('Facturas')),
-        DataColumn(label: Text('Compras')),
-        DataColumn(label: Text('Por cobrar')),
-      ],
-      rows: datos
-          .map(
-            (v) => DataRow(
-              cells: [
-                DataCell(
-                  SizedBox(
-                    width: 240,
-                    child: Text(v.nombre, overflow: TextOverflow.ellipsis),
-                  ),
+        scrollDirection: Axis.horizontal,
+        child: DataTable(
+          columns: const [
+            DataColumn(label: Text('Cliente')),
+            DataColumn(label: Text('Facturas')),
+            DataColumn(label: Text('Compras')),
+            DataColumn(label: Text('Por cobrar')),
+          ],
+          rows: datos
+              .map(
+                (v) => DataRow(
+                  cells: [
+                    DataCell(
+                      SizedBox(
+                        width: 240,
+                        child: Text(v.nombre, overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                    DataCell(Text('${v.facturas}')),
+                    DataCell(Text(dinero(v.compras))),
+                    DataCell(Text(dinero(v.porCobrar))),
+                  ],
                 ),
-                DataCell(Text('${v.facturas}')),
-                DataCell(Text(dinero(v.compras))),
-                DataCell(Text(dinero(v.porCobrar))),
-              ],
-            ),
-          )
-          .toList(),
-    ),
-  );
+              )
+              .toList(),
+        ),
+      );
 }
 
 class _Estado extends StatelessWidget {
@@ -584,26 +586,26 @@ class _Estado extends StatelessWidget {
   final Future<void> Function()? accion;
   @override
   Widget build(BuildContext c) => Center(
-    child: Padding(
-      padding: const EdgeInsets.all(32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 42, color: c.hg.mutedText),
-          const SizedBox(height: 12),
-          Text(texto, textAlign: TextAlign.center),
-          if (accion != null) ...[
-            const SizedBox(height: 12),
-            OutlinedButton.icon(
-              onPressed: accion,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Reintentar'),
-            ),
-          ],
-        ],
-      ),
-    ),
-  );
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 42, color: c.hg.mutedText),
+              const SizedBox(height: 12),
+              Text(texto, textAlign: TextAlign.center),
+              if (accion != null) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: accion,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
 }
 
 class _LineChart extends StatefulWidget {
@@ -621,9 +623,9 @@ class _LineChartState extends State<_LineChart> {
     final i = widget.puntos.length == 1
         ? 0
         : ((x - 12) / (ancho - 24) * (widget.puntos.length - 1)).round().clamp(
-            0,
-            widget.puntos.length - 1,
-          );
+              0,
+              widget.puntos.length - 1,
+            );
     if (_indice != i) setState(() => _indice = i);
   }
 
@@ -707,16 +709,16 @@ class _Leyenda extends StatelessWidget {
   final String texto;
   @override
   Widget build(BuildContext c) => Row(
-    children: [
-      Container(
-        width: 10,
-        height: 10,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      ),
-      const SizedBox(width: 5),
-      Text(texto, style: const TextStyle(fontSize: 11)),
-    ],
-  );
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 5),
+          Text(texto, style: const TextStyle(fontSize: 11)),
+        ],
+      );
 }
 
 class _LinePainter extends CustomPainter {
@@ -793,48 +795,49 @@ class _BarChart extends StatelessWidget {
   final String Function(double) dinero;
   @override
   Widget build(BuildContext c) => LayoutBuilder(
-    builder: (c, k) {
-      final maxV = math.max(
-        1,
-        datos.fold<double>(0, (m, e) => math.max(m, e.promedio)),
-      );
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: datos
-            .map(
-              (e) => Expanded(
-                child: Tooltip(
-                  message: '${e.dia}: ${dinero(e.promedio)}',
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        Text(
-                          e.promedio == 0 ? '' : dinero(e.promedio),
-                          maxLines: 1,
-                          style: TextStyle(fontSize: 8, color: c.hg.mutedText),
-                        ),
-                        const SizedBox(height: 3),
-                        Container(
-                          height: (150 * e.promedio / maxV).clamp(2, 150),
-                          decoration: BoxDecoration(
-                            color: c.hg.lilac,
-                            borderRadius: const BorderRadius.vertical(
-                              top: Radius.circular(5),
+        builder: (c, k) {
+          final maxV = math.max(
+            1,
+            datos.fold<double>(0, (m, e) => math.max(m, e.promedio)),
+          );
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: datos
+                .map(
+                  (e) => Expanded(
+                    child: Tooltip(
+                      message: '${e.dia}: ${dinero(e.promedio)}',
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              e.promedio == 0 ? '' : dinero(e.promedio),
+                              maxLines: 1,
+                              style:
+                                  TextStyle(fontSize: 8, color: c.hg.mutedText),
                             ),
-                          ),
+                            const SizedBox(height: 3),
+                            Container(
+                              height: (150 * e.promedio / maxV).clamp(2, 150),
+                              decoration: BoxDecoration(
+                                color: c.hg.lilac,
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(5),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(e.dia, style: const TextStyle(fontSize: 10)),
+                          ],
                         ),
-                        const SizedBox(height: 6),
-                        Text(e.dia, style: const TextStyle(fontSize: 10)),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-              ),
-            )
-            .toList(),
+                )
+                .toList(),
+          );
+        },
       );
-    },
-  );
 }

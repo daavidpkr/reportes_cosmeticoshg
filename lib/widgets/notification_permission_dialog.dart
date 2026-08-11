@@ -21,8 +21,7 @@ Future<AuthorizationStatus?> requestNotificationPermissionWithExplanation(
     return current;
   }
 
-  final proceed =
-      await showDialog<bool>(
+  final proceed = await showDialog<bool>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Notificaciones de pagos'),
@@ -54,25 +53,26 @@ Future<AuthorizationStatus?> requestNotificationPermissionWithExplanation(
 Future<void> _showDisabledDialog(
   BuildContext context,
   FirebaseMessagingService service,
-) => showDialog<void>(
-  context: context,
-  builder: (dialogContext) => AlertDialog(
-    title: const Text('Notificaciones desactivadas'),
-    content: const Text(
-      'La aplicación seguirá funcionando. Puedes activar las notificaciones desde la configuración cuando quieras.',
-    ),
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(dialogContext),
-        child: const Text('Cerrar'),
+) =>
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Notificaciones desactivadas'),
+        content: const Text(
+          'La aplicación seguirá funcionando. Puedes activar las notificaciones desde la configuración cuando quieras.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cerrar'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              service.openNotificationSettings();
+            },
+            child: const Text('Abrir configuración'),
+          ),
+        ],
       ),
-      FilledButton(
-        onPressed: () {
-          Navigator.pop(dialogContext);
-          service.openNotificationSettings();
-        },
-        child: const Text('Abrir configuración'),
-      ),
-    ],
-  ),
-);
+    );

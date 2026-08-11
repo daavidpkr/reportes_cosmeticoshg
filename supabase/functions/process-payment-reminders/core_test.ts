@@ -5,6 +5,8 @@ import {
   classifyFcmError,
   classifyThrownError,
   dueDateForNotice,
+  filterEnterpriseDevices,
+  finalDeliveryBlockReason,
   guayaquilDate,
   mapLimit,
   MAX_ATTEMPTS,
@@ -28,6 +30,56 @@ const validEnvironment = {
   SUPABASE_URL: "https://project.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "service-role-placeholder",
 };
+
+Deno.test("enterprise devices include only active members of the organization", () => {
+  const devices = [
+    { id: "a", user_id: "u1", organization_id: "org1" },
+    { id: "b", user_id: "u2", organization_id: "org1" },
+    { id: "c", user_id: "u1", organization_id: "org2" },
+  ];
+  assertEquals(
+    filterEnterpriseDevices(devices, "org1", new Set(["u1"])).map((d) => d.id),
+    ["a"],
+  );
+});
+
+Deno.test("final delivery only accepts the current processing schedule", () => {
+  const valid = {
+    eventExists: true,
+    eventStatus: "processing",
+    eventScheduleVersion: "v2",
+    eventScheduledFor: "2026-08-17",
+    reminderExists: true,
+    reminderActive: true,
+    reminderScheduleVersion: "v2",
+    reminderPaymentDate: "2026-08-17",
+  };
+  assertEquals(finalDeliveryBlockReason(valid), null);
+  assertEquals(
+    finalDeliveryBlockReason({ ...valid, eventExists: false }),
+    "EVENT_MISSING",
+  );
+  assertEquals(
+    finalDeliveryBlockReason({ ...valid, eventStatus: "cancelled" }),
+    "EVENT_CANCELLED",
+  );
+  assertEquals(
+    finalDeliveryBlockReason({ ...valid, eventStatus: "sent" }),
+    "EVENT_NOT_PROCESSING",
+  );
+  assertEquals(
+    finalDeliveryBlockReason({ ...valid, reminderActive: false }),
+    "REMINDER_INACTIVE",
+  );
+  assertEquals(
+    finalDeliveryBlockReason({ ...valid, reminderScheduleVersion: "v3" }),
+    "SCHEDULE_CHANGED",
+  );
+  assertEquals(
+    finalDeliveryBlockReason({ ...valid, reminderPaymentDate: "2026-08-18" }),
+    "DATE_CHANGED",
+  );
+});
 
 Deno.test("rechaza métodos distintos de POST", async () => {
   const response = await handler(

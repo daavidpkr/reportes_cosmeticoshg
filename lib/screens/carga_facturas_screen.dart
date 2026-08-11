@@ -171,9 +171,9 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
                         ? 'Suelta aquí los archivos'
                         : 'Arrastra y suelta aquí tus facturas',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: context.hg.burgundy,
-                      fontWeight: FontWeight.bold,
-                    ),
+                          color: context.hg.burgundy,
+                          fontWeight: FontWeight.bold,
+                        ),
                   ),
                   const SizedBox(height: 10),
                   const Text('o selecciónalas manualmente'),

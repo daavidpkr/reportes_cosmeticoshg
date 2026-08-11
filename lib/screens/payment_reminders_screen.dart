@@ -1,9 +1,13 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'dart:math';
 
 import '../models/factura.dart';
+import '../models/billing_customer.dart';
 import '../models/payment_reminder.dart';
 import '../services/firebase_messaging_service.dart';
+import '../services/customer_terms_repository.dart';
 import '../services/payment_reminders_repository.dart';
 import '../widgets/notification_permission_dialog.dart';
 
@@ -149,6 +153,14 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
                                   subtitle: Text(
                                       '${_format(item.paymentDate)} · ${item.active ? 'Activo' : 'Inactivo'}\n${_notices(item)}'),
                                   isThreeLine: true,
+                                  trailing: item.active
+                                      ? IconButton(
+                                          tooltip:
+                                              'Agregar seguimiento / Reprogramar cobro',
+                                          icon: const Icon(
+                                              Icons.history_outlined),
+                                          onPressed: () => _followup(item))
+                                      : null,
                                   onTap: () async {
                                     final invoice = await _repository
                                         .findInvoice(item.facturaId);
@@ -162,6 +174,18 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
               const SizedBox(height: 80),
             ])),
       );
+
+  Future<void> _followup(PaymentReminder reminder) async {
+    final invoice = await _repository.findInvoice(reminder.facturaId);
+    if (!mounted || invoice == null) return;
+    final changed = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (_) => _FollowupEditor(
+            invoice: invoice, reminder: reminder, repository: _repository));
+    if (changed ?? false) await _reload();
+  }
 
   static String _format(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
@@ -184,6 +208,7 @@ class _ReminderEditor extends StatefulWidget {
 }
 
 class _ReminderEditorState extends State<_ReminderEditor> {
+  final _termsRepository = CustomerTermsRepository();
   late DateTime _date = widget.reminder?.paymentDate ??
       DateTime.now().add(const Duration(days: 3));
   late bool _active = widget.reminder?.active ?? true;
@@ -191,13 +216,131 @@ class _ReminderEditorState extends State<_ReminderEditor> {
   late bool _one = widget.reminder?.notifyOneDay ?? true;
   bool _saving = false;
 
+  Future<void> _configureInvoiceTerm() async {
+    final plan =
+        await _termsRepository.getInvoicePlan(widget.invoice.secuencial);
+    if (!mounted) return;
+    if (plan == null || plan.invoiceDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Plazo pendiente de configurar para esta factura.')));
+      return;
+    }
+    var useException = plan.exceptionalTermDays != null;
+    final controller =
+        TextEditingController(text: plan.exceptionalTermDays?.toString() ?? '');
+    final selected = await showDialog<int?>(
+        context: context,
+        builder: (context) => StatefulBuilder(builder: (context, update) {
+              final parsed = parsePaymentTerm(controller.text);
+              final days = useException ? parsed : plan.customerTermDays;
+              final calculated = days == null
+                  ? null
+                  : calculatePaymentDate(plan.invoiceDate!, days);
+              return AlertDialog(
+                title: const Text('Plazo de esta factura'),
+                content: Column(mainAxisSize: MainAxisSize.min, children: [
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Fecha de factura'),
+                    trailing: Text(PaymentRemindersScreenStateHelper.format(
+                        plan.invoiceDate!)),
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Plazo habitual'),
+                    trailing: Text(plan.customerTermDays == null
+                        ? 'Pendiente'
+                        : '${plan.customerTermDays} días'),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: useException,
+                    onChanged: (value) =>
+                        update(() => useException = value ?? false),
+                    title:
+                        const Text('Usar un plazo diferente para esta factura'),
+                  ),
+                  if (useException)
+                    TextField(
+                      controller: controller,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      onChanged: (_) => update(() {}),
+                      decoration: const InputDecoration(
+                          labelText: 'Días excepcionales'),
+                    ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(calculated == null
+                        ? 'Plazo pendiente de configurar'
+                        : 'Fecha definitiva: ${PaymentRemindersScreenStateHelper.format(calculated)}'),
+                  ),
+                ]),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Cancelar')),
+                  FilledButton(
+                      onPressed: days == null
+                          ? null
+                          : () => Navigator.pop(
+                              context, useException ? parsed : -1),
+                      child: const Text('Guardar')),
+                ],
+              );
+            }));
+    controller.dispose();
+    if (selected == null || !mounted) return;
+    final exception = selected == -1 ? null : selected;
+    final calculatedDays = exception ?? plan.customerTermDays;
+    final proposed = calculatedDays == null
+        ? null
+        : calculatePaymentDate(plan.invoiceDate!, calculatedDays);
+    var confirmManual = false;
+    if (plan.manualSchedule && proposed != plan.currentPaymentDate) {
+      confirmManual = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                    title: const Text('Programación manual existente'),
+                    content: Text(
+                        'Fecha manual: ${plan.currentPaymentDate == null ? 'Sin fecha' : PaymentRemindersScreenStateHelper.format(plan.currentPaymentDate!)}\nFecha calculada: ${proposed == null ? 'Sin fecha' : PaymentRemindersScreenStateHelper.format(proposed)}\n¿Deseas reemplazarla?'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('Conservar manual')),
+                      FilledButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('Reemplazar')),
+                    ],
+                  )) ??
+          false;
+      if (!confirmManual) return;
+    }
+    final effective = await _termsRepository.saveInvoiceException(
+        widget.invoice.secuencial, exception,
+        confirmManualOverride: confirmManual);
+    if (!mounted) return;
+    if (effective != null) setState(() => _date = effective);
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Plazo de la factura guardado correctamente.')));
+  }
+
   Future<void> _pickDate() async {
     final selected = await showDatePicker(
         context: context,
         initialDate: _date,
         firstDate: DateTime.now(),
         lastDate: DateTime.now().add(const Duration(days: 3650)));
-    if (selected != null) setState(() => _date = selected);
+    if (selected != null) {
+      final effective = effectiveBusinessDate(selected);
+      setState(() => _date = effective);
+      if (effective != selected && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+                'La fecha seleccionada cae en fin de semana. El cobro fue programado para el lunes ${PaymentRemindersScreenStateHelper.format(effective)}.')));
+      }
+    }
   }
 
   Future<void> _save() async {
@@ -259,7 +402,14 @@ class _ReminderEditorState extends State<_ReminderEditor> {
             title: const Text('Fecha de pago'),
             subtitle: Text(PaymentRemindersScreenStateHelper.format(_date)),
             trailing: const Icon(Icons.edit_calendar_outlined),
-            onTap: _pickDate),
+            onTap: widget.reminder == null ? _pickDate : null),
+        OutlinedButton.icon(
+            onPressed: _saving ? null : _configureInvoiceTerm,
+            icon: const Icon(Icons.calendar_month_outlined),
+            label: const Text('Usar plazo habitual o excepcional')),
+        if (widget.reminder != null)
+          const Text(
+              'Para cambiar la fecha usa “Agregar seguimiento / Reprogramar cobro” desde la lista.'),
         SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Recordatorio activo'),
@@ -286,6 +436,195 @@ class _ReminderEditorState extends State<_ReminderEditor> {
               icon: const Icon(Icons.delete_outline),
               label: const Text('Eliminar recordatorio')),
       ])));
+}
+
+class _FollowupEditor extends StatefulWidget {
+  const _FollowupEditor(
+      {required this.invoice,
+      required this.reminder,
+      required this.repository});
+  final Factura invoice;
+  final PaymentReminder reminder;
+  final PaymentRemindersDataSource repository;
+  @override
+  State<_FollowupEditor> createState() => _FollowupEditorState();
+}
+
+class _FollowupEditorState extends State<_FollowupEditor> {
+  final _comment = TextEditingController();
+  DateTime? _requestedDate;
+  bool _saving = false;
+  late final String _idempotencyKey = _newRequestId();
+  late final Future<List<PaymentFollowup>> _history =
+      widget.repository.listFollowups(widget.reminder.id);
+
+  @override
+  void dispose() {
+    _comment.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final selected = await showDatePicker(
+        context: context,
+        initialDate: _requestedDate ?? widget.reminder.paymentDate,
+        firstDate: DateTime.now(),
+        lastDate: DateTime.now().add(const Duration(days: 3650)));
+    if (selected != null) setState(() => _requestedDate = selected);
+  }
+
+  Future<void> _save() async {
+    if (_comment.text.trim().isEmpty && _requestedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Ingresa un comentario o selecciona una fecha.')));
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final result = await widget.repository.addFollowup(
+          reminderId: widget.reminder.id,
+          requestId: _idempotencyKey,
+          comment: _comment.text,
+          requestedPaymentDate: _requestedDate);
+      if (!mounted) return;
+      final message = result.rescheduled
+          ? 'Cobro actualizado y recordatorios reprogramados para el ${PaymentRemindersScreenStateHelper.format(result.effectivePaymentDate)}.'
+          : 'Seguimiento registrado correctamente.';
+      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
+      if (mounted) {
+        setState(() => _saving = false);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('No se pudo registrar el seguimiento.')));
+      }
+    }
+  }
+
+  String _newRequestId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final effective = _requestedDate == null
+        ? widget.reminder.paymentDate
+        : effectiveBusinessDate(_requestedDate!);
+    final adjusted = _requestedDate != null && effective != _requestedDate;
+    return Padding(
+        padding: EdgeInsets.fromLTRB(
+            20, 20, 20, MediaQuery.viewInsetsOf(context).bottom + 20),
+        child: SingleChildScrollView(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+              Text('Agregar seguimiento / Reprogramar cobro',
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 6),
+              Text(
+                  'Factura ${widget.invoice.secuencial} · ${widget.invoice.nombreComercial.isEmpty ? widget.invoice.cliente : widget.invoice.nombreComercial}'),
+              Text(
+                  'Fecha actual: ${PaymentRemindersScreenStateHelper.format(widget.reminder.paymentDate)}'),
+              const SizedBox(height: 16),
+              TextField(
+                  controller: _comment,
+                  maxLength: 4000,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                      labelText: 'Comentario', border: OutlineInputBorder())),
+              ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Nueva fecha de cobro (opcional)'),
+                  subtitle: Text(_requestedDate == null
+                      ? 'Sin cambio de fecha'
+                      : PaymentRemindersScreenStateHelper.format(
+                          _requestedDate!)),
+                  trailing: const Icon(Icons.edit_calendar_outlined),
+                  onTap: _saving ? null : _pickDate),
+              if (_requestedDate != null) ...[
+                Text(
+                    'Fecha definitiva: ${PaymentRemindersScreenStateHelper.format(effective)}'),
+                if (adjusted)
+                  Text(
+                      'La fecha seleccionada cae en fin de semana. El cobro fue programado para el lunes ${PaymentRemindersScreenStateHelper.format(effective)}.'),
+                TextButton(
+                    onPressed: _saving
+                        ? null
+                        : () => setState(() => _requestedDate = null),
+                    child: const Text('Quitar cambio de fecha')),
+              ],
+              Row(children: [
+                Expanded(
+                    child: OutlinedButton(
+                        onPressed: _saving
+                            ? null
+                            : () => Navigator.pop(context, false),
+                        child: const Text('Cancelar'))),
+                const SizedBox(width: 12),
+                Expanded(
+                    child: FilledButton(
+                        onPressed: _saving ? null : _save,
+                        child: Text(_saving ? 'Guardando…' : 'Guardar'))),
+              ]),
+              const SizedBox(height: 24),
+              Text('Historial de seguimientos y reprogramaciones',
+                  style: Theme.of(context).textTheme.titleMedium),
+              FutureBuilder<List<PaymentFollowup>>(
+                  future: _history,
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final items = snapshot.data!;
+                    if (items.isEmpty) {
+                      return const Padding(
+                          padding: EdgeInsets.all(12),
+                          child: Text('Sin seguimientos registrados.'));
+                    }
+                    return Column(
+                        children: items
+                            .map((item) => _FollowupTile(item: item))
+                            .toList());
+                  }),
+            ])));
+  }
+}
+
+class _FollowupTile extends StatelessWidget {
+  const _FollowupTile({required this.item});
+  final PaymentFollowup item;
+  @override
+  Widget build(BuildContext context) {
+    final details = <String>[
+      _actionLabel(item.actionType),
+      if (item.previousPaymentDate != null)
+        'Anterior: ${PaymentRemindersScreenStateHelper.format(item.previousPaymentDate!)}',
+      if (item.requestedPaymentDate != null)
+        'Solicitada: ${PaymentRemindersScreenStateHelper.format(item.requestedPaymentDate!)}',
+      if (item.effectivePaymentDate != null)
+        'Programada: ${PaymentRemindersScreenStateHelper.format(item.effectivePaymentDate!)}',
+      'Usuario: ${item.createdBy ?? 'No disponible'}',
+    ];
+    return ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.history),
+        title: Text(item.comment ?? _actionLabel(item.actionType)),
+        subtitle: Text('${_dateTime(item.createdAt)}\n${details.join(' · ')}'));
+  }
+
+  static String _actionLabel(String value) => switch (value) {
+        'comment' => 'Comentario',
+        'reschedule' => 'Reprogramación',
+        _ => 'Comentario y reprogramación',
+      };
+  static String _dateTime(DateTime value) =>
+      '${PaymentRemindersScreenStateHelper.format(value.toLocal())} ${value.toLocal().hour.toString().padLeft(2, '0')}:${value.toLocal().minute.toString().padLeft(2, '0')}';
 }
 
 class PaymentRemindersScreenStateHelper {

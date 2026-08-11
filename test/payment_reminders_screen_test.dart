@@ -8,6 +8,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 class FakeReminders implements PaymentRemindersDataSource {
   @override
+  Future<FollowupResult> addFollowup(
+          {required String reminderId,
+          required String requestId,
+          String? comment,
+          DateTime? requestedPaymentDate}) async =>
+      FollowupResult(
+          actionType: requestedPaymentDate == null ? 'comment' : 'reschedule',
+          effectivePaymentDate: requestedPaymentDate ?? DateTime(2026, 8, 10));
+  @override
   Future<void> delete(String id) async {}
   @override
   Future<PaymentReminder?> findForInvoice(String facturaId) async => null;
@@ -17,6 +26,8 @@ class FakeReminders implements PaymentRemindersDataSource {
   Future<List<PaymentReminder>> list() async => [];
   @override
   Future<List<Factura>> listInvoices() async => [];
+  @override
+  Future<List<PaymentFollowup>> listFollowups(String reminderId) async => [];
   @override
   Future<void> save(
       {required String facturaId,

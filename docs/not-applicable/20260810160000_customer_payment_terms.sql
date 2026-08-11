@@ -1,0 +1,3 @@
+-- NOT APPLICABLE: superseded before execution by the enterprise ownership model.
+-- Preserved outside supabase/migrations so automated deployment cannot execute it.
+-- Replacement sequence starts at 20260810160100_organization_foundation.sql.

@@ -69,26 +69,26 @@ class _ErrorConfiguracionApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.cloud_off, size: 52, color: Colors.red),
-              const SizedBox(height: 16),
-              const Text(
-                'No se pudo configurar Supabase',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.cloud_off, size: 52, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'No se pudo configurar Supabase',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(mensaje, textAlign: TextAlign.center),
+                ],
               ),
-              const SizedBox(height: 8),
-              Text(mensaje, textAlign: TextAlign.center),
-            ],
+            ),
           ),
         ),
-      ),
-    ),
-  );
+      );
 }
