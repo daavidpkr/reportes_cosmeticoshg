@@ -641,10 +641,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
   void _gestionarVendedores() {
     setState(() {
       _vistaVendedores = true;
+      _vistaClientes = false;
       _vistaCobrosMensuales = false;
       _vistaEstadisticas = false;
       _vistaGeneral = false;
-      _seccionMovil = 3;
+      _seccionMovil = 4;
     });
   }
 
@@ -1470,29 +1471,31 @@ class _ReporteScreenState extends State<ReporteScreen> {
             children: [
               _barraSuperior(),
               Expanded(
-                child: _vistaVendedores
-                    ? VendedoresContent(store: _vendedores)
-                    : _vistaEstadisticas
-                        ? const EstadisticasScreen()
-                        : _vistaCobrosMensuales
-                            ? CobrosMensualesView(
-                                key: ValueKey(_versionCobrosMensuales),
-                              )
-                            : Padding(
-                                padding:
-                                    const EdgeInsets.fromLTRB(28, 22, 28, 28),
-                                child: Column(
-                                  children: [
-                                    _encabezadoPagina(),
-                                    const SizedBox(height: 18),
-                                    _tarjetasResumen(),
-                                    const SizedBox(height: 18),
-                                    _barraRedisenada(),
-                                    const SizedBox(height: 14),
-                                    Expanded(child: _tarjetaTabla()),
-                                  ],
-                                ),
-                              ),
+                child: _vistaClientes
+                    ? const ClientesScreen()
+                    : _vistaVendedores
+                        ? VendedoresContent(store: _vendedores)
+                        : _vistaEstadisticas
+                            ? const EstadisticasScreen()
+                            : _vistaCobrosMensuales
+                                ? CobrosMensualesView(
+                                    key: ValueKey(_versionCobrosMensuales),
+                                  )
+                                : Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                        28, 22, 28, 28),
+                                    child: Column(
+                                      children: [
+                                        _encabezadoPagina(),
+                                        const SizedBox(height: 18),
+                                        _tarjetasResumen(),
+                                        const SizedBox(height: 18),
+                                        _barraRedisenada(),
+                                        const SizedBox(height: 14),
+                                        Expanded(child: _tarjetaTabla()),
+                                      ],
+                                    ),
+                                  ),
               ),
             ],
           ),
@@ -1626,8 +1629,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
             setState(() {
               _seccionMovil = indice;
               _vistaCobrosMensuales = indice == 2;
-              _vistaVendedores = indice == 3;
-              _vistaClientes = indice == 4;
+              _vistaClientes = indice == 3;
+              _vistaVendedores = indice == 4;
               _vistaEstadisticas = indice == 5;
               _vistaGeneral = indice == 1;
             });
@@ -1646,12 +1649,12 @@ class _ReporteScreenState extends State<ReporteScreen> {
               label: 'Cobros mensuales',
             ),
             NavigationDestination(
-              icon: Icon(Icons.people_outline),
-              label: 'Vendedores',
-            ),
-            NavigationDestination(
               icon: Icon(Icons.groups_outlined),
               label: 'Clientes',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.people_outline),
+              label: 'Vendedores',
             ),
             NavigationDestination(
               icon: Icon(Icons.insights_outlined),
@@ -2522,53 +2525,81 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 ),
               ],
             ),
-            const Spacer(),
-            _pestana(
-              'Reporte de ventas',
-              !_vistaGeneral &&
-                  !_vistaCobrosMensuales &&
-                  !_vistaEstadisticas &&
-                  !_vistaVendedores,
-              () => setState(() {
-                _vistaGeneral = false;
-                _vistaCobrosMensuales = false;
-                _vistaEstadisticas = false;
-                _vistaVendedores = false;
-              }),
+            const SizedBox(width: 20),
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    _pestana(
+                      'Reporte de ventas',
+                      !_vistaGeneral &&
+                          !_vistaCobrosMensuales &&
+                          !_vistaEstadisticas &&
+                          !_vistaVendedores &&
+                          !_vistaClientes,
+                      () => setState(() {
+                        _vistaGeneral = false;
+                        _vistaCobrosMensuales = false;
+                        _vistaEstadisticas = false;
+                        _vistaVendedores = false;
+                        _vistaClientes = false;
+                      }),
+                    ),
+                    _pestana(
+                      'Reporte general',
+                      _vistaGeneral &&
+                          !_vistaCobrosMensuales &&
+                          !_vistaEstadisticas &&
+                          !_vistaVendedores &&
+                          !_vistaClientes,
+                      () => setState(() {
+                        _vistaGeneral = true;
+                        _vistaCobrosMensuales = false;
+                        _vistaEstadisticas = false;
+                        _vistaVendedores = false;
+                        _vistaClientes = false;
+                      }),
+                    ),
+                    _pestana(
+                      'Reporte de Cobros Mensuales',
+                      _vistaCobrosMensuales,
+                      () => setState(() {
+                        _vistaCobrosMensuales = true;
+                        _vistaEstadisticas = false;
+                        _vistaVendedores = false;
+                        _vistaClientes = false;
+                      }),
+                    ),
+                    _pestana(
+                      'Clientes',
+                      _vistaClientes,
+                      () => setState(() {
+                        _vistaClientes = true;
+                        _vistaCobrosMensuales = false;
+                        _vistaEstadisticas = false;
+                        _vistaVendedores = false;
+                        _vistaGeneral = false;
+                        _seccionMovil = 3;
+                      }),
+                    ),
+                    _pestana(
+                        'Vendedores', _vistaVendedores, _gestionarVendedores),
+                    _pestana(
+                      'Estadísticas',
+                      _vistaEstadisticas,
+                      () => setState(() {
+                        _vistaEstadisticas = true;
+                        _vistaCobrosMensuales = false;
+                        _vistaVendedores = false;
+                        _vistaClientes = false;
+                      }),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            _pestana(
-              'Reporte general',
-              _vistaGeneral &&
-                  !_vistaCobrosMensuales &&
-                  !_vistaEstadisticas &&
-                  !_vistaVendedores,
-              () => setState(() {
-                _vistaGeneral = true;
-                _vistaCobrosMensuales = false;
-                _vistaEstadisticas = false;
-                _vistaVendedores = false;
-              }),
-            ),
-            _pestana(
-              'Reporte de Cobros Mensuales',
-              _vistaCobrosMensuales,
-              () => setState(() {
-                _vistaCobrosMensuales = true;
-                _vistaEstadisticas = false;
-                _vistaVendedores = false;
-              }),
-            ),
-            _pestana('Vendedores', _vistaVendedores, _gestionarVendedores),
-            _pestana(
-              'Estadísticas',
-              _vistaEstadisticas,
-              () => setState(() {
-                _vistaEstadisticas = true;
-                _vistaCobrosMensuales = false;
-                _vistaVendedores = false;
-              }),
-            ),
-            const Spacer(),
+            const SizedBox(width: 8),
             IconButton(
               tooltip: 'Recordatorios de pago',
               onPressed: _abrirRecordatorios,
