@@ -121,28 +121,130 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   );
                 }
                 final customer = values[index - 1];
-                return Card(
-                  child: ListTile(
-                    leading: Icon(customer.configured
-                        ? Icons.check_circle_outline
-                        : Icons.pending_outlined),
-                    title: Text(customer.name),
-                    subtitle: Text([
-                      if (customer.commercialName.isNotEmpty)
-                        customer.commercialName,
-                      customer.configured
-                          ? '${customer.paymentTermDays} días · Configurado'
-                          : 'Plazo pendiente de configurar · Pendiente',
-                    ].join('\n')),
-                    trailing: IconButton(
-                        tooltip: 'Editar y guardar',
-                        onPressed: () => _edit(customer),
-                        icon: const Icon(Icons.edit_outlined)),
-                  ),
+                return _CustomerCard(
+                  customer: customer,
+                  onEdit: () => _edit(customer),
                 );
               },
             );
           },
+        ),
+      );
+}
+
+class _CustomerCard extends StatelessWidget {
+  const _CustomerCard({required this.customer, required this.onEdit});
+
+  final BillingCustomer customer;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) => Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final fields = [
+                _CustomerField(label: 'Cliente', value: customer.name),
+                _CustomerField(
+                  label: 'Nombre comercial',
+                  value: customer.commercialName.isEmpty
+                      ? 'Sin nombre comercial'
+                      : customer.commercialName,
+                ),
+                _CustomerField(
+                  label: 'Días configurados',
+                  value: customer.configured
+                      ? '${customer.paymentTermDays} días'
+                      : 'Pendiente',
+                  statusColor: customer.configured
+                      ? Colors.green.shade700
+                      : Theme.of(context).colorScheme.error,
+                ),
+              ];
+
+              if (constraints.maxWidth < 720) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var index = 0; index < fields.length; index++) ...[
+                      fields[index],
+                      if (index < fields.length - 1) const SizedBox(height: 10),
+                    ],
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: IconButton(
+                        tooltip: 'Editar y guardar',
+                        onPressed: onEdit,
+                        icon: const Icon(Icons.edit_outlined),
+                      ),
+                    ),
+                  ],
+                );
+              }
+
+              return Row(
+                children: [
+                  Expanded(flex: 3, child: fields[0]),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 4, child: fields[1]),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 2, child: fields[2]),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: 'Editar y guardar',
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
+}
+
+class _CustomerField extends StatelessWidget {
+  const _CustomerField({
+    required this.label,
+    required this.value,
+    this.statusColor,
+  });
+
+  final String label;
+  final String value;
+  final Color? statusColor;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minHeight: 72),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Theme.of(context).dividerColor),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ],
         ),
       );
 }

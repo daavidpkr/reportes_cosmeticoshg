@@ -38,9 +38,10 @@ void main() {
         home: Scaffold(body: ClientesScreen(repository: FakeCustomerTerms()))));
     await tester.pumpAndSettle();
     expect(find.text('Cliente configurado'), findsOneWidget);
-    expect(find.textContaining('45 días · Configurado'), findsOneWidget);
+    expect(find.text('Nombre comercial'), findsNWidgets(2));
+    expect(find.text('Comercial Uno'), findsOneWidget);
+    expect(find.text('45 días'), findsOneWidget);
     expect(find.text('Cliente pendiente'), findsOneWidget);
-    expect(
-        find.textContaining('Plazo pendiente de configurar'), findsOneWidget);
+    expect(find.text('Pendiente'), findsOneWidget);
   });
 }
