@@ -2855,10 +2855,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
               label: const Text('Descargar PDF'),
             ),
             const SizedBox(width: 8),
-            _botonBarra(
-              Icons.analytics_outlined,
-              'Generar reporte mensual',
-              _guardarResumenMensual,
+            FilledButton.icon(
+              onPressed: _guardarResumenMensual,
+              icon: const Icon(Icons.analytics_outlined, size: 18),
+              label: const Text('Generar reporte mensual'),
             ),
             _botonZoom(),
           ],
