@@ -236,7 +236,7 @@ class ReporteExporter {
               4: pw.FlexColumnWidth(1.25),
               5: pw.FlexColumnWidth(1.25),
               6: pw.FlexColumnWidth(1.45),
-              7: pw.FlexColumnWidth(1.3),
+              7: pw.FlexColumnWidth(1.5),
               8: pw.FlexColumnWidth(.9),
               9: pw.FlexColumnWidth(1.50),
               10: pw.FlexColumnWidth(1.1),
