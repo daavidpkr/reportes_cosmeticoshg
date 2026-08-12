@@ -38,7 +38,8 @@ class FilaVenta {
 
   double get totalAbonos => abonos.fold(0, (suma, abono) => suma + abono.valor);
   double get saldo => venta - totalAbonos;
-  bool get pagada => venta > 0 && saldo <= 0.005;
+  bool get anulada => vendedor.trim().toUpperCase() == 'ANULADA';
+  bool get pagada => !anulada && venta > 0 && saldo <= 0.005;
   bool get tieneDatos =>
       referencia.trim().isNotEmpty ||
       cliente.trim().isNotEmpty ||

@@ -1412,13 +1412,25 @@ class _ReporteScreenState extends State<ReporteScreen> {
       ? _filasGenerales
       : _filasVisibles.map((item) => item.value).toList();
   int get _totalEsmaltes =>
-      _filasParaTotales.fold(0, (suma, fila) => suma + fila.esmalte);
+      _filasParaTotales.where((fila) => !fila.anulada).fold(
+            0,
+            (suma, fila) => suma + fila.esmalte,
+          );
   double get _totalVentas =>
-      _filasParaTotales.fold(0, (suma, fila) => suma + fila.venta);
+      _filasParaTotales.where((fila) => !fila.anulada).fold(
+            0,
+            (suma, fila) => suma + fila.venta,
+          );
   double get _totalCobros =>
-      _filasParaTotales.fold(0, (suma, fila) => suma + fila.totalAbonos);
+      _filasParaTotales.where((fila) => !fila.anulada).fold(
+            0,
+            (suma, fila) => suma + fila.totalAbonos,
+          );
   double get _totalPorCobrar =>
-      _filasParaTotales.fold(0, (suma, fila) => suma + fila.saldo);
+      _filasParaTotales.where((fila) => !fila.anulada).fold(
+            0,
+            (suma, fila) => suma + fila.saldo,
+          );
 
   List<FilaVenta> get _filasGenerales {
     final texto = _filtro.toLowerCase();
@@ -2097,7 +2109,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
     final expandida = _filasExpandidas.contains(fila.numero);
     return Container(
       decoration: BoxDecoration(
-        color: context.hg.panel,
+        color: fila.anulada
+            ? context.hg.danger.withValues(alpha: .12)
+            : fila.pagada
+                ? context.hg.positive.withValues(alpha: .12)
+                : context.hg.panel,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
@@ -2167,7 +2183,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
                       Text(
-                        '\$${fila.saldo.toStringAsFixed(2)}',
+                        fila.anulada
+                            ? 'ANULADA'
+                            : '\$${fila.saldo.toStringAsFixed(2)}',
                         style: TextStyle(
                           color: context.hg.burgundy,
                           fontSize: 14,
@@ -2356,16 +2374,22 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       children: [
                         _datoMovil(
                           'Venta',
-                          '\$${fila.venta.toStringAsFixed(2)}',
+                          fila.anulada
+                              ? 'ANULADA'
+                              : '\$${fila.venta.toStringAsFixed(2)}',
                         ),
                         _datoMovil(
                           'Tot. abono',
-                          '\$${fila.totalAbonos.toStringAsFixed(2)}',
+                          fila.anulada
+                              ? 'ANULADA'
+                              : '\$${fila.totalAbonos.toStringAsFixed(2)}',
                           color: context.hg.positive,
                         ),
                         _datoMovil(
                           'Saldo',
-                          '\$${fila.saldo.toStringAsFixed(2)}',
+                          fila.anulada
+                              ? 'ANULADA'
+                              : '\$${fila.saldo.toStringAsFixed(2)}',
                           color: context.hg.burgundy,
                         ),
                       ],
@@ -3290,11 +3314,15 @@ class _ReporteScreenState extends State<ReporteScreen> {
               rows: _filasGenerales
                   .map(
                     (fila) => DataRow(
-                      color: fila.pagada
+                      color: fila.anulada
                           ? WidgetStatePropertyAll(
-                              context.hg.positive.withValues(alpha: .12),
+                              context.hg.danger.withValues(alpha: .12),
                             )
-                          : null,
+                          : fila.pagada
+                              ? WidgetStatePropertyAll(
+                                  context.hg.positive.withValues(alpha: .12),
+                                )
+                              : null,
                       cells: [
                         DataCell(Text(fila.cliente)),
                         DataCell(Text(fila.nombreComercial)),
@@ -3302,12 +3330,17 @@ class _ReporteScreenState extends State<ReporteScreen> {
                         DataCell(Text(fila.numeroFactura)),
                         DataCell(Text(fila.vendedor)),
                         DataCell(Text('${fila.esmalte}')),
-                        DataCell(Text('\$${fila.venta.toStringAsFixed(2)}')),
-                        DataCell(
-                            Text('\$${fila.totalAbonos.toStringAsFixed(2)}')),
+                        DataCell(Text(fila.anulada
+                            ? 'ANULADA'
+                            : '\$${fila.venta.toStringAsFixed(2)}')),
+                        DataCell(Text(fila.anulada
+                            ? 'ANULADA'
+                            : '\$${fila.totalAbonos.toStringAsFixed(2)}')),
                         DataCell(
                           Text(
-                            '\$${fila.saldo.toStringAsFixed(2)}',
+                            fila.anulada
+                                ? 'ANULADA'
+                                : '\$${fila.saldo.toStringAsFixed(2)}',
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                         ),
@@ -3322,10 +3355,12 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   DataRow _crearFila(int indice, FilaVenta fila) => DataRow(
         key: ValueKey(fila.numero),
-        color: fila.pagada
-            ? WidgetStatePropertyAll(
-                context.hg.positive.withValues(alpha: 0.12))
-            : null,
+        color: fila.anulada
+            ? WidgetStatePropertyAll(context.hg.danger.withValues(alpha: 0.12))
+            : fila.pagada
+                ? WidgetStatePropertyAll(
+                    context.hg.positive.withValues(alpha: 0.12))
+                : null,
         cells: [
           DataCell(
             Container(
@@ -3366,14 +3401,17 @@ class _ReporteScreenState extends State<ReporteScreen> {
           DataCell(Text(fila.numeroFactura)),
           DataCell(_selectorVendedor(fila)),
           DataCell(_entradaEntera(fila)),
-          DataCell(Text('\$${fila.venta.toStringAsFixed(2)}')),
+          DataCell(Text(
+              fila.anulada ? 'ANULADA' : '\$${fila.venta.toStringAsFixed(2)}')),
           DataCell(_botonAbono(fila, 0)),
           DataCell(_botonAbono(fila, 1)),
           DataCell(_abonosAdicionales(fila)),
-          DataCell(Text('\$${fila.totalAbonos.toStringAsFixed(2)}')),
+          DataCell(Text(fila.anulada
+              ? 'ANULADA'
+              : '\$${fila.totalAbonos.toStringAsFixed(2)}')),
           DataCell(
             Text(
-              '\$${fila.saldo.toStringAsFixed(2)}',
+              fila.anulada ? 'ANULADA' : '\$${fila.saldo.toStringAsFixed(2)}',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),

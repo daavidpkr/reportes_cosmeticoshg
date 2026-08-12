@@ -85,10 +85,12 @@ class ReporteExporter {
       author: 'Cosméticos HG',
     );
     final rosa = PdfColor.fromHex('#B71157');
-    final ventas = filas.fold(0.0, (suma, fila) => suma + fila.venta);
-    final cobros = filas.fold(0.0, (suma, fila) => suma + fila.totalAbonos);
-    final saldo = filas.fold(0.0, (suma, fila) => suma + fila.saldo);
-    final esmaltes = filas.fold(0, (suma, fila) => suma + fila.esmalte);
+    final filasValidas = filas.where((fila) => !fila.anulada).toList();
+    final ventas = filasValidas.fold(0.0, (suma, fila) => suma + fila.venta);
+    final cobros =
+        filasValidas.fold(0.0, (suma, fila) => suma + fila.totalAbonos);
+    final saldo = filasValidas.fold(0.0, (suma, fila) => suma + fila.saldo);
+    final esmaltes = filasValidas.fold(0, (suma, fila) => suma + fila.esmalte);
     final pagadas = filas.where((fila) => fila.pagada).length;
     final pendientes = filas.length - pagadas;
 
@@ -102,10 +104,12 @@ class ReporteExporter {
         () => _ResumenVendedorPdf(nombre),
       );
       resumen.facturas += 1;
-      resumen.esmaltes += fila.esmalte;
-      resumen.ventas += fila.venta;
-      resumen.cobros += fila.totalAbonos;
-      resumen.saldo += fila.saldo;
+      if (!fila.anulada) {
+        resumen.esmaltes += fila.esmalte;
+        resumen.ventas += fila.venta;
+        resumen.cobros += fila.totalAbonos;
+        resumen.saldo += fila.saldo;
+      }
     }
     final vendedores = porVendedor.values.toList()
       ..sort((a, b) => b.ventas.compareTo(a.ventas));
@@ -210,6 +214,8 @@ class ReporteExporter {
     // Equivale a Colors.green (#4CAF50) con 12 % de opacidad sobre blanco,
     // que es el color usado para las filas pagadas en la tabla de la app.
     final verdePagada = PdfColor.fromHex('#DCEEDC');
+    // Equivale al rojo de peligro con 12 % de opacidad sobre blanco.
+    final rojoAnulada = PdfColor.fromHex('#F4E7EA');
 
     documento.addPage(
       pw.MultiPage(
@@ -247,7 +253,7 @@ class ReporteExporter {
                     fila.numeroFactura,
                     nombresVendedores[fila.vendedor] ?? fila.vendedor,
                     fila.esmalte,
-                    _dinero(fila.venta),
+                    fila.anulada ? 'ANULADA' : _dinero(fila.venta),
                     fila.abonos
                         .asMap()
                         .entries
@@ -257,8 +263,8 @@ class ReporteExporter {
                               '${item.key + 1}: ${_dinero(item.value.valor)}',
                         )
                         .join(' / '),
-                    _dinero(fila.totalAbonos),
-                    _dinero(fila.saldo),
+                    fila.anulada ? 'ANULADA' : _dinero(fila.totalAbonos),
+                    fila.anulada ? 'ANULADA' : _dinero(fila.saldo),
                   ],
                 )
                 .toList(),
@@ -277,10 +283,14 @@ class ReporteExporter {
             oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
             cellDecoration: (_, __, rowNum) {
               final indiceFila = rowNum - 1;
-              if (indiceFila >= 0 &&
-                  indiceFila < filasConDatos.length &&
-                  filasConDatos[indiceFila].pagada) {
-                return pw.BoxDecoration(color: verdePagada);
+              if (indiceFila >= 0 && indiceFila < filasConDatos.length) {
+                final fila = filasConDatos[indiceFila];
+                if (fila.anulada) {
+                  return pw.BoxDecoration(color: rojoAnulada);
+                }
+                if (fila.pagada) {
+                  return pw.BoxDecoration(color: verdePagada);
+                }
               }
               return const pw.BoxDecoration();
             },
@@ -291,24 +301,34 @@ class ReporteExporter {
             children: [
               _total(
                 'Total esmaltes',
-                filas.fold(0, (suma, fila) => suma + fila.esmalte).toDouble(),
+                filas
+                    .where((fila) => !fila.anulada)
+                    .fold(0, (suma, fila) => suma + fila.esmalte)
+                    .toDouble(),
               ),
               pw.SizedBox(width: 24),
               _total(
                 'Total ventas',
-                filas.fold(0.0, (suma, fila) => suma + fila.venta),
+                filas
+                    .where((fila) => !fila.anulada)
+                    .fold(0.0, (suma, fila) => suma + fila.venta),
                 dinero: true,
               ),
               pw.SizedBox(width: 24),
               _total(
                 'Total cobros',
-                filas.fold(0.0, (suma, fila) => suma + fila.totalAbonos),
+                filas.where((fila) => !fila.anulada).fold(
+                      0.0,
+                      (suma, fila) => suma + fila.totalAbonos,
+                    ),
                 dinero: true,
               ),
               pw.SizedBox(width: 24),
               _total(
                 'Total por cobrar',
-                filas.fold(0.0, (suma, fila) => suma + fila.saldo),
+                filas
+                    .where((fila) => !fila.anulada)
+                    .fold(0.0, (suma, fila) => suma + fila.saldo),
                 dinero: true,
               ),
             ],
