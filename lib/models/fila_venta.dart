@@ -1,12 +1,36 @@
+const int maxNumeroReciboSeguro = 9007199254740991;
+
+String? validarNumeroRecibo(String valor) {
+  final limpio = valor.trim();
+  if (limpio.isEmpty) return 'Ingrese el número de recibo.';
+  if (!RegExp(r'^\d+$').hasMatch(limpio)) {
+    return 'Ingrese un número de recibo válido, utilizando únicamente '
+        'números enteros.';
+  }
+  final numero = int.tryParse(limpio);
+  if (numero == null || numero > maxNumeroReciboSeguro) {
+    return 'Ingrese un número de recibo válido, utilizando únicamente '
+        'números enteros.';
+  }
+  if (numero == 0) return 'El número de recibo debe ser mayor que cero.';
+  return null;
+}
+
 class Abono {
-  Abono({this.valor = 0, this.comentario = ''});
+  Abono({this.valor = 0, this.numeroRecibo, this.comentario = ''});
 
   double valor;
+  int? numeroRecibo;
   String comentario;
 
-  Map<String, dynamic> toJson() => {'valor': valor, 'comentario': comentario};
+  Map<String, dynamic> toJson() => {
+        'valor': valor,
+        'numeroRecibo': numeroRecibo,
+        'comentario': comentario,
+      };
   factory Abono.fromJson(Map<String, dynamic> json) => Abono(
         valor: (json['valor'] as num?)?.toDouble() ?? 0,
+        numeroRecibo: (json['numeroRecibo'] as num?)?.toInt(),
         comentario: json['comentario'] as String? ?? '',
       );
 }
@@ -50,7 +74,10 @@ class FilaVenta {
       esmalte != 0 ||
       venta != 0 ||
       abonos.any(
-        (abono) => abono.valor != 0 || abono.comentario.trim().isNotEmpty,
+        (abono) =>
+            abono.valor != 0 ||
+            abono.numeroRecibo != null ||
+            abono.comentario.trim().isNotEmpty,
       );
 
   Map<String, dynamic> toJson() => {

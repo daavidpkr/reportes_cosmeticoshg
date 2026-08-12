@@ -214,6 +214,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
           final abonos = dato['abonos'];
           if (abonos is List) {
             final comentarios = dato['comentarios_abonos'];
+            final numerosRecibo = dato['numeros_recibo'];
             fila.abonos
               ..clear()
               ..addAll(
@@ -222,8 +223,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       comentarios is List && indice < comentarios.length
                           ? comentarios[indice]?.toString() ?? ''
                           : '';
+                  final recibo = numerosRecibo is List &&
+                          indice < numerosRecibo.length &&
+                          numerosRecibo[indice] != null
+                      ? int.tryParse(numerosRecibo[indice].toString())
+                      : null;
                   return Abono(
                     valor: (abonos[indice] as num?)?.toDouble() ?? 0,
+                    numeroRecibo: recibo,
                     comentario: comentario,
                   );
                 }),
@@ -463,12 +470,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
     }
   }
 
-  Future<void> _guardarFilaNube(FilaVenta fila) async {
-    if (!fila.tieneDatos) return;
+  Future<bool> _guardarFilaNube(FilaVenta fila) async {
+    if (!fila.tieneDatos) return true;
     try {
       await _supabaseReportes.guardarFila(fila, _reportes.activo.nombre);
+      return true;
     } catch (error) {
       _mostrarErrorNube('No se pudo guardar la fila ${fila.numero}: $error');
+      return false;
     }
   }
 
@@ -498,41 +507,76 @@ class _ReporteScreenState extends State<ReporteScreen> {
     bool nuevo = false,
   }) async {
     final abono = fila.abonos[indice];
+    final valorAnterior = abono.valor;
+    final reciboAnterior = abono.numeroRecibo;
+    final comentarioAnterior = abono.comentario;
     final montoController = TextEditingController(
       text: abono.valor == 0 ? '' : abono.valor.toStringAsFixed(2),
     );
+    final reciboController = TextEditingController(
+      text: abono.numeroRecibo?.toString() ?? '',
+    );
     final comentarioController = TextEditingController(text: abono.comentario);
-    final resultado = await showDialog<(double, String)>(
+    final formKey = GlobalKey<FormState>();
+    final resultado = await showDialog<(double, int?, String)>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Abono ${indice + 1}'),
         content: SizedBox(
           width: 360,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: montoController,
-                autofocus: true,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: montoController,
+                  autofocus: true,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Valor',
+                    prefixText: '\$ ',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-                decoration: const InputDecoration(
-                  labelText: 'Valor',
-                  prefixText: '\$ ',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: reciboController,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (valor) {
+                    if ((valor ?? '').trim().isEmpty &&
+                        abono.numeroRecibo == null &&
+                        abono.valor > 0 &&
+                        (double.tryParse(montoController.text
+                                    .replaceAll(',', '.')) ??
+                                0) ==
+                            abono.valor) {
+                      return null;
+                    }
+                    return validarNumeroRecibo(valor ?? '');
+                  },
+                  decoration: InputDecoration(
+                    labelText: 'Número de recibo *',
+                    helperText: abono.numeroRecibo == null && abono.valor > 0
+                        ? 'Sin número de recibo (registro histórico)'
+                        : null,
+                    border: const OutlineInputBorder(),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: comentarioController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Comentario',
-                  border: OutlineInputBorder(),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: comentarioController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Comentario',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
         actions: [
@@ -541,16 +585,23 @@ class _ReporteScreenState extends State<ReporteScreen> {
             child: const Text('Cancelar'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, (
-              double.tryParse(montoController.text.replaceAll(',', '.')) ?? 0,
-              comentarioController.text.trim(),
-            )),
+            onPressed: () {
+              if (!(formKey.currentState?.validate() ?? false)) return;
+              Navigator.pop(context, (
+                double.tryParse(montoController.text.replaceAll(',', '.')) ?? 0,
+                reciboController.text.isEmpty
+                    ? null
+                    : int.parse(reciboController.text),
+                comentarioController.text.trim(),
+              ));
+            },
             child: const Text('Guardar'),
           ),
         ],
       ),
     );
     montoController.dispose();
+    reciboController.dispose();
     comentarioController.dispose();
     if (!mounted) return;
     if (resultado != null) {
@@ -574,12 +625,23 @@ class _ReporteScreenState extends State<ReporteScreen> {
         if (nuevo) fila.abonos.removeAt(indice);
       } else {
         abono.valor = resultado.$1;
-        abono.comentario = resultado.$2;
+        abono.numeroRecibo = resultado.$2;
+        abono.comentario = resultado.$3;
         _asegurarFilaVacia();
       }
     });
     _guardarProgreso();
-    if (resultado != null) _guardarFilaNube(fila);
+    if (resultado != null && !await _guardarFilaNube(fila)) {
+      if (!mounted) return;
+      setState(() {
+        abono
+          ..valor = valorAnterior
+          ..numeroRecibo = reciboAnterior
+          ..comentario = comentarioAnterior;
+        if (nuevo) fila.abonos.remove(abono);
+      });
+      await _guardarProgreso();
+    }
   }
 
   Future<void> _agregarAbono(FilaVenta fila) async {
@@ -604,9 +666,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   ListTile(
                     title: Text('Abono ${indice + 1}'),
                     subtitle: Text(
-                      fila.abonos[indice].comentario.isEmpty
-                          ? 'Sin comentario'
-                          : fila.abonos[indice].comentario,
+                      'Número de recibo: '
+                      '${fila.abonos[indice].numeroRecibo?.toString() ?? 'Sin número de recibo (registro histórico)'}\n'
+                      'Comentario: ${fila.abonos[indice].comentario.isEmpty ? 'Sin comentario' : fila.abonos[indice].comentario}',
                     ),
                     trailing: Text(
                       '\$${fila.abonos[indice].valor.toStringAsFixed(2)}',
@@ -3522,17 +3584,24 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   Widget _botonAbono(FilaVenta fila, int indice) {
     final abono = fila.abonos[indice];
-    return SizedBox(
-      width: 82 * _escalaReporte,
-      child: OutlinedButton(
-        style: OutlinedButton.styleFrom(
-          padding: EdgeInsets.symmetric(horizontal: 6 * _escalaReporte),
-          visualDensity: VisualDensity.compact,
-          textStyle: TextStyle(fontSize: 14 * _escalaReporte),
-        ),
-        onPressed: () => _editarAbono(fila, indice),
-        child: Text(
-          abono.valor == 0 ? 'Añadir' : '\$${abono.valor.toStringAsFixed(2)}',
+    return Tooltip(
+      message: abono.valor == 0
+          ? 'Añadir abono'
+          : 'Número de recibo: '
+              '${abono.numeroRecibo?.toString() ?? 'Sin número de recibo (registro histórico)'}\n'
+              'Comentario: ${abono.comentario.isEmpty ? 'Sin comentario' : abono.comentario}',
+      child: SizedBox(
+        width: 82 * _escalaReporte,
+        child: OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            padding: EdgeInsets.symmetric(horizontal: 6 * _escalaReporte),
+            visualDensity: VisualDensity.compact,
+            textStyle: TextStyle(fontSize: 14 * _escalaReporte),
+          ),
+          onPressed: () => _editarAbono(fila, indice),
+          child: Text(
+            abono.valor == 0 ? 'Añadir' : '\$${abono.valor.toStringAsFixed(2)}',
+          ),
         ),
       ),
     );

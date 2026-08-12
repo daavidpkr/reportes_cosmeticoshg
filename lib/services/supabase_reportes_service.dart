@@ -204,6 +204,8 @@ class SupabaseReportesService {
       'p_seller': fila.vendedor,
       'p_nail_polish': fila.esmalte,
       'p_payments': fila.abonos.map((item) => item.valor).toList(),
+      'p_payment_receipts':
+          fila.abonos.map((item) => item.numeroRecibo?.toString()).toList(),
       'p_payment_comments': fila.abonos.map((item) => item.comentario).toList(),
     });
   }

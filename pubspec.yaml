@@ -1,7 +1,7 @@
 name: cosmeticos_hg_reportes
 description: "Sistema de reportes de ventas para Cosméticos HG."
 publish_to: 'none'
-version: 1.0.0+4
+version: 1.0.1+5
 
 environment:
   sdk: '>=3.0.0 <4.0.0'

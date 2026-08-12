@@ -352,6 +352,7 @@ class ReporteExporter {
                 'CLIENTE',
                 'ABONO',
                 'VALOR',
+                'NÚMERO DE RECIBO',
                 'COMENTARIO',
               ],
               data: comentarios,
@@ -381,13 +382,19 @@ class ReporteExporter {
     for (final fila in filas) {
       for (var indice = 0; indice < fila.abonos.length; indice++) {
         final abono = fila.abonos[indice];
-        if (abono.comentario.trim().isEmpty) continue;
+        if (abono.valor == 0 &&
+            abono.numeroRecibo == null &&
+            abono.comentario.trim().isEmpty) {
+          continue;
+        }
         resultado.add([
           fila.numero,
           fila.numeroFactura,
           fila.cliente,
           'Abono ${indice + 1}',
           _dinero(abono.valor),
+          abono.numeroRecibo?.toString() ??
+              'Sin número de recibo (registro histórico)',
           abono.comentario,
         ]);
       }
