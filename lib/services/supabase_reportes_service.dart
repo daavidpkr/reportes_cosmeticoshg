@@ -108,6 +108,66 @@ List<CobroMensual> calcularCobrosMensuales({
   }).toList();
 }
 
+/// Une las filas operativas con su factura maestra sin depender del mes activo.
+/// La clave compuesta evita duplicar una fila al reconstruir el consolidado.
+List<FilaVenta> construirFilasConsolidadas({
+  required List<Map<String, dynamic>> filas,
+  required List<Map<String, dynamic>> facturas,
+}) {
+  final facturasPorRef = <String, Map<String, dynamic>>{
+    for (final factura in facturas)
+      factura['ref_fact']?.toString().trim() ?? '': factura,
+  };
+  final unicas = <String, FilaVenta>{};
+  for (final dato in filas) {
+    final referencia = dato['ref_fact']?.toString().trim() ?? '';
+    if (referencia.isEmpty) continue;
+    final factura = facturasPorRef[referencia];
+    if (factura == null) continue;
+    final abonos = dato['abonos'] is List ? dato['abonos'] as List : const [];
+    final recibos = dato['numeros_recibo'] is List
+        ? dato['numeros_recibo'] as List
+        : const [];
+    final comentarios = dato['comentarios_abonos'] is List
+        ? dato['comentarios_abonos'] as List
+        : const [];
+    final pagos = List<Abono>.generate(abonos.length, (indice) {
+      return Abono(
+        valor: (abonos[indice] as num?)?.toDouble() ?? 0,
+        numeroRecibo: indice < recibos.length && recibos[indice] != null
+            ? int.tryParse(recibos[indice].toString())
+            : null,
+        comentario: indice < comentarios.length
+            ? comentarios[indice]?.toString() ?? ''
+            : '',
+      );
+    });
+    while (pagos.length < 2) {
+      pagos.add(Abono());
+    }
+    final numero = (dato['nro_fila'] as num?)?.toInt() ?? 0;
+    final mes = dato['mes_reporte']?.toString() ?? '';
+    unicas['$mes::$numero'] = FilaVenta(
+      numero: numero,
+      referencia: referencia,
+      cliente: factura['cliente']?.toString() ?? '',
+      nombreComercial: factura['nombre_comercial']?.toString() ?? '',
+      fecha: factura['fecha']?.toString() ?? '',
+      numeroFactura: factura['nro_fact']?.toString() ?? '',
+      vendedor: dato['vendedor']?.toString() ?? '',
+      esmalte: (dato['esmaltes'] as num?)?.toInt() ?? 0,
+      venta: (factura['venta'] as num?)?.toDouble() ?? 0,
+      abonos: pagos,
+    );
+  }
+  final resultado = unicas.values.toList();
+  resultado.sort((a, b) {
+    final fecha = b.fecha.compareTo(a.fecha);
+    return fecha != 0 ? fecha : b.numeroFactura.compareTo(a.numeroFactura);
+  });
+  return resultado;
+}
+
 class SupabaseReportesService {
   SupabaseReportesService({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
@@ -147,6 +207,34 @@ class SupabaseReportesService {
             .range(desde, hasta),
       );
 
+  Future<List<FilaVenta>> obtenerFilasConsolidadas() async {
+    final resultados = await Future.wait([
+      _obtenerEnPaginas(
+        (desde, hasta) => _client
+            .from('reportes_ventas')
+            .select(
+              'mes_reporte,nro_fila,ref_fact,vendedor,esmaltes,abonos,'
+              'numeros_recibo,comentarios_abonos',
+            )
+            .order('mes_reporte', ascending: false)
+            .order('nro_fila', ascending: false)
+            .range(desde, hasta),
+      ),
+      _obtenerEnPaginas(
+        (desde, hasta) => _client
+            .from('facturas_maestras')
+            .select(
+              'ref_fact,cliente,nombre_comercial,fecha,nro_fact,venta',
+            )
+            .range(desde, hasta),
+      ),
+    ]);
+    return construirFilasConsolidadas(
+      filas: resultados[0],
+      facturas: resultados[1],
+    );
+  }
+
   Future<List<Map<String, dynamic>>> _obtenerTodasLasFacturas() =>
       _obtenerEnPaginas(
         (desde, hasta) => _client
@@ -157,8 +245,13 @@ class SupabaseReportesService {
 
   Future<List<Map<String, dynamic>>> _obtenerEnPaginas(
     Future<List<Map<String, dynamic>>> Function(int, int) consulta,
-  ) async {
-    const tamano = 1000;
+  ) =>
+      obtenerTodasLasPaginas(consulta);
+
+  static Future<List<Map<String, dynamic>>> obtenerTodasLasPaginas(
+    Future<List<Map<String, dynamic>>> Function(int, int) consulta, {
+    int tamano = 1000,
+  }) async {
     final todos = <Map<String, dynamic>>[];
     while (true) {
       final pagina = await consulta(todos.length, todos.length + tamano - 1);

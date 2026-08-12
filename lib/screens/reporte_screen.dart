@@ -66,6 +66,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   final Set<int> _filasExpandidas = {};
   bool _actualizando = false;
   int _versionCobrosMensuales = 0;
+  List<FilaVenta> _filasConsolidadas = const [];
 
   // La antigua vista al 90% es ahora la escala base (100%).
   double get _escalaReporte => _zoom * .99;
@@ -135,6 +136,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
       await _reportes.cargarDesdeNube(datos);
 
+      final consolidadas = await _supabaseReportes.obtenerFilasConsolidadas();
+
       if (datos.isEmpty) {
         await _supabaseReportes.guardarReporteMensual(
           _reportes.activo.anio,
@@ -143,6 +146,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
       }
 
       if (!mounted) return;
+
+      _filasConsolidadas = consolidadas;
 
       _activarReporte(_reportes.activo, guardar: false);
     } catch (error) {
@@ -1506,9 +1511,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   List<FilaVenta> get _filasGenerales {
     final texto = _filtro.toLowerCase();
-    return _reportes.reportes.expand((r) => r.filas).where((fila) {
+    final resultado = _filasConsolidadas.where((fila) {
       if (!fila.tieneDatos) return false;
       final coincide = texto.isEmpty ||
+          fila.referencia.toLowerCase().contains(texto) ||
           fila.numeroFactura.toLowerCase().contains(texto) ||
           fila.cliente.toLowerCase().contains(texto) ||
           fila.nombreComercial.toLowerCase().contains(texto) ||
@@ -1523,6 +1529,16 @@ class _ReporteScreenState extends State<ReporteScreen> {
         _ => true,
       };
     }).toList();
+    final columna = _ordenColumna;
+    if (columna != null) {
+      resultado.sort((a, b) {
+        final comparacion = _valorOrden(a, columna).toString().compareTo(
+              _valorOrden(b, columna).toString(),
+            );
+        return _ordenAscendente ? comparacion : -comparacion;
+      });
+    }
+    return resultado;
   }
 
   // ignore: unused_element
@@ -2522,42 +2538,43 @@ class _ReporteScreenState extends State<ReporteScreen> {
     String sugerencia,
     ValueChanged<String> asignar,
     FilaVenta fila,
-  ) =>
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            etiqueta.toUpperCase(),
-            style: TextStyle(
-              color: context.hg.mutedText,
-              fontSize: 10,
-              letterSpacing: .6,
-            ),
+  ) {
+    if (_vistaGeneral) return _textoCampoMovil(etiqueta, valor);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          etiqueta.toUpperCase(),
+          style: TextStyle(
+            color: context.hg.mutedText,
+            fontSize: 10,
+            letterSpacing: .6,
           ),
-          const SizedBox(height: 5),
-          TextFormField(
-            initialValue: valor,
-            decoration: InputDecoration(
-              hintText: sugerencia,
-              isDense: true,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
-              ),
-              border:
-                  OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
+        ),
+        const SizedBox(height: 5),
+        TextFormField(
+          initialValue: valor,
+          decoration: InputDecoration(
+            hintText: sugerencia,
+            isDense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 12,
+              vertical: 10,
             ),
-            onChanged: (texto) {
-              setState(() {
-                asignar(texto);
-                _asegurarFilaVacia();
-              });
-              _guardarProgreso();
-              _guardarFilaNube(fila);
-            },
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(9)),
           ),
-        ],
-      );
+          onChanged: (texto) {
+            setState(() {
+              asignar(texto);
+              _asegurarFilaVacia();
+            });
+            _guardarProgreso();
+            _guardarFilaNube(fila);
+          },
+        ),
+      ],
+    );
+  }
 
   Widget _datoMovil(String etiqueta, String valor, {Color? color}) => SizedBox(
         width: 88,
@@ -3307,39 +3324,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  DataTable(
-                    horizontalMargin: 7 * _escalaReporte,
-                    columnSpacing: 13 * _escalaReporte,
-                    dataRowMinHeight: 38 * _escalaReporte,
-                    dataRowMaxHeight: 58 * _escalaReporte,
-                    headingRowHeight: 46 * _escalaReporte,
-                    headingRowColor:
-                        WidgetStatePropertyAll(context.hg.tableHeader),
-                    headingTextStyle: TextStyle(
-                      color: context.hg.mutedText,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: .7,
-                      fontSize: 11 * _escalaReporte,
-                    ),
-                    dataTextStyle: TextStyle(fontSize: 15 * _escalaReporte),
-                    columns: [
-                      DataColumn(label: _encabezadoSinFiltro('NRO')),
-                      DataColumn(label: _encabezadoSinFiltro('REF. (FACT)')),
-                      DataColumn(label: _encabezado('CLIENTE', 'cliente')),
-                      DataColumn(
-                          label: _encabezado('NOMBRE COMERCIAL', 'nombre')),
-                      DataColumn(label: _encabezado('FECHA', 'fecha')),
-                      DataColumn(label: _encabezado('NRO. FACT.', 'factura')),
-                      DataColumn(label: _encabezado('VENDEDOR', 'vendedor')),
-                      DataColumn(label: _encabezadoSinFiltro('ESMALTE')),
-                      DataColumn(label: _encabezado('VENTA', 'venta')),
-                      DataColumn(label: _encabezadoSinFiltro('ABONO 1')),
-                      DataColumn(label: _encabezadoSinFiltro('ABONO 2')),
-                      const DataColumn(label: SizedBox.shrink()),
-                      DataColumn(label: _encabezadoSinFiltro('TOT. ABONO')),
-                      DataColumn(label: _encabezado('SALDO', 'saldo')),
-                    ],
-                    rows: _filasVisibles
+                  _tablaCompartida(
+                    filas: _filasVisibles
                         .map((item) => _crearFila(item.key, item.value))
                         .toList(),
                   ),
@@ -3366,64 +3352,99 @@ class _ReporteScreenState extends State<ReporteScreen> {
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SingleChildScrollView(
-            child: DataTable(
-              headingRowColor: WidgetStatePropertyAll(context.hg.tableHeader),
-              headingTextStyle: TextStyle(
-                color: context.hg.mutedText,
-                fontWeight: FontWeight.w600,
-              ),
-              columns: const [
-                DataColumn(label: Text('CLIENTE')),
-                DataColumn(label: Text('NOMBRE COMERCIAL')),
-                DataColumn(label: Text('FECHA')),
-                DataColumn(label: Text('NRO. FACT.')),
-                DataColumn(label: Text('VENDEDOR')),
-                DataColumn(label: Text('ESMALTE')),
-                DataColumn(label: Text('VENTA')),
-                DataColumn(label: Text('TOT. ABONO')),
-                DataColumn(label: Text('SALDO')),
-              ],
-              rows: _filasGenerales
-                  .map(
-                    (fila) => DataRow(
-                      color: fila.anulada
-                          ? WidgetStatePropertyAll(
-                              context.hg.danger.withValues(alpha: .12),
-                            )
-                          : fila.pagada
-                              ? WidgetStatePropertyAll(
-                                  context.hg.positive.withValues(alpha: .12),
-                                )
-                              : null,
-                      cells: [
-                        DataCell(Text(fila.cliente)),
-                        DataCell(Text(fila.nombreComercial)),
-                        DataCell(Text(fila.fecha)),
-                        DataCell(Text(fila.numeroFactura)),
-                        DataCell(Text(fila.vendedor)),
-                        DataCell(Text('${fila.esmalte}')),
-                        DataCell(Text(fila.anulada
-                            ? 'ANULADA'
-                            : '\$${fila.venta.toStringAsFixed(2)}')),
-                        DataCell(Text(fila.anulada
-                            ? 'ANULADA'
-                            : '\$${fila.totalAbonos.toStringAsFixed(2)}')),
-                        DataCell(
-                          Text(
-                            fila.anulada
-                                ? 'ANULADA'
-                                : '\$${fila.saldo.toStringAsFixed(2)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                  .toList(),
+            child: _tablaCompartida(
+              filas: _filasGenerales.map(_crearFilaLectura).toList(),
             ),
           ),
         ),
       );
+
+  DataTable _tablaCompartida({required List<DataRow> filas}) => DataTable(
+        horizontalMargin: 7 * _escalaReporte,
+        columnSpacing: 13 * _escalaReporte,
+        dataRowMinHeight: 38 * _escalaReporte,
+        dataRowMaxHeight: 58 * _escalaReporte,
+        headingRowHeight: 46 * _escalaReporte,
+        headingRowColor: WidgetStatePropertyAll(context.hg.tableHeader),
+        headingTextStyle: TextStyle(
+          color: context.hg.mutedText,
+          fontWeight: FontWeight.w600,
+          letterSpacing: .7,
+          fontSize: 11 * _escalaReporte,
+        ),
+        dataTextStyle: TextStyle(fontSize: 15 * _escalaReporte),
+        columns: [
+          DataColumn(label: _encabezadoSinFiltro('NRO')),
+          DataColumn(label: _encabezadoSinFiltro('REF. (FACT)')),
+          DataColumn(label: _encabezado('CLIENTE', 'cliente')),
+          DataColumn(label: _encabezado('NOMBRE COMERCIAL', 'nombre')),
+          DataColumn(label: _encabezado('FECHA', 'fecha')),
+          DataColumn(label: _encabezado('NRO. FACT.', 'factura')),
+          DataColumn(label: _encabezado('VENDEDOR', 'vendedor')),
+          DataColumn(label: _encabezadoSinFiltro('ESMALTE')),
+          DataColumn(label: _encabezado('VENTA', 'venta')),
+          DataColumn(label: _encabezadoSinFiltro('ABONO 1')),
+          DataColumn(label: _encabezadoSinFiltro('ABONO 2')),
+          const DataColumn(label: SizedBox.shrink()),
+          DataColumn(label: _encabezadoSinFiltro('TOT. ABONO')),
+          DataColumn(label: _encabezado('SALDO', 'saldo')),
+        ],
+        rows: filas,
+      );
+
+  DataRow _crearFilaLectura(FilaVenta fila) => DataRow(
+        key: ValueKey('general-${fila.referencia}-${fila.numero}'),
+        color: fila.anulada
+            ? WidgetStatePropertyAll(context.hg.danger.withValues(alpha: .12))
+            : fila.pagada
+                ? WidgetStatePropertyAll(
+                    context.hg.positive.withValues(alpha: .12),
+                  )
+                : null,
+        cells: [
+          DataCell(SizedBox(
+            width: 24 * _escalaReporte,
+            child: Text('${fila.numero}', textAlign: TextAlign.center),
+          )),
+          DataCell(SizedBox(
+            width: 72 * _escalaReporte,
+            child: Text(_refSinCeros(fila.referencia)),
+          )),
+          DataCell(
+              SizedBox(width: 240 * _escalaReporte, child: Text(fila.cliente))),
+          DataCell(SizedBox(
+            width: 220 * _escalaReporte,
+            child: Text(fila.nombreComercial),
+          )),
+          DataCell(Text(fila.fecha)),
+          DataCell(Text(fila.numeroFactura)),
+          DataCell(SizedBox(
+              width: 106 * _escalaReporte, child: Text(fila.vendedor))),
+          DataCell(Text('${fila.esmalte}')),
+          DataCell(Text(
+              fila.anulada ? 'ANULADA' : '\$${fila.venta.toStringAsFixed(2)}')),
+          DataCell(Text('\$${fila.abonos[0].valor.toStringAsFixed(2)}')),
+          DataCell(Text('\$${fila.abonos[1].valor.toStringAsFixed(2)}')),
+          DataCell(_abonosAdicionalesLectura(fila)),
+          DataCell(Text(fila.anulada
+              ? 'ANULADA'
+              : '\$${fila.totalAbonos.toStringAsFixed(2)}')),
+          DataCell(Text(
+            fila.anulada ? 'ANULADA' : '\$${fila.saldo.toStringAsFixed(2)}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          )),
+        ],
+      );
+
+  Widget _abonosAdicionalesLectura(FilaVenta fila) {
+    if (fila.abonos.length <= 2) return const SizedBox.shrink();
+    return Tooltip(
+      message: fila.abonos.skip(2).indexed.map((item) {
+        return 'Abono ${item.$1 + 3}: \$${item.$2.valor.toStringAsFixed(2)}';
+      }).join('\n'),
+      child: Chip(label: Text('+${fila.abonos.length - 2}')),
+    );
+  }
 
   DataRow _crearFila(int indice, FilaVenta fila) => DataRow(
         key: ValueKey(fila.numero),
