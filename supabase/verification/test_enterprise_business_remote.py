@@ -82,7 +82,7 @@ try:
         cursor.execute(
             "select public.enterprise_save_report_row(%s,999990,'2099-12',"
             "'RPC-ROLLBACK','Synthetic RPC','Synthetic RPC','2026-08-10',"
-            "10,'ZZR',0,'[]'::jsonb,'[]'::jsonb)",
+            "10,'ZZR',0,'[]'::jsonb,'[]'::jsonb,'[]'::jsonb)",
             (new_id(),),
         )
         cursor.execute(
@@ -230,7 +230,7 @@ try:
             cursor.execute(
                 "select public.enterprise_save_report_row("
                 "%s,777777,'OTHER-MONTH','ATOMIC-ROLLBACK','Atomic','Atomic',"
-                "'2026-08-10',1,'ZZR',0,'[]','[]')",
+                "'2026-08-10',1,'ZZR',0,'[]','[]','[]')",
                 (new_id(),),
             )
             output["atomic_error"] = False

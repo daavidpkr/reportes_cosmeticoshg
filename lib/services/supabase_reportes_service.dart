@@ -5,6 +5,38 @@ import '../models/fila_venta.dart';
 import '../models/billing_customer.dart';
 import 'request_id.dart';
 
+Map<String, dynamic> construirParametrosGuardarFila({
+  required FilaVenta fila,
+  required String mesReporte,
+  required String requestId,
+  DateTime? invoiceDate,
+}) {
+  // The model always has two empty payment controls for the UI. They are not
+  // payments and must reach PostgreSQL as three genuinely empty arrays.
+  final payments = fila.abonos.where(
+    (item) =>
+        item.valor != 0 ||
+        item.numeroRecibo != null ||
+        item.comentario.trim().isNotEmpty,
+  );
+
+  return {
+    'p_request_id': requestId,
+    'p_row_number': fila.numero,
+    'p_report_name': mesReporte,
+    'p_ref_fact': fila.numeroFactura.trim(),
+    'p_cliente': fila.cliente,
+    'p_commercial_name': fila.nombreComercial,
+    'p_invoice_date': invoiceDate?.toIso8601String().substring(0, 10),
+    'p_sale': fila.venta,
+    'p_seller': fila.vendedor,
+    'p_nail_polish': fila.esmalte,
+    'p_payments': payments.map((item) => item.valor).toList(),
+    'p_payment_receipts': payments.map((item) => item.numeroRecibo).toList(),
+    'p_payment_comments': payments.map((item) => item.comentario).toList(),
+  };
+}
+
 class CobroMensual {
   const CobroMensual({
     required this.anio,
@@ -192,22 +224,15 @@ class SupabaseReportesService {
     if (referencia.isNotEmpty && date == null) {
       throw const FormatException('Fecha de factura inválida.');
     }
-    await _client.rpc('enterprise_save_report_row', params: {
-      'p_request_id': newRequestId(),
-      'p_row_number': fila.numero,
-      'p_report_name': mesReporte,
-      'p_ref_fact': referencia,
-      'p_cliente': fila.cliente,
-      'p_commercial_name': fila.nombreComercial,
-      'p_invoice_date': date?.toIso8601String().substring(0, 10),
-      'p_sale': fila.venta,
-      'p_seller': fila.vendedor,
-      'p_nail_polish': fila.esmalte,
-      'p_payments': fila.abonos.map((item) => item.valor).toList(),
-      'p_payment_receipts':
-          fila.abonos.map((item) => item.numeroRecibo?.toString()).toList(),
-      'p_payment_comments': fila.abonos.map((item) => item.comentario).toList(),
-    });
+    await _client.rpc(
+      'enterprise_save_report_row',
+      params: construirParametrosGuardarFila(
+        fila: fila,
+        mesReporte: mesReporte,
+        requestId: newRequestId(),
+        invoiceDate: date,
+      ),
+    );
   }
 
   Future<void> eliminarFila(int numeroFila, String mesReporte) =>

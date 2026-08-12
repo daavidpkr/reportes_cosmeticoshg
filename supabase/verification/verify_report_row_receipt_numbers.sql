@@ -4,6 +4,17 @@ do $$
 declare
   sample public.reportes_ventas%rowtype;
 begin
+  if to_regprocedure(
+    'public.enterprise_save_report_row(uuid,integer,text,text,text,text,date,numeric,text,numeric,jsonb,jsonb,jsonb)'
+  ) is null then
+    raise exception 'current enterprise_save_report_row signature is missing';
+  end if;
+  if to_regprocedure(
+    'public.enterprise_save_report_row(uuid,integer,text,text,text,text,date,numeric,text,numeric,jsonb,jsonb)'
+  ) is not null then
+    raise exception 'obsolete enterprise_save_report_row overload still exists';
+  end if;
+
   if not exists (
     select 1 from information_schema.columns
     where table_schema='public' and table_name='reportes_ventas'

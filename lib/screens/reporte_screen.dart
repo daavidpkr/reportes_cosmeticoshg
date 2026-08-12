@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/fila_venta.dart';
 import '../services/facturas_store.dart';
+import '../services/optimistic_persistence.dart';
 import '../services/reporte_exporter.dart';
 import '../services/reportes_store.dart';
 import '../services/supabase_reportes_service.dart';
@@ -439,6 +440,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       return;
     }
     final fila = _filas[indice];
+    final filaAnterior = FilaVenta.fromJson(fila.toJson());
     setState(() {
       fila.referencia = valor;
       fila.cliente = facturaEncontrada.cliente;
@@ -448,8 +450,26 @@ class _ReporteScreenState extends State<ReporteScreen> {
       fila.venta = facturaEncontrada.total;
       _asegurarFilaVacia();
     });
-    _guardarProgreso();
-    _guardarFilaNube(fila);
+    await _guardarProgreso();
+    final guardada = await persistirConReversion(
+      persistir: () =>
+          _supabaseReportes.guardarFila(fila, _reportes.activo.nombre),
+      revertir: () async {
+        if (!mounted) return;
+        setState(() {
+          final indiceActual = _filas.indexOf(fila);
+          if (indiceActual >= 0) _filas[indiceActual] = filaAnterior;
+          _normalizarFilas();
+        });
+        await _guardarProgreso();
+      },
+    );
+    if (!guardada && mounted) {
+      _mostrarErrorNube(
+        'No fue posible guardar la factura en Supabase. '
+        'La factura no fue registrada.',
+      );
+    }
   }
 
   Future<void> _completarFacturaNube(FilaVenta fila, String referencia) async {
