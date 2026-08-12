@@ -34,10 +34,12 @@ class PaymentRemindersRepository implements PaymentRemindersDataSource {
       '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
 
   @override
-  Future<List<PaymentReminder>> list() async =>
-      (await _client.from('payment_reminders').select().order('payment_date'))
-          .map<PaymentReminder>((row) => PaymentReminder.fromJson(row))
-          .toList();
+  Future<List<PaymentReminder>> list() async => (await _client
+          .from('payment_reminders')
+          .select('*,facturas_maestras(cliente,nombre_comercial)')
+          .order('payment_date'))
+      .map<PaymentReminder>((row) => PaymentReminder.fromJson(row))
+      .toList();
 
   @override
   Future<PaymentReminder?> findForInvoice(String facturaId) async {

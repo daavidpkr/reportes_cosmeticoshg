@@ -36,6 +36,10 @@ type Reminder = {
   active?: boolean;
   notify_three_days?: boolean;
   notify_one_day?: boolean;
+  facturas_maestras?: {
+    cliente?: string | null;
+    nombre_comercial?: string | null;
+  } | null;
 };
 
 type Device = {
@@ -214,6 +218,9 @@ async function deliver(
           facturaId: reminder.factura_id,
           reminderId: reminder.id,
           notice,
+          cliente: reminder.facturas_maestras?.cliente ?? "",
+          nombreComercial:
+            reminder.facturas_maestras?.nombre_comercial ?? "",
         })),
       },
     );
@@ -349,7 +356,7 @@ async function processNewNotices(
     while (true) {
       let query = db.from("payment_reminders")
         .select(
-          "id,user_id,organization_id,factura_id,schedule_version,payment_date",
+          "id,user_id,organization_id,factura_id,schedule_version,payment_date,facturas_maestras(cliente,nombre_comercial)",
         )
         .eq("active", true).eq(flag, true).eq("payment_date", due)
         .order("id", { ascending: true }).limit(PAGE_SIZE);
@@ -404,7 +411,7 @@ async function processRetry(
   const [reminderResult, deviceResult] = await Promise.all([
     db.from("payment_reminders")
       .select(
-        "id,user_id,organization_id,factura_id,schedule_version,payment_date,active,notify_three_days,notify_one_day",
+        "id,user_id,organization_id,factura_id,schedule_version,payment_date,active,notify_three_days,notify_one_day,facturas_maestras(cliente,nombre_comercial)",
       )
       .eq("id", retry.reminder_id).maybeSingle(),
     db.from("fcm_devices").select("id,user_id,organization_id,token,active")

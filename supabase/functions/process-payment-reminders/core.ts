@@ -105,16 +105,22 @@ export function dueDateForNotice(today: string, notice: Notice): string {
   return addDays(today, notice === "three_days" ? 3 : 1);
 }
 
-export function visibleContent(notice: Notice) {
-  return notice === "three_days"
-    ? {
-      title: "Próximo pago",
-      body: "Tienes un pago programado dentro de 3 días.",
-    }
-    : {
-      title: "Pago programado para mañana",
-      body: "Recuerda revisar el pago pendiente.",
-    };
+export function visibleContent(input: {
+  facturaId: string;
+  cliente: string;
+  nombreComercial: string;
+  notice: Notice;
+}) {
+  const cliente = input.cliente.trim() || "Sin registrar";
+  const nombreComercial = input.nombreComercial.trim() || "Sin registrar";
+  const reminder = input.notice === "three_days"
+    ? "Tienes un pago programado dentro de 3 días."
+    : "Recuerda revisar el pago pendiente para mañana.";
+  return {
+    title: `Factura ${input.facturaId}`,
+    body:
+      `Cliente: ${cliente} · Nombre comercial: ${nombreComercial} · ${reminder}`,
+  };
 }
 
 export function buildFcmPayload(input: {
@@ -122,11 +128,13 @@ export function buildFcmPayload(input: {
   facturaId: string;
   reminderId: string;
   notice: Notice;
+  cliente: string;
+  nombreComercial: string;
 }) {
   return {
     message: {
       token: input.deviceToken,
-      notification: visibleContent(input.notice),
+      notification: visibleContent(input),
       data: {
         type: "recordatorio_pago",
         factura_id: input.facturaId,

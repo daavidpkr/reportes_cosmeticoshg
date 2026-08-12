@@ -110,12 +110,14 @@ Deno.test("America/Guayaquil cambia de fecha a las 05:00 UTC", () => {
   );
 });
 
-Deno.test("el payload no contiene datos financieros sensibles", () => {
+Deno.test("el payload visible identifica factura, cliente y nombre comercial", () => {
   const payload = buildFcmPayload({
     deviceToken: "token-placeholder",
     facturaId: "FAC-1",
     reminderId: "REM-1",
     notice: "three_days",
+    cliente: "Cliente Ejemplo",
+    nombreComercial: "Comercial Ejemplo",
   });
   const encoded = JSON.stringify(payload).toLowerCase();
   assertEquals(payload.message.data.type, "recordatorio_pago");
@@ -123,7 +125,11 @@ Deno.test("el payload no contiene datos financieros sensibles", () => {
     payload.message.android.notification.channel_id,
     "recordatorios_pago",
   );
-  for (const forbidden of ["monto", "saldo", "cliente", "venta", "abono"]) {
+  assertEquals(payload.message.notification.title, "Factura FAC-1");
+  assert(payload.message.notification.body.includes("Cliente Ejemplo"));
+  assert(payload.message.notification.body.includes("Comercial Ejemplo"));
+  assert(payload.message.notification.body.includes("dentro de 3 días"));
+  for (const forbidden of ["monto", "saldo", "venta", "abono"]) {
     assert(!encoded.includes(forbidden));
   }
 });

@@ -7,6 +7,8 @@ class PaymentReminder {
     required this.notifyThreeDays,
     required this.notifyOneDay,
     this.scheduleVersion = '',
+    this.cliente = '',
+    this.nombreComercial = '',
   });
 
   final String id;
@@ -16,6 +18,8 @@ class PaymentReminder {
   final bool notifyThreeDays;
   final bool notifyOneDay;
   final String scheduleVersion;
+  final String cliente;
+  final String nombreComercial;
 
   factory PaymentReminder.fromJson(Map<String, dynamic> json) =>
       PaymentReminder(
@@ -26,7 +30,15 @@ class PaymentReminder {
         notifyThreeDays: json['notify_three_days'] as bool? ?? true,
         notifyOneDay: json['notify_one_day'] as bool? ?? true,
         scheduleVersion: json['schedule_version']?.toString() ?? '',
+        cliente: _invoiceValue(json, 'cliente'),
+        nombreComercial: _invoiceValue(json, 'nombre_comercial'),
       );
+
+  static String _invoiceValue(Map<String, dynamic> json, String key) {
+    final invoice = json['facturas_maestras'];
+    if (invoice is Map) return invoice[key]?.toString() ?? '';
+    return '';
+  }
 }
 
 DateTime effectiveBusinessDate(DateTime value) {

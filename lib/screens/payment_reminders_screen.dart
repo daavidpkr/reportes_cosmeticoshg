@@ -151,8 +151,8 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
                                       : Icons.event_busy_outlined),
                                   title: Text('Factura ${item.facturaId}'),
                                   subtitle: Text(
-                                      '${_format(item.paymentDate)} · ${item.active ? 'Activo' : 'Inactivo'}\n${_notices(item)}'),
-                                  isThreeLine: true,
+                                      'Cliente: ${_valueOrFallback(item.cliente)}\nNombre comercial: ${_valueOrFallback(item.nombreComercial)}\n${_format(item.paymentDate)} · ${item.active ? 'Activo' : 'Inactivo'}\n${_notices(item)}'),
+                                  isThreeLine: false,
                                   trailing: item.active
                                       ? IconButton(
                                           tooltip:
@@ -193,6 +193,8 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
         if (item.notifyThreeDays) '3 días antes',
         if (item.notifyOneDay) '1 día antes'
       ].join(' y ');
+  static String _valueOrFallback(String value) =>
+      value.trim().isEmpty ? 'Sin registrar' : value.trim();
 }
 
 class _ReminderEditor extends StatefulWidget {
