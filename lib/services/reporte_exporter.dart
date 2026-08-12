@@ -236,13 +236,13 @@ class ReporteExporter {
               4: pw.FlexColumnWidth(1.25),
               5: pw.FlexColumnWidth(1.25),
               6: pw.FlexColumnWidth(1.45),
-              7: pw.FlexColumnWidth(1.5),
+              7: pw.FlexColumnWidth(1),
               8: pw.FlexColumnWidth(.9),
               9: pw.FlexColumnWidth(1.50),
               10: pw.FlexColumnWidth(1.1),
               11: pw.FlexColumnWidth(1),
             },
-            headers: const [
+            headers: [
               'NRO',
               'REF.',
               'CLIENTE',
@@ -255,7 +255,21 @@ class ReporteExporter {
               'ABONOS',
               'TOT. ABONO',
               'SALDO',
-            ],
+            ]
+                .map(
+                  (titulo) => pw.FittedBox(
+                    fit: pw.BoxFit.scaleDown,
+                    child: pw.Text(
+                      titulo,
+                      style: pw.TextStyle(
+                        color: PdfColors.white,
+                        fontWeight: pw.FontWeight.bold,
+                        fontSize: 7,
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
             data: filasConDatos
                 .map(
                   (fila) => [
@@ -289,6 +303,14 @@ class ReporteExporter {
               fontSize: 7,
             ),
             cellStyle: const pw.TextStyle(fontSize: 7),
+            cellBuilder: (_, contenido, __) => pw.FittedBox(
+              fit: pw.BoxFit.scaleDown,
+              alignment: pw.Alignment.centerLeft,
+              child: pw.Text(
+                contenido.toString(),
+                style: const pw.TextStyle(fontSize: 7),
+              ),
+            ),
             cellPadding: const pw.EdgeInsets.symmetric(
               horizontal: 3,
               vertical: 2.5,
