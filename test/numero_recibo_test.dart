@@ -9,8 +9,8 @@ void main() {
       }
     });
 
-    test('rechaza vacío, cero, negativos, decimales y caracteres', () {
-      expect(validarNumeroRecibo(''), 'Ingrese el número de recibo.');
+    test('acepta vacío y rechaza cero, negativos, decimales y caracteres', () {
+      expect(validarNumeroRecibo(''), isNull);
       expect(
         validarNumeroRecibo('0'),
         'El número de recibo debe ser mayor que cero.',

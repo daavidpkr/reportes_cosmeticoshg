@@ -2,7 +2,7 @@ const int maxNumeroReciboSeguro = 9007199254740991;
 
 String? validarNumeroRecibo(String valor) {
   final limpio = valor.trim();
-  if (limpio.isEmpty) return 'Ingrese el número de recibo.';
+  if (limpio.isEmpty) return null;
   if (!RegExp(r'^\d+$').hasMatch(limpio)) {
     return 'Ingrese un número de recibo válido, utilizando únicamente '
         'números enteros.';

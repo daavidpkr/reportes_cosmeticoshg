@@ -208,10 +208,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
             numero,
             () => FilaVenta(numero: numero),
           );
+          final referenciaNube = dato['ref_fact']?.toString().trim() ?? '';
           fila
-            ..referencia = dato['ref_fact']?.toString() ?? ''
             ..vendedor = dato['vendedor']?.toString() ?? ''
             ..esmalte = (dato['esmaltes'] as num?)?.toInt() ?? 0;
+          // Legacy rows can have an empty ref_fact even though the locally
+          // imported report still has the reference (most visibly, row 1).
+          // Do not erase that valid value while synchronizing.
+          if (referenciaNube.isNotEmpty) fila.referencia = referenciaNube;
           final abonos = dato['abonos'];
           if (abonos is List) {
             final comentarios = dato['comentarios_abonos'];
@@ -566,24 +570,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
                   controller: reciboController,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (valor) {
-                    if ((valor ?? '').trim().isEmpty &&
-                        abono.numeroRecibo == null &&
-                        abono.valor > 0 &&
-                        (double.tryParse(montoController.text
-                                    .replaceAll(',', '.')) ??
-                                0) ==
-                            abono.valor) {
-                      return null;
-                    }
-                    return validarNumeroRecibo(valor ?? '');
-                  },
-                  decoration: InputDecoration(
-                    labelText: 'Número de recibo *',
-                    helperText: abono.numeroRecibo == null && abono.valor > 0
-                        ? 'Sin número de recibo (registro histórico)'
-                        : null,
-                    border: const OutlineInputBorder(),
+                  validator: (valor) => validarNumeroRecibo(valor ?? ''),
+                  decoration: const InputDecoration(
+                    labelText: 'Número de recibo (opcional)',
+                    border: OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 16),

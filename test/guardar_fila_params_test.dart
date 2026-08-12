@@ -7,6 +7,7 @@ void main() {
     final params = construirParametrosGuardarFila(
       fila: FilaVenta(
         numero: 1,
+        referencia: 'REF-1',
         numeroFactura: 'FACT-1',
         cliente: 'Cliente',
         fecha: '11/08/2026',
@@ -18,6 +19,8 @@ void main() {
     );
 
     expect(params['p_payments'], isEmpty);
+    expect(params['p_ref_fact'], 'REF-1');
+    expect(params['p_invoice_number'], 'FACT-1');
     expect(params['p_payment_receipts'], isEmpty);
     expect(params['p_payment_comments'], isEmpty);
   });

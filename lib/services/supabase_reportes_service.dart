@@ -24,7 +24,8 @@ Map<String, dynamic> construirParametrosGuardarFila({
     'p_request_id': requestId,
     'p_row_number': fila.numero,
     'p_report_name': mesReporte,
-    'p_ref_fact': fila.numeroFactura.trim(),
+    'p_ref_fact': fila.referencia.trim(),
+    'p_invoice_number': fila.numeroFactura.trim(),
     'p_cliente': fila.cliente,
     'p_commercial_name': fila.nombreComercial,
     'p_invoice_date': invoiceDate?.toIso8601String().substring(0, 10),
@@ -204,7 +205,7 @@ class SupabaseReportesService {
       cliente: respuesta['cliente']?.toString() ?? '',
       nombreComercial: respuesta['nombre_comercial']?.toString() ?? '',
       fecha: respuesta['fecha']?.toString() ?? '',
-      secuencial: respuesta['ref_fact']?.toString() ?? ref,
+      secuencial: respuesta['nro_fact']?.toString() ?? ref,
       total: (respuesta['venta'] as num?)?.toDouble() ?? 0,
     );
   }
@@ -218,7 +219,7 @@ class SupabaseReportesService {
   }
 
   Future<void> guardarFila(FilaVenta fila, String mesReporte) async {
-    final referencia = fila.numeroFactura.trim();
+    final referencia = fila.referencia.trim();
 
     final date = parseInvoiceDate(fila.fecha);
     if (referencia.isNotEmpty && date == null) {
