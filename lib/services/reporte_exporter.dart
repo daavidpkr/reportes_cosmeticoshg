@@ -220,7 +220,7 @@ class ReporteExporter {
     documento.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4.landscape,
-        margin: const pw.EdgeInsets.all(24),
+        margin: const pw.EdgeInsets.symmetric(horizontal: 18, vertical: 20),
         header: (_) => _encabezado(
           '${vendedor == null ? 'REPORTE GENERAL DE VENTAS' : 'REPORTE DE VENTAS - ${nombresVendedores[vendedor] ?? vendedor}'}${periodo == null ? '' : ' - $periodo'}',
           rosa,
@@ -228,6 +228,20 @@ class ReporteExporter {
         footer: _piePagina,
         build: (_) => [
           pw.TableHelper.fromTextArray(
+            columnWidths: const {
+              0: pw.FlexColumnWidth(.55),
+              1: pw.FlexColumnWidth(.65),
+              2: pw.FlexColumnWidth(3.5),
+              3: pw.FlexColumnWidth(2.55),
+              4: pw.FlexColumnWidth(1.25),
+              5: pw.FlexColumnWidth(1.25),
+              6: pw.FlexColumnWidth(1.45),
+              7: pw.FlexColumnWidth(.8),
+              8: pw.FlexColumnWidth(.9),
+              9: pw.FlexColumnWidth(1.55),
+              10: pw.FlexColumnWidth(1.1),
+              11: pw.FlexColumnWidth(1),
+            },
             headers: const [
               'NRO',
               'REF.',
@@ -272,12 +286,12 @@ class ReporteExporter {
             headerStyle: pw.TextStyle(
               color: PdfColors.white,
               fontWeight: pw.FontWeight.bold,
-              fontSize: 8,
+              fontSize: 7,
             ),
-            cellStyle: const pw.TextStyle(fontSize: 8),
+            cellStyle: const pw.TextStyle(fontSize: 7),
             cellPadding: const pw.EdgeInsets.symmetric(
-              horizontal: 4,
-              vertical: 5,
+              horizontal: 3,
+              vertical: 2.5,
             ),
             border: pw.TableBorder.all(color: PdfColors.grey400, width: .5),
             oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
