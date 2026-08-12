@@ -34,7 +34,10 @@ Map<String, dynamic> construirParametrosGuardarFila({
     'p_nail_polish': fila.esmalte,
     'p_payments': payments.map((item) => item.valor).toList(),
     'p_payment_receipts': payments.map((item) => item.numeroRecibo).toList(),
-    'p_payment_comments': payments.map((item) => item.comentario).toList(),
+    'p_payment_comments': payments
+        .map((item) =>
+            item.comentario.trim().isEmpty ? null : item.comentario.trim())
+        .toList(),
   };
 }
 

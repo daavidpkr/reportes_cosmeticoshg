@@ -534,8 +534,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
     FilaVenta fila,
     int indice, {
     bool nuevo = false,
+    Abono? borrador,
   }) async {
-    final abono = nuevo ? Abono() : fila.abonos[indice];
+    final abono = borrador ?? (nuevo ? Abono() : fila.abonos[indice]);
     final montoController = TextEditingController(
       text: abono.valor == 0 ? '' : abono.valor.toStringAsFixed(2),
     );
@@ -572,23 +573,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
                 TextFormField(
                   controller: reciboController,
                   keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (valor) {
-                    final monto = double.tryParse(
-                      montoController.text.trim().replaceAll(',', '.'),
-                    );
-                    final modificoHistorico = abono.numeroRecibo == null &&
-                        monto != null &&
-                        monto != abono.valor;
-                    return validarNumeroRecibo(
-                      valor ?? '',
-                      obligatorio: nuevo ||
-                          abono.numeroRecibo != null ||
-                          modificoHistorico,
-                    );
-                  },
+                  validator: (valor) => validarNumeroRecibo(valor ?? ''),
                   decoration: const InputDecoration(
-                    labelText: 'Número de recibo',
+                    labelText: 'Número de recibo (opcional)',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -668,13 +655,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
       );
     } catch (error) {
       if (!mounted) return;
-      final esReciboInvalido = error is PostgrestException &&
-          (error.code == 'P0001' ||
-              error.message.contains('receipt number is required'));
       _mostrarErrorNube(
-        esReciboInvalido
-            ? 'No se guardó el abono. Ingresa un número de recibo válido.'
-            : 'No se guardó el abono. Inténtalo nuevamente.',
+        'No fue posible guardar el abono. Inténtalo nuevamente.',
+      );
+      await _editarAbono(
+        fila,
+        indice,
+        nuevo: nuevo,
+        borrador: abonoPropuesto,
       );
       return;
     }

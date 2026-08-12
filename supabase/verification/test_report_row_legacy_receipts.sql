@@ -15,41 +15,45 @@ begin
     array[null,2002]::bigint[],'["Histórico","Existente"]'::jsonb,test_report
   );
 
-  -- The unchanged receipt-less legacy payment may move when a valid new one is
-  -- inserted. This proves the comparison does not rely on array position.
+  -- New and historical payments may omit receipts without losing positions.
   perform public.enterprise_save_report_row(
     gen_random_uuid(),test_row,test_report,'','','',null,100,'',0,
-    '[7,13.50,20]'::jsonb,'[7007,null,2002]'::jsonb,
-    '["Nuevo","Histórico","Existente"]'::jsonb,''
+    '[9.90,13.50,20]'::jsonb,'[null,null,2002]'::jsonb,
+    '[null,"Histórico","Existente"]'::jsonb,''
   );
   if not exists (
     select 1 from public.reportes_ventas
     where organization_id=test_org and nro_fila=test_row
       and mes_reporte=test_report
-      and abonos='[7,13.50,20]'::jsonb
-      and numeros_recibo=array[7007,null,2002]::bigint[]
+      and abonos='[9.90,13.50,20]'::jsonb
+      and numeros_recibo=array[null,null,2002]::bigint[]
+      and comentarios_abonos='[null,"Histórico","Existente"]'::jsonb
   ) then
     raise exception 'valid payment tuple did not persist';
+  end if;
+
+  -- Removing the middle tuple keeps the remaining value/receipt/comment pairs.
+  perform public.enterprise_save_report_row(
+    gen_random_uuid(),test_row,test_report,'','','',null,100,'',0,
+    '[9.90,20]'::jsonb,'[null,2002]'::jsonb,
+    '[null,"Existente"]'::jsonb,''
+  );
+  if not exists (
+    select 1 from public.reportes_ventas
+    where organization_id=test_org and nro_fila=test_row
+      and mes_reporte=test_report
+      and abonos='[9.90,20]'::jsonb
+      and numeros_recibo=array[null,2002]::bigint[]
+      and comentarios_abonos='[null,"Existente"]'::jsonb
+  ) then
+    raise exception 'payment tuples became misaligned after deletion';
   end if;
 
   begin
     perform public.enterprise_save_report_row(
       gen_random_uuid(),test_row,test_report,'','','',null,100,'',0,
-      '[7,14,20]'::jsonb,'[7007,null,2002]'::jsonb,
-      '["Nuevo","Histórico modificado","Existente"]'::jsonb,''
-    );
-    raise exception 'modified legacy payment was accepted without a receipt';
-  exception when raise_exception then
-    if sqlerrm <> 'receipt number is required for new or modified payments' then
-      raise;
-    end if;
-  end;
-
-  begin
-    perform public.enterprise_save_report_row(
-      gen_random_uuid(),test_row,test_report,'','','',null,100,'',0,
-      '[7,13.50,20,3]'::jsonb,'[7007,null,2002,0]'::jsonb,
-      '["Nuevo","Histórico","Existente",""]'::jsonb,''
+      '[9.90,20,3]'::jsonb,'[null,2002,0]'::jsonb,
+      '[null,"Existente",null]'::jsonb,''
     );
     raise exception 'zero receipt was accepted';
   exception when raise_exception then

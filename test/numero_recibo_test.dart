@@ -9,11 +9,9 @@ void main() {
       }
     });
 
-    test('acepta vacío solo para un histórico y exige recibo nuevo', () {
+    test('acepta vacío para cualquier abono', () {
       expect(validarNumeroRecibo(''), isNull);
-      expect(validarNumeroRecibo('', obligatorio: true),
-          'Ingresa un número de recibo válido');
-      expect(validarNumeroRecibo('   ', obligatorio: true), isNotNull);
+      expect(validarNumeroRecibo('   '), isNull);
       expect(validarNumeroRecibo('0'), isNotNull);
       for (final value in [
         '-25',

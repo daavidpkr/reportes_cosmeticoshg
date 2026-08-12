@@ -2,19 +2,19 @@
 // PostgreSQL bigint y no pierde precisión cuando Flutter se ejecuta en web.
 const int maxNumeroReciboSeguro = 9007199254740991;
 
-String? validarNumeroRecibo(String valor, {bool obligatorio = false}) {
+String? validarNumeroRecibo(String valor) {
   final limpio = valor.trim();
-  if (limpio.isEmpty) {
-    return obligatorio ? 'Ingresa un número de recibo válido' : null;
-  }
+  if (limpio.isEmpty) return null;
   if (!RegExp(r'^\d+$').hasMatch(limpio)) {
-    return 'Ingresa un número de recibo válido';
+    return 'El número de recibo debe ser un entero mayor que cero.';
   }
   final numero = int.tryParse(limpio);
   if (numero == null || numero > maxNumeroReciboSeguro) {
-    return 'Ingresa un número de recibo válido';
+    return 'El número de recibo debe ser un entero mayor que cero.';
   }
-  if (numero == 0) return 'Ingresa un número de recibo válido';
+  if (numero == 0) {
+    return 'El número de recibo debe ser un entero mayor que cero.';
+  }
   return null;
 }
 

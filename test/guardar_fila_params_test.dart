@@ -67,4 +67,38 @@ void main() {
     expect(params['p_payment_receipts'], [1001, 1003]);
     expect(params['p_payment_comments'], ['Primero', 'Final']);
   });
+
+  test('optional receipt and comment keep null positions', () {
+    final params = construirParametrosGuardarFila(
+      fila: FilaVenta(
+        numero: 1,
+        abonos: [Abono(valor: 9.90), Abono(valor: 8, comentario: 'Efectivo')],
+      ),
+      mesReporte: 'Agosto 2026',
+      requestId: '00000000-0000-0000-0000-000000000004',
+    );
+
+    expect(params['p_payments'], [9.90, 8]);
+    expect(params['p_payment_receipts'], [null, null]);
+    expect(params['p_payment_comments'], [null, 'Efectivo']);
+  });
+
+  test('three mixed receipts preserve their exact indexes', () {
+    final params = construirParametrosGuardarFila(
+      fila: FilaVenta(
+        numero: 1,
+        abonos: [
+          Abono(valor: 9.90, comentario: 'Sin recibo'),
+          Abono(valor: 10, numeroRecibo: 4587, comentario: 'Transferencia'),
+          Abono(valor: 11),
+        ],
+      ),
+      mesReporte: 'Agosto 2026',
+      requestId: '00000000-0000-0000-0000-000000000005',
+    );
+
+    expect(params['p_payments'], [9.90, 10, 11]);
+    expect(params['p_payment_receipts'], [null, 4587, null]);
+    expect(params['p_payment_comments'], ['Sin recibo', 'Transferencia', null]);
+  });
 }
