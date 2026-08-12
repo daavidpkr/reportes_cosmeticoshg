@@ -1783,6 +1783,12 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ),
           ),
           const SizedBox(width: 10),
+          IconButton.filledTonal(
+            tooltip: 'Crear nuevo mes',
+            onPressed: _nuevoReporte,
+            icon: const Icon(Icons.add, size: 18),
+          ),
+          const SizedBox(width: 6),
           SizedBox(
             width: 135,
             child: DropdownButtonFormField<String>(
@@ -1949,19 +1955,19 @@ class _ReporteScreenState extends State<ReporteScreen> {
             children: [
               Expanded(
                 child: FilledButton.tonalIcon(
-                  onPressed: _nuevoReporte,
+                  onPressed: _abrirCargaFacturas,
                   style: _estiloAccionMovil,
-                  icon: const Icon(Icons.add, size: 17),
-                  label: const Text('Nuevo mes'),
+                  icon: const Icon(Icons.upload_file, size: 17),
+                  label: Text('Subir facturas (${_facturas.cantidad})'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton.tonalIcon(
-                  onPressed: _abrirCargaFacturas,
+                  onPressed: _guardarResumenMensual,
                   style: _estiloAccionMovil,
-                  icon: const Icon(Icons.upload_file, size: 17),
-                  label: Text('Subir facturas (${_facturas.cantidad})'),
+                  icon: const Icon(Icons.analytics_outlined, size: 17),
+                  label: const Text('Reporte mensual'),
                 ),
               ),
             ],
@@ -2682,6 +2688,12 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ],
           ),
           const Spacer(),
+          OutlinedButton.icon(
+            onPressed: _nuevoReporte,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Nuevo mes'),
+          ),
+          const SizedBox(width: 10),
           SizedBox(
             width: 190,
             child: DropdownButtonFormField<String>(
@@ -2825,8 +2837,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
             const SizedBox(width: 10),
             _filtroEstadoRedisenado(),
             const SizedBox(width: 10),
-            _botonBarra(Icons.add, 'Nuevo mes', _nuevoReporte),
-            const SizedBox(width: 8),
             _botonBarra(
               Icons.upload_file,
               'Subir facturas (${_facturas.cantidad})',
@@ -2843,6 +2853,12 @@ class _ReporteScreenState extends State<ReporteScreen> {
               onPressed: _guardar,
               icon: const Icon(Icons.download, size: 18),
               label: const Text('Descargar PDF'),
+            ),
+            const SizedBox(width: 8),
+            _botonBarra(
+              Icons.analytics_outlined,
+              'Generar reporte mensual',
+              _guardarResumenMensual,
             ),
             _botonZoom(),
           ],
@@ -2862,6 +2878,38 @@ class _ReporteScreenState extends State<ReporteScreen> {
     if (mounted) {
       setState(() {});
       await _guardarProgreso();
+    }
+  }
+
+  Future<void> _guardarResumenMensual() async {
+    await _guardarProgreso();
+    if (!mounted) return;
+    final filas = _filas.where((fila) => fila.tieneDatos).toList();
+    if (filas.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay datos para generar el reporte.')),
+      );
+      return;
+    }
+    try {
+      final ruta = await _exporter.guardarResumenMensual(
+        filas,
+        periodo: _reportes.activo.nombre,
+        nombresVendedores: {
+          for (final vendedor in _vendedores.vendedores)
+            vendedor.etiqueta: vendedor.nombre,
+        },
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Reporte mensual guardado en: $ruta')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text('No se pudo guardar el reporte mensual: $error')),
+      );
     }
   }
 
@@ -3333,7 +3381,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       );
 
   Widget _selectorVendedor(FilaVenta fila) => SizedBox(
-        width: 82 * _escalaReporte,
+        width: 106 * _escalaReporte,
         child: DropdownButtonFormField<String>(
           initialValue: fila.vendedor.isEmpty ? null : fila.vendedor,
           isExpanded: true,
@@ -3361,9 +3409,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
               .map<Widget>(
             (item) => Align(
               alignment: Alignment.centerLeft,
-              child: Text(
-                item.codigo.isEmpty ? item.nombre : item.codigo,
-                overflow: TextOverflow.ellipsis,
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  item.codigo.isEmpty ? item.nombre : item.codigo,
+                  maxLines: 1,
+                ),
               ),
             ),
           )

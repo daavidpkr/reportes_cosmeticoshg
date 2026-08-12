@@ -46,6 +46,154 @@ class ReporteExporter {
     return archivo.path;
   }
 
+  Future<String> guardarResumenMensual(
+    List<FilaVenta> filas, {
+    required String periodo,
+    Map<String, String> nombresVendedores = const {},
+  }) async {
+    final periodoArchivo = periodo
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
+    final nombreArchivo = 'resumen_mensual_$periodoArchivo.pdf';
+    final bytes = await _generarResumenMensualPdf(
+      filas.where((fila) => fila.tieneDatos).toList(),
+      periodo: periodo,
+      nombresVendedores: nombresVendedores,
+    );
+
+    if (kIsWeb) {
+      descargarArchivoWeb(bytes, nombreArchivo);
+      return nombreArchivo;
+    }
+
+    final directorio = await getApplicationDocumentsDirectory();
+    final archivo = File(
+      '${directorio.path}${Platform.pathSeparator}$nombreArchivo',
+    );
+    await archivo.writeAsBytes(bytes, flush: true);
+    return archivo.path;
+  }
+
+  Future<Uint8List> _generarResumenMensualPdf(
+    List<FilaVenta> filas, {
+    required String periodo,
+    required Map<String, String> nombresVendedores,
+  }) async {
+    final documento = pw.Document(
+      title: 'Resumen mensual - Cosméticos HG - $periodo',
+      author: 'Cosméticos HG',
+    );
+    final rosa = PdfColor.fromHex('#B71157');
+    final ventas = filas.fold(0.0, (suma, fila) => suma + fila.venta);
+    final cobros = filas.fold(0.0, (suma, fila) => suma + fila.totalAbonos);
+    final saldo = filas.fold(0.0, (suma, fila) => suma + fila.saldo);
+    final esmaltes = filas.fold(0, (suma, fila) => suma + fila.esmalte);
+    final pagadas = filas.where((fila) => fila.pagada).length;
+    final pendientes = filas.length - pagadas;
+
+    final porVendedor = <String, _ResumenVendedorPdf>{};
+    for (final fila in filas) {
+      final clave = fila.vendedor.trim();
+      final nombre =
+          clave.isEmpty ? 'Sin vendedor' : nombresVendedores[clave] ?? clave;
+      final resumen = porVendedor.putIfAbsent(
+        nombre,
+        () => _ResumenVendedorPdf(nombre),
+      );
+      resumen.facturas += 1;
+      resumen.esmaltes += fila.esmalte;
+      resumen.ventas += fila.venta;
+      resumen.cobros += fila.totalAbonos;
+      resumen.saldo += fila.saldo;
+    }
+    final vendedores = porVendedor.values.toList()
+      ..sort((a, b) => b.ventas.compareTo(a.ventas));
+    final porcentajeCobrado = ventas == 0 ? 0.0 : cobros / ventas * 100;
+    final descripcion = filas.isEmpty
+        ? 'No se registraron ventas durante $periodo.'
+        : 'Durante $periodo se registraron ${filas.length} facturas por '
+            '${_dinero(ventas)}. Se cobraron ${_dinero(cobros)} '
+            '(${porcentajeCobrado.toStringAsFixed(1)} % de las ventas) y quedó '
+            'un saldo de ${_dinero(saldo)}. Se vendieron $esmaltes esmaltes; '
+            '$pagadas facturas quedaron pagadas y $pendientes pendientes.';
+
+    documento.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        header: (_) =>
+            _encabezado('REPORTE MENSUAL DE ESTADÍSTICAS - $periodo', rosa),
+        footer: _piePagina,
+        build: (_) => [
+          pw.Container(
+            padding: const pw.EdgeInsets.all(12),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey100,
+              border: pw.Border.all(color: PdfColors.grey400, width: .5),
+            ),
+            child:
+                pw.Text(descripcion, style: const pw.TextStyle(fontSize: 10)),
+          ),
+          pw.SizedBox(height: 18),
+          pw.Wrap(
+            spacing: 18,
+            runSpacing: 10,
+            children: [
+              _total('Facturas', filas.length.toDouble()),
+              _total('Esmaltes', esmaltes.toDouble()),
+              _total('Ventas', ventas, dinero: true),
+              _total('Cobros', cobros, dinero: true),
+              _total('Por cobrar', saldo, dinero: true),
+            ],
+          ),
+          pw.SizedBox(height: 22),
+          pw.Text(
+            'RESULTADOS POR VENDEDOR',
+            style: pw.TextStyle(
+              color: rosa,
+              fontSize: 12,
+              fontWeight: pw.FontWeight.bold,
+            ),
+          ),
+          pw.SizedBox(height: 8),
+          pw.TableHelper.fromTextArray(
+            headers: const [
+              'VENDEDOR',
+              'FACTURAS',
+              'ESMALTES',
+              'VENTAS',
+              'COBROS',
+              'POR COBRAR',
+            ],
+            data: vendedores
+                .map((vendedor) => [
+                      vendedor.nombre,
+                      vendedor.facturas,
+                      vendedor.esmaltes,
+                      _dinero(vendedor.ventas),
+                      _dinero(vendedor.cobros),
+                      _dinero(vendedor.saldo),
+                    ])
+                .toList(),
+            headerDecoration: pw.BoxDecoration(color: rosa),
+            headerStyle: pw.TextStyle(
+              color: PdfColors.white,
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 8,
+            ),
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            cellPadding:
+                const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 6),
+            border: pw.TableBorder.all(color: PdfColors.grey400, width: .5),
+            oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+          ),
+        ],
+      ),
+    );
+    return documento.save();
+  }
+
   Future<Uint8List> _generarPdf(
     List<FilaVenta> filas, {
     String? vendedor,
@@ -267,4 +415,15 @@ class ReporteExporter {
     if (!RegExp(r'^\d+$').hasMatch(limpio)) return valor;
     return limpio.replaceFirst(RegExp(r'^0+(?=\d)'), '');
   }
+}
+
+class _ResumenVendedorPdf {
+  _ResumenVendedorPdf(this.nombre);
+
+  final String nombre;
+  int facturas = 0;
+  int esmaltes = 0;
+  double ventas = 0;
+  double cobros = 0;
+  double saldo = 0;
 }

@@ -28,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _correoController = TextEditingController();
   final _contrasenaController = TextEditingController();
   bool _ocultarContrasena = true;
+  bool _guardarContrasena = true;
   bool _iniciandoSesion = false;
   String? _errorAcceso;
 
@@ -55,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
           password: contrasena,
         );
       }
-      TextInput.finishAutofillContext(shouldSave: true);
+      TextInput.finishAutofillContext(shouldSave: _guardarContrasena);
     } on AuthException catch (error) {
       if (mounted) setState(() => _errorAcceso = _mensajeAuth(error));
     } catch (_) {
@@ -194,6 +195,30 @@ class _LoginScreenState extends State<LoginScreen> {
                     _buildEmailField(),
                     const SizedBox(height: 14),
                     _buildPasswordField(),
+                    const SizedBox(height: 6),
+                    CheckboxListTile(
+                      key: const Key('guardarContrasena'),
+                      value: _guardarContrasena,
+                      onChanged: _iniciandoSesion
+                          ? null
+                          : (value) => setState(
+                                () => _guardarContrasena = value ?? false,
+                              ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                      title: const Text(
+                        'Guardar contraseña',
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      subtitle: Text(
+                        'Usar el administrador de contraseñas del navegador',
+                        style: TextStyle(
+                          color: context.hg.mutedText,
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ),
                     if (_errorAcceso != null) ...[
                       const SizedBox(height: 14),
                       Semantics(
