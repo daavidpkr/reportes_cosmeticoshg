@@ -535,10 +535,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
     int indice, {
     bool nuevo = false,
   }) async {
-    final abono = fila.abonos[indice];
-    final valorAnterior = abono.valor;
-    final reciboAnterior = abono.numeroRecibo;
-    final comentarioAnterior = abono.comentario;
+    final abono = nuevo ? Abono() : fila.abonos[indice];
     final montoController = TextEditingController(
       text: abono.valor == 0 ? '' : abono.valor.toStringAsFixed(2),
     );
@@ -558,7 +555,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(
+                TextFormField(
                   controller: montoController,
                   autofocus: true,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -569,15 +566,29 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     prefixText: '\$ ',
                     border: OutlineInputBorder(),
                   ),
+                  validator: (valor) => validarValorAbono(valor ?? ''),
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: reciboController,
                   keyboardType: TextInputType.number,
                   inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (valor) => validarNumeroRecibo(valor ?? ''),
+                  validator: (valor) {
+                    final monto = double.tryParse(
+                      montoController.text.trim().replaceAll(',', '.'),
+                    );
+                    final modificoHistorico = abono.numeroRecibo == null &&
+                        monto != null &&
+                        monto != abono.valor;
+                    return validarNumeroRecibo(
+                      valor ?? '',
+                      obligatorio: nuevo ||
+                          abono.numeroRecibo != null ||
+                          modificoHistorico,
+                    );
+                  },
                   decoration: const InputDecoration(
-                    labelText: 'Número de recibo (opcional)',
+                    labelText: 'Número de recibo',
                     border: OutlineInputBorder(),
                   ),
                 ),
@@ -604,9 +615,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
               if (!(formKey.currentState?.validate() ?? false)) return;
               Navigator.pop(context, (
                 double.tryParse(montoController.text.replaceAll(',', '.')) ?? 0,
-                reciboController.text.isEmpty
+                reciboController.text.trim().isEmpty
                     ? null
-                    : int.parse(reciboController.text),
+                    : int.parse(reciboController.text.trim()),
                 comentarioController.text.trim(),
               ));
             },
@@ -621,8 +632,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
     if (!mounted) return;
     if (resultado != null) {
       final totalPropuesto = fila.totalAbonos - abono.valor + resultado.$1;
-      if (resultado.$1 < 0 || totalPropuesto > fila.venta + 0.005) {
-        if (nuevo) setState(() => fila.abonos.removeAt(indice));
+      if (totalPropuesto > fila.venta + 0.005) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: context.hg.warning,
@@ -635,33 +645,51 @@ class _ReporteScreenState extends State<ReporteScreen> {
         return;
       }
     }
-    setState(() {
-      if (resultado == null) {
-        if (nuevo) fila.abonos.removeAt(indice);
-      } else {
-        abono.valor = resultado.$1;
-        abono.numeroRecibo = resultado.$2;
-        abono.comentario = resultado.$3;
-        _asegurarFilaVacia();
-      }
-    });
-    _guardarProgreso();
-    if (resultado != null && !await _guardarFilaNube(fila)) {
-      if (!mounted) return;
-      setState(() {
-        abono
-          ..valor = valorAnterior
-          ..numeroRecibo = reciboAnterior
-          ..comentario = comentarioAnterior;
-        if (nuevo) fila.abonos.remove(abono);
-      });
-      await _guardarProgreso();
+    if (resultado == null) return;
+
+    // Persistimos una copia: totales y saldo visibles no cambian hasta que la
+    // RPC confirme. Ante cualquier error, el estado local permanece intacto.
+    final propuesta = FilaVenta.fromJson(fila.toJson());
+    final abonoPropuesto = Abono(
+      valor: resultado.$1,
+      numeroRecibo: resultado.$2,
+      comentario: resultado.$3,
+    );
+    if (nuevo) {
+      propuesta.abonos.add(abonoPropuesto);
+    } else {
+      propuesta.abonos[indice] = abonoPropuesto;
     }
+    late final FilaVenta confirmada;
+    try {
+      confirmada = await _supabaseReportes.guardarFila(
+        propuesta,
+        _reportes.activo.nombre,
+      );
+    } catch (error) {
+      if (!mounted) return;
+      final esReciboInvalido = error is PostgrestException &&
+          (error.code == 'P0001' ||
+              error.message.contains('receipt number is required'));
+      _mostrarErrorNube(
+        esReciboInvalido
+            ? 'No se guardó el abono. Ingresa un número de recibo válido.'
+            : 'No se guardó el abono. Inténtalo nuevamente.',
+      );
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      fila.abonos
+        ..clear()
+        ..addAll(confirmada.abonos);
+      _asegurarFilaVacia();
+    });
+    await _guardarProgreso();
   }
 
   Future<void> _agregarAbono(FilaVenta fila) async {
-    setState(() => fila.abonos.add(Abono()));
-    await _editarAbono(fila, fila.abonos.length - 1, nuevo: true);
+    await _editarAbono(fila, fila.abonos.length, nuevo: true);
   }
 
   Future<void> _gestionarAbonosAdicionales(FilaVenta fila) async {

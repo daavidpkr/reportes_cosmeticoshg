@@ -311,7 +311,7 @@ class SupabaseReportesService {
     }
   }
 
-  Future<void> guardarFila(FilaVenta fila, String mesReporte) async {
+  Future<FilaVenta> guardarFila(FilaVenta fila, String mesReporte) async {
     final referencia = fila.referencia.trim();
 
     final date = parseInvoiceDate(fila.fecha);
@@ -327,6 +327,33 @@ class SupabaseReportesService {
         invoiceDate: date,
       ),
     );
+    final persistida = await _client
+        .from('reportes_ventas')
+        .select('abonos,numeros_recibo,comentarios_abonos')
+        .eq('nro_fila', fila.numero)
+        .eq('mes_reporte', mesReporte)
+        .single();
+    final abonos = persistida['abonos'] as List? ?? const [];
+    final recibos = persistida['numeros_recibo'] as List? ?? const [];
+    final comentarios = persistida['comentarios_abonos'] as List? ?? const [];
+    final confirmada = FilaVenta.fromJson(fila.toJson());
+    confirmada.abonos
+      ..clear()
+      ..addAll(List<Abono>.generate(abonos.length, (indice) {
+        return Abono(
+          valor: (abonos[indice] as num).toDouble(),
+          numeroRecibo: indice < recibos.length && recibos[indice] != null
+              ? int.parse(recibos[indice].toString())
+              : null,
+          comentario: indice < comentarios.length
+              ? comentarios[indice]?.toString() ?? ''
+              : '',
+        );
+      }));
+    while (confirmada.abonos.length < 2) {
+      confirmada.abonos.add(Abono());
+    }
+    return confirmada;
   }
 
   Future<void> eliminarFila(int numeroFila, String mesReporte) =>

@@ -9,12 +9,12 @@ void main() {
       }
     });
 
-    test('acepta vacío y rechaza cero, negativos, decimales y caracteres', () {
+    test('acepta vacío solo para un histórico y exige recibo nuevo', () {
       expect(validarNumeroRecibo(''), isNull);
-      expect(
-        validarNumeroRecibo('0'),
-        'El número de recibo debe ser mayor que cero.',
-      );
+      expect(validarNumeroRecibo('', obligatorio: true),
+          'Ingresa un número de recibo válido');
+      expect(validarNumeroRecibo('   ', obligatorio: true), isNotNull);
+      expect(validarNumeroRecibo('0'), isNotNull);
       for (final value in [
         '-25',
         '12.5',
@@ -24,9 +24,18 @@ void main() {
         'REC-123',
         '12 34',
         '9007199254740992',
+        '9223372036854775808',
       ]) {
-        expect(validarNumeroRecibo(value), contains('números enteros'));
+        expect(validarNumeroRecibo(value), isNotNull);
       }
+    });
+
+    test('el valor del abono debe ser numérico y mayor que cero', () {
+      for (final value in ['', '0', '-1', 'letras', 'Infinity']) {
+        expect(validarValorAbono(value), isNotNull);
+      }
+      expect(validarValorAbono('13.50'), isNull);
+      expect(validarValorAbono('13,50'), isNull);
     });
 
     test('serializa, recupera y conserva la ausencia histórica', () {

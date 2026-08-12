@@ -1,18 +1,28 @@
+// Supabase serializa este valor como JSON. Este límite es positivo, cabe en
+// PostgreSQL bigint y no pierde precisión cuando Flutter se ejecuta en web.
 const int maxNumeroReciboSeguro = 9007199254740991;
 
-String? validarNumeroRecibo(String valor) {
+String? validarNumeroRecibo(String valor, {bool obligatorio = false}) {
   final limpio = valor.trim();
-  if (limpio.isEmpty) return null;
+  if (limpio.isEmpty) {
+    return obligatorio ? 'Ingresa un número de recibo válido' : null;
+  }
   if (!RegExp(r'^\d+$').hasMatch(limpio)) {
-    return 'Ingrese un número de recibo válido, utilizando únicamente '
-        'números enteros.';
+    return 'Ingresa un número de recibo válido';
   }
   final numero = int.tryParse(limpio);
   if (numero == null || numero > maxNumeroReciboSeguro) {
-    return 'Ingrese un número de recibo válido, utilizando únicamente '
-        'números enteros.';
+    return 'Ingresa un número de recibo válido';
   }
-  if (numero == 0) return 'El número de recibo debe ser mayor que cero.';
+  if (numero == 0) return 'Ingresa un número de recibo válido';
+  return null;
+}
+
+String? validarValorAbono(String valor) {
+  final numero = double.tryParse(valor.trim().replaceAll(',', '.'));
+  if (numero == null || !numero.isFinite || numero <= 0) {
+    return 'Ingresa un valor de abono válido mayor que cero';
+  }
   return null;
 }
 
