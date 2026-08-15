@@ -79,8 +79,11 @@ class ReportTableGeometry {
 
   factory ReportTableGeometry.forLayout(ReportResponsiveLayout layout) {
     final scale = layout.tableScale;
+    // DataTable también distribuye espacio entre columnas no numéricas. Se
+    // asigna explícitamente solo el 60 % del excedente para reservar el resto
+    // a separaciones, encabezados y a esa distribución intrínseca.
     final wideSurplus = layout.density == ReportDensity.wide
-        ? math.max(0, layout.contentWidth - 1400)
+        ? math.max(0, layout.contentWidth - 1460) * .6
         : 0.0;
     return ReportTableGeometry(
       availableWidth: layout.contentWidth,
