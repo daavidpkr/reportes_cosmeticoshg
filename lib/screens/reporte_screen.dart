@@ -18,7 +18,10 @@ import 'cobros_mensuales_view.dart';
 import 'clientes_screen.dart';
 import 'estadisticas_screen.dart';
 import 'payment_calendar/payment_calendar_screen.dart';
+import 'reporte/report_responsive_layout.dart';
 import 'vendedores_screen.dart';
+
+export 'reporte/report_responsive_layout.dart';
 
 part 'reporte/reporte_screen_view.dart';
 
@@ -37,55 +40,6 @@ class ReporteScreen extends StatefulWidget {
   @override
   State<ReporteScreen> createState() => _ReporteScreenState();
 }
-
-enum ReportDensity { compact, normal, wide }
-
-@immutable
-class ReportResponsiveLayout {
-  const ReportResponsiveLayout._({
-    required this.density,
-    required this.pagePadding,
-    required this.sectionGap,
-    required this.tableScale,
-  });
-
-  static const compactBreakpoint = 1366.0;
-  static const wideBreakpoint = 1600.0;
-
-  factory ReportResponsiveLayout.forWidth(double width) {
-    if (width >= wideBreakpoint) {
-      return const ReportResponsiveLayout._(
-        density: ReportDensity.wide,
-        pagePadding: 28,
-        sectionGap: 18,
-        tableScale: 1,
-      );
-    }
-    if (width >= compactBreakpoint) {
-      return const ReportResponsiveLayout._(
-        density: ReportDensity.normal,
-        pagePadding: 20,
-        sectionGap: 14,
-        tableScale: .9,
-      );
-    }
-    return const ReportResponsiveLayout._(
-      density: ReportDensity.compact,
-      pagePadding: 12,
-      sectionGap: 10,
-      tableScale: .78,
-    );
-  }
-
-  final ReportDensity density;
-  final double pagePadding;
-  final double sectionGap;
-  final double tableScale;
-
-  bool get compact => density == ReportDensity.compact;
-}
-
-enum ReportTableMode { editable, readOnly }
 
 class _ReporteScreenState extends State<ReporteScreen> {
   static const _opcionAnulada = 'ANULADA';
@@ -1644,33 +1598,12 @@ class _ReporteScreenState extends State<ReporteScreen> {
                                               ReportResponsiveLayout.forWidth(
                                             constraints.maxWidth,
                                           );
-                                          return Padding(
-                                            padding: EdgeInsets.fromLTRB(
-                                              layout.pagePadding,
-                                              layout.compact ? 10 : 18,
-                                              layout.pagePadding,
-                                              layout.compact ? 12 : 22,
-                                            ),
-                                            child: Column(
-                                              children: [
-                                                _encabezadoPagina(layout),
-                                                SizedBox(
-                                                  height: layout.sectionGap,
-                                                ),
-                                                _tarjetasResumen(layout),
-                                                SizedBox(
-                                                  height: layout.sectionGap,
-                                                ),
-                                                _barraRedisenada(layout),
-                                                SizedBox(
-                                                  height:
-                                                      layout.compact ? 8 : 12,
-                                                ),
-                                                Expanded(
-                                                  child: _tarjetaTabla(),
-                                                ),
-                                              ],
-                                            ),
+                                          return ReportDesktopFrame(
+                                            layout: layout,
+                                            header: _encabezadoPagina(layout),
+                                            kpis: _tarjetasResumen(layout),
+                                            toolbar: _barraRedisenada(layout),
+                                            table: _tarjetaTabla(),
                                           );
                                         },
                                       ),

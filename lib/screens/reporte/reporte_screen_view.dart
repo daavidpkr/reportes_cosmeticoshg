@@ -145,8 +145,9 @@ extension _ReporteScreenView on _ReporteScreenState {
         ),
       );
 
-  Widget _selectorVendedor(FilaVenta fila) => SizedBox(
-        width: 106 * _escalaReporte,
+  Widget _selectorVendedor(FilaVenta fila, ReportTableGeometry geometry) =>
+      SizedBox(
+        width: geometry.sellerWidth,
         child: DropdownButtonFormField<String>(
           initialValue: fila.vendedor.isEmpty ? null : fila.vendedor,
           isExpanded: true,
@@ -223,7 +224,12 @@ extension _ReporteScreenView on _ReporteScreenState {
         ),
       );
 
-  DataRow _crearFila(int indice, FilaVenta fila) => DataRow(
+  DataRow _crearFila(
+    int indice,
+    FilaVenta fila,
+    ReportTableGeometry geometry,
+  ) =>
+      DataRow(
         key: ValueKey(fila.numero),
         color: fila.anulada
             ? WidgetStatePropertyAll(context.hg.danger.withValues(alpha: 0.12))
@@ -258,13 +264,16 @@ extension _ReporteScreenView on _ReporteScreenState {
               enviar: true,
             ),
           ),
-          DataCell(_textoTablaLargo(fila.cliente, 190 * _escalaReporte)),
+          DataCell(_textoTablaLargo(fila.cliente, geometry.clientWidth)),
           DataCell(
-            _textoTablaLargo(fila.nombreComercial, 175 * _escalaReporte),
+            _textoTablaLargo(
+              fila.nombreComercial,
+              geometry.businessNameWidth,
+            ),
           ),
           DataCell(Text(fila.fecha)),
           DataCell(Text(fila.numeroFactura)),
-          DataCell(_selectorVendedor(fila)),
+          DataCell(_selectorVendedor(fila, geometry)),
           DataCell(_entradaEntera(fila)),
           DataCell(Text(
               fila.anulada ? 'ANULADA' : '\$${fila.venta.toStringAsFixed(2)}')),
@@ -283,24 +292,36 @@ extension _ReporteScreenView on _ReporteScreenState {
         ],
       );
 
-  Widget _tablaGeneral() => Scrollbar(
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SingleChildScrollView(
-            child: _tablaCompartida(
-              mode: ReportTableMode.readOnly,
-              filas: _filasGenerales.map(_crearFilaLectura).toList(),
+  Widget _tablaGeneral() => LayoutBuilder(
+        builder: (context, constraints) {
+          final geometry = _reportLayout.table;
+          return Scrollbar(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: geometry.tableWidth),
+                child: SingleChildScrollView(
+                  child: _tablaCompartida(
+                    geometry: geometry,
+                    mode: ReportTableMode.readOnly,
+                    filas: _filasGenerales
+                        .map((fila) => _crearFilaLectura(fila, geometry))
+                        .toList(),
+                  ),
+                ),
+              ),
             ),
-          ),
-        ),
+          );
+        },
       );
 
   DataTable _tablaCompartida({
     required ReportTableMode mode,
+    required ReportTableGeometry geometry,
     required List<DataRow> filas,
   }) =>
       DataTable(
-        key: ValueKey(mode),
+        key: ValueKey('report-data-table-${mode.name}'),
         horizontalMargin: 7 * _escalaReporte,
         columnSpacing: 10 * _escalaReporte,
         dataRowMinHeight: 38 * _escalaReporte,
@@ -311,9 +332,9 @@ extension _ReporteScreenView on _ReporteScreenState {
           color: context.hg.mutedText,
           fontWeight: FontWeight.w600,
           letterSpacing: .7,
-          fontSize: 11 * _escalaReporte,
+          fontSize: _reportLayout.tableHeadingFontSize,
         ),
-        dataTextStyle: TextStyle(fontSize: 14 * _escalaReporte),
+        dataTextStyle: TextStyle(fontSize: _reportLayout.tableFontSize),
         columns: [
           DataColumn(label: _encabezadoSinFiltro('NRO')),
           DataColumn(label: _encabezadoSinFiltro('REF. (FACT)')),
@@ -333,7 +354,11 @@ extension _ReporteScreenView on _ReporteScreenState {
         rows: filas,
       );
 
-  DataRow _crearFilaLectura(FilaVenta fila) => DataRow(
+  DataRow _crearFilaLectura(
+    FilaVenta fila,
+    ReportTableGeometry geometry,
+  ) =>
+      DataRow(
         key: ValueKey('general-${fila.referencia}-${fila.numero}'),
         color: fila.anulada
             ? WidgetStatePropertyAll(context.hg.danger.withValues(alpha: .12))
@@ -351,14 +376,17 @@ extension _ReporteScreenView on _ReporteScreenState {
             width: 72 * _escalaReporte,
             child: Text(_refSinCeros(fila.referencia)),
           )),
-          DataCell(_textoTablaLargo(fila.cliente, 190 * _escalaReporte)),
+          DataCell(_textoTablaLargo(fila.cliente, geometry.clientWidth)),
           DataCell(
-            _textoTablaLargo(fila.nombreComercial, 175 * _escalaReporte),
+            _textoTablaLargo(
+              fila.nombreComercial,
+              geometry.businessNameWidth,
+            ),
           ),
           DataCell(Text(fila.fecha)),
           DataCell(Text(fila.numeroFactura)),
           DataCell(SizedBox(
-              width: 106 * _escalaReporte, child: Text(fila.vendedor))),
+              width: geometry.sellerWidth, child: Text(fila.vendedor))),
           DataCell(Text('${fila.esmalte}')),
           DataCell(Text(
               fila.anulada ? 'ANULADA' : '\$${fila.venta.toStringAsFixed(2)}')),
@@ -375,38 +403,45 @@ extension _ReporteScreenView on _ReporteScreenState {
         ],
       );
 
-  Widget _tabla() => Padding(
-        padding: EdgeInsets.zero,
-        child: Scrollbar(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
+  Widget _tabla() => LayoutBuilder(
+        builder: (context, constraints) {
+          final geometry = _reportLayout.table;
+          return Scrollbar(
             child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _tablaCompartida(
-                    mode: ReportTableMode.editable,
-                    filas: _filasVisibles
-                        .map((item) => _crearFila(item.key, item.value))
-                        .toList(),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 28, 12),
-                    child: FilledButton.icon(
-                      onPressed: _reiniciar,
-                      style: FilledButton.styleFrom(
-                        backgroundColor: context.hg.danger,
-                        visualDensity: VisualDensity.compact,
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: geometry.tableWidth),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      _tablaCompartida(
+                        geometry: geometry,
+                        mode: ReportTableMode.editable,
+                        filas: _filasVisibles
+                            .map((item) =>
+                                _crearFila(item.key, item.value, geometry))
+                            .toList(),
                       ),
-                      icon: const Icon(Icons.delete_outline, size: 18),
-                      label: const Text('Eliminar reporte'),
-                    ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 28, 12),
+                        child: FilledButton.icon(
+                          onPressed: _reiniciar,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: context.hg.danger,
+                            visualDensity: VisualDensity.compact,
+                          ),
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          label: const Text('Eliminar reporte'),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-          ),
-        ),
+          );
+        },
       );
 
   Widget _barraBusqueda() => LayoutBuilder(
@@ -564,6 +599,7 @@ extension _ReporteScreenView on _ReporteScreenState {
       );
 
   Widget _tarjetaTabla() => Container(
+        key: const ValueKey('report-table-container'),
         decoration: BoxDecoration(
           color: context.hg.panel,
           borderRadius: BorderRadius.circular(14),
@@ -705,6 +741,7 @@ extension _ReporteScreenView on _ReporteScreenState {
       });
 
   Widget _barraRedisenada(ReportResponsiveLayout layout) => Container(
+        key: const ValueKey('report-toolbar'),
         padding: EdgeInsets.all(layout.compact ? 8 : 12),
         decoration: BoxDecoration(
           color: context.hg.panel,
@@ -712,47 +749,63 @@ extension _ReporteScreenView on _ReporteScreenState {
           border:
               Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         ),
-        child: LayoutBuilder(
-          builder: (context, constraints) => Wrap(
+        child: LayoutBuilder(builder: (context, constraints) {
+          final actions = <Widget>[
+            _filtroVendedorRedisenado(),
+            _filtroEstadoRedisenado(),
+            if (!_vistaGeneral) ...[
+              _botonBarra(
+                Icons.upload_file,
+                'Subir facturas (${_facturas.cantidad})',
+                _abrirCargaFacturas,
+              ),
+              _botonBarra(
+                Icons.person_remove_outlined,
+                'Eliminar cliente',
+                _eliminarReporteCliente,
+              ),
+              FilledButton.icon(
+                onPressed: _guardar,
+                icon: const Icon(Icons.download, size: 18),
+                label: const Text('Descargar PDF'),
+              ),
+              FilledButton.icon(
+                onPressed: _guardarResumenMensual,
+                icon: const Icon(Icons.analytics_outlined, size: 18),
+                label: const Text('Generar reporte mensual'),
+              ),
+            ],
+          ];
+          final singleLine = _vistaGeneral
+              ? constraints.maxWidth >= 900
+              : constraints.maxWidth >= 1450;
+          if (singleLine) {
+            return Row(
+              children: [
+                Expanded(child: _campoBusquedaRedisenado()),
+                SizedBox(width: layout.compact ? 6 : 10),
+                for (var index = 0; index < actions.length; index++) ...[
+                  actions[index],
+                  if (index < actions.length - 1)
+                    SizedBox(width: layout.compact ? 6 : 10),
+                ],
+              ],
+            );
+          }
+          return Wrap(
             spacing: layout.compact ? 6 : 10,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               SizedBox(
-                width: constraints.maxWidth >= 1500
-                    ? constraints.maxWidth - (_vistaGeneral ? 310 : 935)
-                    : constraints.maxWidth >= 1280
-                        ? (_vistaGeneral ? constraints.maxWidth - 310 : 260)
-                        : constraints.maxWidth,
+                width:
+                    constraints.maxWidth >= 1180 ? 280 : constraints.maxWidth,
                 child: _campoBusquedaRedisenado(),
               ),
-              _filtroVendedorRedisenado(),
-              _filtroEstadoRedisenado(),
-              if (!_vistaGeneral) ...[
-                _botonBarra(
-                  Icons.upload_file,
-                  'Subir facturas (${_facturas.cantidad})',
-                  _abrirCargaFacturas,
-                ),
-                _botonBarra(
-                  Icons.person_remove_outlined,
-                  'Eliminar cliente',
-                  _eliminarReporteCliente,
-                ),
-                FilledButton.icon(
-                  onPressed: _guardar,
-                  icon: const Icon(Icons.download, size: 18),
-                  label: const Text('Descargar PDF'),
-                ),
-                FilledButton.icon(
-                  onPressed: _guardarResumenMensual,
-                  icon: const Icon(Icons.analytics_outlined, size: 18),
-                  label: const Text('Generar reporte mensual'),
-                ),
-              ],
+              ...actions,
             ],
-          ),
-        ),
+          );
+        }),
       );
 
   Widget _kpi(
@@ -820,6 +873,7 @@ extension _ReporteScreenView on _ReporteScreenState {
       );
 
   Widget _tarjetasResumen(ReportResponsiveLayout layout) => Row(
+        key: const ValueKey('report-kpis'),
         children: [
           _kpi(
             'TOTAL ESMALTES',
@@ -1369,7 +1423,9 @@ extension _ReporteScreenView on _ReporteScreenState {
                     const SizedBox(height: 5),
                     Row(
                       children: [
-                        Expanded(child: _selectorVendedor(fila)),
+                        Expanded(
+                          child: _selectorVendedor(fila, _reportLayout.table),
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: _entrada(
