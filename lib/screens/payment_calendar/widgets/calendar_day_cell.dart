@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/payment_calendar_entry.dart';
+import 'pending_invoice_card.dart';
 
 class CalendarDayCell extends StatelessWidget {
   const CalendarDayCell({
@@ -86,7 +87,8 @@ class CalendarDayCell extends StatelessWidget {
                   '${entries.length} ${entries.length == 1 ? 'factura' : 'facturas'}',
                   style: Theme.of(context).textTheme.labelSmall),
               for (final entry in entries.take(2))
-                Text('${entry.facturaId} · ${entry.cliente}',
+                Text(
+                    '${visibleInvoiceReference(entry.facturaId)} · ${entry.cliente}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall),

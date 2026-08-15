@@ -5,6 +5,13 @@ import '../../../models/payment_calendar_entry.dart';
 String calendarDate(DateTime date) =>
     '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 
+String visibleInvoiceReference(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return trimmed;
+  final withoutLeadingZeroes = trimmed.replaceFirst(RegExp(r'^0+'), '');
+  return withoutLeadingZeroes.isEmpty ? '0' : withoutLeadingZeroes;
+}
+
 class PendingInvoiceCard extends StatelessWidget {
   const PendingInvoiceCard(
       {required this.entry, required this.onEdit, super.key});
@@ -17,7 +24,7 @@ class PendingInvoiceCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('REF. ${entry.facturaId}',
+            Text('REF. ${visibleInvoiceReference(entry.facturaId)}',
                 style: Theme.of(context)
                     .textTheme
                     .titleMedium
@@ -25,9 +32,9 @@ class PendingInvoiceCard extends StatelessWidget {
             const SizedBox(height: 8),
             _line(
                 'Nro. factura',
-                entry.invoiceNumber.isEmpty
+                visibleInvoiceReference(entry.invoiceNumber.isEmpty
                     ? entry.facturaId
-                    : entry.invoiceNumber),
+                    : entry.invoiceNumber)),
             _line('Cliente', entry.cliente),
             _line('Nombre comercial', entry.nombreComercial),
             _line('Fecha de factura', calendarDate(entry.invoiceDate)),

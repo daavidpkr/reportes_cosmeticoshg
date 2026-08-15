@@ -4,6 +4,7 @@ import 'package:cosmeticos_hg_reportes/models/payment_calendar_entry.dart';
 import 'package:cosmeticos_hg_reportes/models/payment_calendar_rules.dart';
 import 'package:cosmeticos_hg_reportes/screens/payment_calendar/payment_calendar_controller.dart';
 import 'package:cosmeticos_hg_reportes/screens/payment_calendar/payment_calendar_screen.dart';
+import 'package:cosmeticos_hg_reportes/screens/payment_calendar/widgets/pending_invoice_card.dart';
 import 'package:cosmeticos_hg_reportes/services/payment_calendar_repository.dart';
 
 PaymentCalendarEntry entry(String id, DateTime date,
@@ -55,6 +56,12 @@ class FakeCalendarRepository implements PaymentCalendarDataSource {
 }
 
 void main() {
+  test('referencias visibles no muestran ceros a la izquierda', () {
+    expect(visibleInvoiceReference('000000674'), '674');
+    expect(visibleInvoiceReference('000'), '0');
+    expect(visibleInvoiceReference('FAC-001'), 'FAC-001');
+  });
+
   group('reglas del calendario', () {
     test('comienza en lunes para meses que comienzan cualquier día', () {
       for (var month = 1; month <= 12; month++) {

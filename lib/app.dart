@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -110,6 +111,9 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
       navigatorKey: _navigatorKey,
       title: 'Cosméticos HG - Reportes',
       debugShowCheckedModeBanner: false,
+      locale: const Locale('es'),
+      supportedLocales: const [Locale('es')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       themeMode: _themeMode,
       theme: ThemeData(
         colorScheme: const ColorScheme.light(

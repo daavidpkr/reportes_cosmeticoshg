@@ -25,7 +25,9 @@ class CalendarGrid extends StatelessWidget {
         final compact = constraints.maxWidth < 900;
         final days = mondayFirstCalendarDays(month);
         final rows = days.length ~/ 7;
-        final height = compact ? rows * 62.0 : rows * 112.0;
+        const rowSpacing = 4.0;
+        final rowHeight = compact ? 62.0 : 112.0;
+        final height = rows * rowHeight + (rows - 1) * rowSpacing;
         final labels = compact
             ? const ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
             : const [
@@ -57,9 +59,9 @@ class CalendarGrid extends StatelessWidget {
                   itemCount: days.length,
                   gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 7,
-                      mainAxisExtent: compact ? 62 : 112,
+                      mainAxisExtent: rowHeight,
                       crossAxisSpacing: 4,
-                      mainAxisSpacing: 4),
+                      mainAxisSpacing: rowSpacing),
                   itemBuilder: (_, index) {
                     final day = days[index];
                     return CalendarDayCell(
