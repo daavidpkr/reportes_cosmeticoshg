@@ -1072,10 +1072,10 @@ extension _ReporteScreenView on _ReporteScreenState {
             ),
             const SizedBox(width: 8),
             IconButton(
-              tooltip: 'Recordatorios de pago',
+              tooltip: 'Calendario de cobros',
               onPressed: _abrirRecordatorios,
               icon: const Icon(
-                Icons.notifications_active_outlined,
+                Icons.calendar_month_outlined,
                 color: Colors.white70,
               ),
             ),
@@ -1906,9 +1906,9 @@ extension _ReporteScreenView on _ReporteScreenState {
           ),
           actions: [
             IconButton(
-              tooltip: 'Recordatorios de pago',
+              tooltip: 'Calendario de cobros',
               onPressed: _abrirRecordatorios,
-              icon: const Icon(Icons.notifications_active_outlined),
+              icon: const Icon(Icons.calendar_month_outlined),
             ),
             IconButton(
               tooltip: 'Actualizar datos',

@@ -18,7 +18,7 @@ import 'carga_facturas_screen.dart';
 import 'cobros_mensuales_view.dart';
 import 'clientes_screen.dart';
 import 'estadisticas_screen.dart';
-import 'payment_reminders_screen.dart';
+import 'payment_calendar/payment_calendar_screen.dart';
 import 'vendedores_screen.dart';
 
 part 'reporte/reporte_screen_view.dart';
@@ -96,7 +96,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   Future<void> _abrirRecordatorios() => Navigator.push<void>(
         context,
-        MaterialPageRoute(builder: (_) => const PaymentRemindersScreen()),
+        // PaymentRemindersScreen y sus servicios se conservan para una futura
+        // reactivación de notificaciones. El acceso visible abre el calendario.
+        MaterialPageRoute(builder: (_) => const PaymentCalendarScreen()),
       );
 
   KeyEventResult _atajoZoom(FocusNode node, KeyEvent evento) {
