@@ -20,68 +20,26 @@ class _ClientesScreenState extends State<ClientesScreen> {
 
   Future<void> _reload() async {
     final future = _repository.listCustomers();
-    setState(() => _customers = future);
+    setState(() {
+      _customers = future;
+    });
     await future;
   }
 
   Future<void> _edit(BillingCustomer customer) async {
-    final controller =
-        TextEditingController(text: customer.paymentTermDays?.toString() ?? '');
     final days = await showDialog<int>(
         context: context,
-        builder: (context) => AlertDialog(
-              title: Text(customer.name),
-              content: TextField(
-                controller: controller,
-                autofocus: true,
-                keyboardType: TextInputType.number,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                decoration: const InputDecoration(
-                  labelText: 'Plazo habitual en días',
-                  helperText: 'Usa 0 para pago el mismo día.',
-                ),
-              ),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancelar')),
-                FilledButton(
-                    onPressed: () {
-                      final parsed = parsePaymentTerm(controller.text);
-                      if (parsed != null) Navigator.pop(context, parsed);
-                    },
-                    child: const Text('Continuar')),
-              ],
-            ));
-    controller.dispose();
+        builder: (context) => _PaymentTermDialog(customer: customer));
     if (days == null || !mounted) return;
     final impacted = await _repository.previewImpact(customer.id, days);
     if (!mounted) return;
-    var apply = false;
-    if (impacted > 0) {
-      apply = await showDialog<bool>(
-              context: context,
-              builder: (context) => AlertDialog(
-                    title: const Text('Facturas pendientes'),
-                    content: Text(
-                        '$impacted facturas activas sin recordatorio podrían recibir una fecha. ¿Deseas aplicarlo ahora?'),
-                    actions: [
-                      TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Solo guardar plazo')),
-                      FilledButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          child: const Text('Aplicar y crear fechas')),
-                    ],
-                  )) ??
-          false;
-    }
-    await _repository.savePaymentTerm(customer.id, days, applyExisting: apply);
+    final scheduled = await _repository.savePaymentTerm(customer.id, days,
+        applyExisting: true);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(apply
-            ? 'Plazo guardado y $impacted facturas actualizadas.'
-            : 'Plazo habitual guardado.')));
+        content: Text(impacted == 0
+            ? 'Plazo habitual guardado.'
+            : 'Plazo guardado y $scheduled facturas programadas.')));
     await _reload();
   }
 
@@ -129,6 +87,52 @@ class _ClientesScreenState extends State<ClientesScreen> {
             );
           },
         ),
+      );
+}
+
+class _PaymentTermDialog extends StatefulWidget {
+  const _PaymentTermDialog({required this.customer});
+
+  final BillingCustomer customer;
+
+  @override
+  State<_PaymentTermDialog> createState() => _PaymentTermDialogState();
+}
+
+class _PaymentTermDialogState extends State<_PaymentTermDialog> {
+  late final TextEditingController _controller = TextEditingController(
+      text: widget.customer.paymentTermDays?.toString() ?? '');
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: Text(widget.customer.name),
+        content: TextField(
+          controller: _controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(
+            labelText: 'Plazo habitual en días',
+            helperText: 'Usa 0 para pago el mismo día.',
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () {
+                final parsed = parsePaymentTerm(_controller.text);
+                if (parsed != null) Navigator.pop(context, parsed);
+              },
+              child: const Text('Continuar')),
+        ],
       );
 }
 

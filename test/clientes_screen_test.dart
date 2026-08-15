@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 class FakeCustomerTerms implements CustomerTermsDataSource {
+  bool? lastApplyExisting;
+  int previewed = 0;
   @override
   Future<InvoicePaymentPlan?> getInvoicePlan(String facturaId) async => null;
   @override
@@ -21,15 +23,17 @@ class FakeCustomerTerms implements CustomerTermsDataSource {
             paymentTermDays: null),
       ];
   @override
-  Future<int> previewImpact(String customerId, int days) async => 0;
+  Future<int> previewImpact(String customerId, int days) async => previewed;
   @override
   Future<DateTime?> saveInvoiceException(String facturaId, int? days,
           {required bool confirmManualOverride}) async =>
       null;
   @override
   Future<int> savePaymentTerm(String customerId, int days,
-          {required bool applyExisting}) async =>
-      0;
+      {required bool applyExisting}) async {
+    lastApplyExisting = applyExisting;
+    return previewed;
+  }
 }
 
 void main() {
@@ -43,5 +47,23 @@ void main() {
     expect(find.text('45 días'), findsOneWidget);
     expect(find.text('Cliente pendiente'), findsOneWidget);
     expect(find.text('Pendiente'), findsOneWidget);
+  });
+
+  testWidgets('programa pendientes automáticamente al guardar días',
+      (tester) async {
+    final repository = FakeCustomerTerms()..previewed = 2;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(body: ClientesScreen(repository: repository))));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Editar y guardar').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), '10');
+    await tester.tap(find.text('Continuar'));
+    await tester.pumpAndSettle();
+
+    expect(repository.lastApplyExisting, isTrue);
+    expect(
+        find.text('Plazo guardado y 2 facturas programadas.'), findsOneWidget);
   });
 }
