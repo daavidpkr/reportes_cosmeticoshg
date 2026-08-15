@@ -60,6 +60,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
   bool _vistaEstadisticas = false;
   bool _vistaVendedores = false;
   bool _vistaClientes = false;
+  bool _vistaCalendario = false;
+  bool _vistaCargaFacturas = false;
   int _seccionMovil = 0;
   final _busquedaController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
@@ -94,12 +96,26 @@ class _ReporteScreenState extends State<ReporteScreen> {
     setState(() => _zoom = (_zoom + cambio).clamp(0.65, 1.25));
   }
 
-  Future<void> _abrirRecordatorios() => Navigator.push<void>(
-        context,
-        // PaymentRemindersScreen y sus servicios se conservan para una futura
-        // reactivación de notificaciones. El acceso visible abre el calendario.
-        MaterialPageRoute(builder: (_) => const PaymentCalendarScreen()),
-      );
+  void _abrirRecordatorios() => setState(() {
+        _vistaCalendario = true;
+        _vistaCargaFacturas = false;
+        _vistaGeneral = false;
+        _vistaCobrosMensuales = false;
+        _vistaEstadisticas = false;
+        _vistaVendedores = false;
+        _vistaClientes = false;
+      });
+
+  void _mostrarReporteVentas() => setState(() {
+        _vistaCalendario = false;
+        _vistaCargaFacturas = false;
+        _vistaGeneral = false;
+        _vistaCobrosMensuales = false;
+        _vistaEstadisticas = false;
+        _vistaVendedores = false;
+        _vistaClientes = false;
+        _seccionMovil = 0;
+      });
 
   KeyEventResult _atajoZoom(FocusNode node, KeyEvent evento) {
     if (evento is! KeyDownEvent ||
@@ -737,6 +753,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   void _gestionarVendedores() {
     setState(() {
+      _vistaCalendario = false;
+      _vistaCargaFacturas = false;
       _vistaVendedores = true;
       _vistaClientes = false;
       _vistaCobrosMensuales = false;
@@ -1591,31 +1609,43 @@ class _ReporteScreenState extends State<ReporteScreen> {
             children: [
               _barraSuperior(),
               Expanded(
-                child: _vistaClientes
-                    ? const ClientesScreen()
-                    : _vistaVendedores
-                        ? VendedoresContent(store: _vendedores)
-                        : _vistaEstadisticas
-                            ? const EstadisticasScreen()
-                            : _vistaCobrosMensuales
-                                ? CobrosMensualesView(
-                                    key: ValueKey(_versionCobrosMensuales),
-                                  )
-                                : Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                        28, 22, 28, 28),
-                                    child: Column(
-                                      children: [
-                                        _encabezadoPagina(),
-                                        const SizedBox(height: 18),
-                                        _tarjetasResumen(),
-                                        const SizedBox(height: 18),
-                                        _barraRedisenada(),
-                                        const SizedBox(height: 14),
-                                        Expanded(child: _tarjetaTabla()),
-                                      ],
-                                    ),
-                                  ),
+                child: _vistaCalendario
+                    ? const PaymentCalendarView()
+                    : _vistaCargaFacturas
+                        ? CargaFacturasView(
+                            key: ValueKey(_reportes.activo.id),
+                            mes: _reportes.activo.mes,
+                            anio: _reportes.activo.anio,
+                            onVolver: _mostrarReporteVentas,
+                            onFacturasGuardadas: _guardarProgreso,
+                          )
+                        : _vistaClientes
+                            ? const ClientesScreen()
+                            : _vistaVendedores
+                                ? VendedoresContent(store: _vendedores)
+                                : _vistaEstadisticas
+                                    ? const EstadisticasScreen()
+                                    : _vistaCobrosMensuales
+                                        ? CobrosMensualesView(
+                                            key: ValueKey(
+                                                _versionCobrosMensuales),
+                                          )
+                                        : Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                28, 22, 28, 28),
+                                            child: Column(
+                                              children: [
+                                                _encabezadoPagina(),
+                                                const SizedBox(height: 18),
+                                                _tarjetasResumen(),
+                                                const SizedBox(height: 18),
+                                                _barraRedisenada(),
+                                                const SizedBox(height: 14),
+                                                Expanded(
+                                                    child: _tarjetaTabla()),
+                                              ],
+                                            ),
+                                          ),
               ),
             ],
           ),

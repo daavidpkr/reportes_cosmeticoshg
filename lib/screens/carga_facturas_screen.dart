@@ -21,8 +21,31 @@ class CargaFacturasScreen extends StatefulWidget {
 }
 
 class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Carga de facturas')),
+        body: CargaFacturasView(mes: widget.mes, anio: widget.anio),
+      );
+}
+
+class CargaFacturasView extends StatefulWidget {
+  const CargaFacturasView(
+      {super.key,
+      required this.mes,
+      required this.anio,
+      this.onVolver,
+      this.onFacturasGuardadas});
+  final int mes;
+  final int anio;
+  final VoidCallback? onVolver;
+  final Future<void> Function()? onFacturasGuardadas;
+  @override
+  State<CargaFacturasView> createState() => _CargaFacturasViewState();
+}
+
+class _CargaFacturasViewState extends State<CargaFacturasView> {
   final _store = FacturasStore.instance;
-  final _supabaseReportes = SupabaseReportesService();
+  SupabaseReportesService? _supabaseReportes;
   bool _cargando = false;
   bool _arrastrando = false;
 
@@ -91,7 +114,9 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
         }
       }
       if (procesados > 0) {
-        await _supabaseReportes.guardarFacturas(_store.facturas);
+        await (_supabaseReportes ??= SupabaseReportesService())
+            .guardarFacturas(_store.facturas);
+        await widget.onFacturasGuardadas?.call();
       }
     } catch (error) {
       if (mounted) {
@@ -123,76 +148,91 @@ class _CargaFacturasScreenState extends State<CargaFacturasScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Carga de facturas')),
-      body: Padding(
+    return SafeArea(
+      child: Padding(
         padding: const EdgeInsets.all(24),
-        child: DropTarget(
-          onDragEntered: (_) => setState(() => _arrastrando = true),
-          onDragExited: (_) => setState(() => _arrastrando = false),
-          onDragDone: (detalle) => _procesarArrastrados(detalle.files),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: double.infinity,
-            height: double.infinity,
-            decoration: BoxDecoration(
-              color: _arrastrando ? context.hg.hover : Colors.transparent,
-              border: Border.all(
-                color: _arrastrando
-                    ? context.hg.burgundy
-                    : Theme.of(context).colorScheme.outline,
-                width: _arrastrando ? 3 : 2,
-              ),
-              borderRadius: BorderRadius.circular(16),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text('Carga de facturas',
+              style: Theme.of(context).textTheme.headlineSmall),
+          const Text(
+              'Importa las facturas correspondientes al reporte seleccionado'),
+          if (widget.onVolver != null) ...[
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: widget.onVolver,
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Volver al reporte de ventas'),
             ),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.cloud_upload,
-                    size: 80,
-                    color: context.hg.burgundy,
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Facturas de ${widget.mes.toString().padLeft(2, '0')}/${widget.anio}',
-                    style: Theme.of(context).textTheme.titleLarge,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  const Text(
-                    'Solo se aceptarán facturas emitidas en este mes. Se guardarán los datos extraídos, no los archivos.',
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    _arrastrando
-                        ? 'Suelta aquí los archivos'
-                        : 'Arrastra y suelta aquí tus facturas',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: context.hg.burgundy,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  const SizedBox(height: 10),
-                  const Text('o selecciónalas manualmente'),
-                  const SizedBox(height: 20),
-                  if (_cargando)
-                    const CircularProgressIndicator()
-                  else
-                    FilledButton.icon(
-                      onPressed: _seleccionarArchivos,
-                      icon: const Icon(Icons.folder_open),
-                      label: const Text('Seleccionar facturas'),
+          ],
+          const SizedBox(height: 8),
+          Expanded(
+              child: DropTarget(
+            onDragEntered: (_) => setState(() => _arrastrando = true),
+            onDragExited: (_) => setState(() => _arrastrando = false),
+            onDragDone: (detalle) => _procesarArrastrados(detalle.files),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: double.infinity,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                color: _arrastrando ? context.hg.hover : Colors.transparent,
+                border: Border.all(
+                  color: _arrastrando
+                      ? context.hg.burgundy
+                      : Theme.of(context).colorScheme.outline,
+                  width: _arrastrando ? 3 : 2,
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.cloud_upload,
+                      size: 80,
+                      color: context.hg.burgundy,
                     ),
-                  const SizedBox(height: 20),
-                  Text('Facturas en memoria: ${_store.cantidad}'),
-                ],
+                    const SizedBox(height: 20),
+                    Text(
+                      'Facturas de ${widget.mes.toString().padLeft(2, '0')}/${widget.anio}',
+                      style: Theme.of(context).textTheme.titleLarge,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Solo se aceptarán facturas emitidas en este mes. Se guardarán los datos extraídos, no los archivos.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _arrastrando
+                          ? 'Suelta aquí los archivos'
+                          : 'Arrastra y suelta aquí tus facturas',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: context.hg.burgundy,
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 10),
+                    const Text('o selecciónalas manualmente'),
+                    const SizedBox(height: 20),
+                    if (_cargando)
+                      const CircularProgressIndicator()
+                    else
+                      FilledButton.icon(
+                        onPressed: _seleccionarArchivos,
+                        icon: const Icon(Icons.folder_open),
+                        label: const Text('Seleccionar facturas'),
+                      ),
+                    const SizedBox(height: 20),
+                    Text('Facturas en memoria: ${_store.cantidad}'),
+                  ],
+                ),
               ),
             ),
-          ),
-        ),
+          )),
+        ]),
       ),
     );
   }

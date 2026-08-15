@@ -537,21 +537,7 @@ extension _ReporteScreenView on _ReporteScreenState {
                 label: const Text('Nuevo mes'),
               ),
               FilledButton.tonalIcon(
-                onPressed: () async {
-                  await Navigator.push<void>(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CargaFacturasScreen(
-                        mes: _reportes.activo.mes,
-                        anio: _reportes.activo.anio,
-                      ),
-                    ),
-                  );
-                  if (mounted) {
-                    setState(() {});
-                    await _guardarProgreso();
-                  }
-                },
+                onPressed: _abrirCargaFacturas,
                 icon: const Icon(Icons.upload_file),
                 label: Text('Subir facturas (${_facturas.cantidad})'),
               ),
@@ -716,21 +702,15 @@ extension _ReporteScreenView on _ReporteScreenState {
     }
   }
 
-  Future<void> _abrirCargaFacturas() async {
-    await Navigator.push<void>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => CargaFacturasScreen(
-          mes: _reportes.activo.mes,
-          anio: _reportes.activo.anio,
-        ),
-      ),
-    );
-    if (mounted) {
-      setState(() {});
-      await _guardarProgreso();
-    }
-  }
+  void _abrirCargaFacturas() => setState(() {
+        _vistaCargaFacturas = true;
+        _vistaCalendario = false;
+        _vistaGeneral = false;
+        _vistaCobrosMensuales = false;
+        _vistaEstadisticas = false;
+        _vistaVendedores = false;
+        _vistaClientes = false;
+      });
 
   Widget _barraRedisenada() => Container(
         padding: const EdgeInsets.all(13),
@@ -1008,14 +988,10 @@ extension _ReporteScreenView on _ReporteScreenState {
                           !_vistaCobrosMensuales &&
                           !_vistaEstadisticas &&
                           !_vistaVendedores &&
-                          !_vistaClientes,
-                      () => setState(() {
-                        _vistaGeneral = false;
-                        _vistaCobrosMensuales = false;
-                        _vistaEstadisticas = false;
-                        _vistaVendedores = false;
-                        _vistaClientes = false;
-                      }),
+                          !_vistaClientes &&
+                          !_vistaCalendario &&
+                          !_vistaCargaFacturas,
+                      _mostrarReporteVentas,
                     ),
                     _pestana(
                       'Reporte general',
@@ -1025,6 +1001,8 @@ extension _ReporteScreenView on _ReporteScreenState {
                           !_vistaVendedores &&
                           !_vistaClientes,
                       () => setState(() {
+                        _vistaCalendario = false;
+                        _vistaCargaFacturas = false;
                         _vistaGeneral = true;
                         _vistaCobrosMensuales = false;
                         _vistaEstadisticas = false;
@@ -1036,6 +1014,8 @@ extension _ReporteScreenView on _ReporteScreenState {
                       'Reporte de Cobros Mensuales',
                       _vistaCobrosMensuales,
                       () => setState(() {
+                        _vistaCalendario = false;
+                        _vistaCargaFacturas = false;
                         _vistaCobrosMensuales = true;
                         _vistaEstadisticas = false;
                         _vistaVendedores = false;
@@ -1046,6 +1026,8 @@ extension _ReporteScreenView on _ReporteScreenState {
                       'Clientes',
                       _vistaClientes,
                       () => setState(() {
+                        _vistaCalendario = false;
+                        _vistaCargaFacturas = false;
                         _vistaClientes = true;
                         _vistaCobrosMensuales = false;
                         _vistaEstadisticas = false;
@@ -1060,6 +1042,8 @@ extension _ReporteScreenView on _ReporteScreenState {
                       'Estadísticas',
                       _vistaEstadisticas,
                       () => setState(() {
+                        _vistaCalendario = false;
+                        _vistaCargaFacturas = false;
                         _vistaEstadisticas = true;
                         _vistaCobrosMensuales = false;
                         _vistaVendedores = false;
@@ -1074,9 +1058,14 @@ extension _ReporteScreenView on _ReporteScreenState {
             IconButton(
               tooltip: 'Calendario de cobros',
               onPressed: _abrirRecordatorios,
-              icon: const Icon(
+              style: IconButton.styleFrom(
+                backgroundColor: _vistaCalendario
+                    ? Colors.white.withValues(alpha: .18)
+                    : null,
+              ),
+              icon: Icon(
                 Icons.calendar_month_outlined,
-                color: Colors.white70,
+                color: _vistaCalendario ? Colors.white : Colors.white70,
               ),
             ),
             IconButton(
@@ -1908,6 +1897,11 @@ extension _ReporteScreenView on _ReporteScreenState {
             IconButton(
               tooltip: 'Calendario de cobros',
               onPressed: _abrirRecordatorios,
+              style: IconButton.styleFrom(
+                backgroundColor: _vistaCalendario
+                    ? Colors.white.withValues(alpha: .18)
+                    : null,
+              ),
               icon: const Icon(Icons.calendar_month_outlined),
             ),
             IconButton(
@@ -1948,7 +1942,9 @@ extension _ReporteScreenView on _ReporteScreenState {
         floatingActionButton: _vistaCobrosMensuales ||
                 _vistaEstadisticas ||
                 _vistaVendedores ||
-                _vistaClientes
+                _vistaClientes ||
+                _vistaCalendario ||
+                _vistaCargaFacturas
             ? null
             : FloatingActionButton.extended(
                 onPressed: _guardar,
@@ -1967,6 +1963,8 @@ extension _ReporteScreenView on _ReporteScreenState {
           indicatorColor: Theme.of(context).colorScheme.secondaryContainer,
           onDestinationSelected: (indice) {
             setState(() {
+              _vistaCalendario = false;
+              _vistaCargaFacturas = false;
               _seccionMovil = indice;
               _vistaCobrosMensuales = indice == 2;
               _vistaClientes = indice == 3;
@@ -2002,102 +2000,122 @@ extension _ReporteScreenView on _ReporteScreenState {
             ),
           ],
         ),
-        body: _vistaVendedores
-            ? SafeArea(child: VendedoresContent(store: _vendedores))
-            : _vistaClientes
-                ? const SafeArea(child: ClientesScreen())
-                : _vistaEstadisticas
-                    ? const SafeArea(child: EstadisticasScreen())
-                    : _vistaCobrosMensuales
-                        ? SafeArea(
-                            child: CobrosMensualesView(
-                                key: ValueKey(_versionCobrosMensuales)),
-                          )
-                        : SafeArea(
-                            child: CustomScrollView(
-                              keyboardDismissBehavior:
-                                  ScrollViewKeyboardDismissBehavior.onDrag,
-                              slivers: [
-                                SliverPadding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(14, 16, 14, 8),
-                                  sliver: SliverList.list(
-                                    children: [
-                                      _encabezadoMovil(),
-                                      const SizedBox(height: 14),
-                                      _resumenMovil(),
-                                      const SizedBox(height: 14),
-                                      _controlesMoviles(),
-                                      const SizedBox(height: 16),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            _vistaGeneral
-                                                ? 'Todos los registros'
-                                                : 'Clientes',
-                                            style: TextStyle(
-                                              color: context.hg.plum,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                          ),
-                                          const Spacer(),
-                                          Text(
-                                            '${_vistaGeneral ? _filasGenerales.length : _filasVisibles.length} registros',
-                                            style: TextStyle(
-                                              color: context.hg.mutedText,
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      if (_descripcionFiltro.isNotEmpty) ...[
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          _descripcionFiltro,
-                                          style: TextStyle(
-                                            color: context.hg.mutedText,
-                                            fontSize: 12,
+        body: _vistaCalendario
+            ? const PaymentCalendarView()
+            : _vistaCargaFacturas
+                ? CargaFacturasView(
+                    key: ValueKey(_reportes.activo.id),
+                    mes: _reportes.activo.mes,
+                    anio: _reportes.activo.anio,
+                    onVolver: _mostrarReporteVentas,
+                    onFacturasGuardadas: _guardarProgreso,
+                  )
+                : _vistaVendedores
+                    ? SafeArea(child: VendedoresContent(store: _vendedores))
+                    : _vistaClientes
+                        ? const SafeArea(child: ClientesScreen())
+                        : _vistaEstadisticas
+                            ? const SafeArea(child: EstadisticasScreen())
+                            : _vistaCobrosMensuales
+                                ? SafeArea(
+                                    child: CobrosMensualesView(
+                                        key: ValueKey(_versionCobrosMensuales)),
+                                  )
+                                : SafeArea(
+                                    child: CustomScrollView(
+                                      keyboardDismissBehavior:
+                                          ScrollViewKeyboardDismissBehavior
+                                              .onDrag,
+                                      slivers: [
+                                        SliverPadding(
+                                          padding: const EdgeInsets.fromLTRB(
+                                              14, 16, 14, 8),
+                                          sliver: SliverList.list(
+                                            children: [
+                                              _encabezadoMovil(),
+                                              const SizedBox(height: 14),
+                                              _resumenMovil(),
+                                              const SizedBox(height: 14),
+                                              _controlesMoviles(),
+                                              const SizedBox(height: 16),
+                                              Row(
+                                                children: [
+                                                  Text(
+                                                    _vistaGeneral
+                                                        ? 'Todos los registros'
+                                                        : 'Clientes',
+                                                    style: TextStyle(
+                                                      color: context.hg.plum,
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                  ),
+                                                  const Spacer(),
+                                                  Text(
+                                                    '${_vistaGeneral ? _filasGenerales.length : _filasVisibles.length} registros',
+                                                    style: TextStyle(
+                                                      color:
+                                                          context.hg.mutedText,
+                                                      fontSize: 11,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                              if (_descripcionFiltro
+                                                  .isNotEmpty) ...[
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  _descripcionFiltro,
+                                                  style: TextStyle(
+                                                    color: context.hg.mutedText,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ],
+                                            ],
                                           ),
                                         ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                _listaMovil(),
-                                SliverToBoxAdapter(
-                                  child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                        14, 4, 14, 110),
-                                    child: Column(
-                                      children: [
-                                        SizedBox(
-                                          width: double.infinity,
-                                          child: FilledButton.icon(
-                                            onPressed: _reiniciar,
-                                            style: FilledButton.styleFrom(
-                                              backgroundColor:
-                                                  context.hg.danger,
-                                              foregroundColor: Colors.white,
-                                              padding: const EdgeInsets.all(13),
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
+                                        _listaMovil(),
+                                        SliverToBoxAdapter(
+                                          child: Padding(
+                                            padding: const EdgeInsets.fromLTRB(
+                                                14, 4, 14, 110),
+                                            child: Column(
+                                              children: [
+                                                SizedBox(
+                                                  width: double.infinity,
+                                                  child: FilledButton.icon(
+                                                    onPressed: _reiniciar,
+                                                    style:
+                                                        FilledButton.styleFrom(
+                                                      backgroundColor:
+                                                          context.hg.danger,
+                                                      foregroundColor:
+                                                          Colors.white,
+                                                      padding:
+                                                          const EdgeInsets.all(
+                                                              13),
+                                                      shape:
+                                                          RoundedRectangleBorder(
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(12),
+                                                      ),
+                                                    ),
+                                                    icon: const Icon(
+                                                        Icons.delete_outline,
+                                                        size: 18),
+                                                    label: const Text(
+                                                        'Eliminar reporte'),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                            icon: const Icon(
-                                                Icons.delete_outline,
-                                                size: 18),
-                                            label:
-                                                const Text('Eliminar reporte'),
                                           ),
                                         ),
                                       ],
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                          ),
       );
 }

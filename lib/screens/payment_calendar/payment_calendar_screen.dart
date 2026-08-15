@@ -33,6 +33,25 @@ class PaymentCalendarScreen extends StatefulWidget {
 }
 
 class _PaymentCalendarScreenState extends State<PaymentCalendarScreen> {
+  @override
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Calendario de cobros')),
+        body: PaymentCalendarView(
+          repository: widget.repository,
+          initialMonth: widget.initialMonth,
+        ),
+      );
+}
+
+class PaymentCalendarView extends StatefulWidget {
+  const PaymentCalendarView({this.repository, this.initialMonth, super.key});
+  final PaymentCalendarDataSource? repository;
+  final DateTime? initialMonth;
+  @override
+  State<PaymentCalendarView> createState() => _PaymentCalendarViewState();
+}
+
+class _PaymentCalendarViewState extends State<PaymentCalendarView> {
   late final PaymentCalendarController controller = PaymentCalendarController(
       repository: widget.repository ?? PaymentCalendarRepository(),
       initialMonth: widget.initialMonth)
@@ -81,57 +100,66 @@ class _PaymentCalendarScreenState extends State<PaymentCalendarScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Calendario de cobros')),
-        body: SafeArea(
-            child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(children: [
-                  CalendarHeader(
-                      monthLabel:
-                          '${_monthNames[controller.visibleMonth.month - 1]} ${controller.visibleMonth.year}',
-                      onPrevious: () => controller.moveMonth(-1),
-                      onNext: () => controller.moveMonth(1),
-                      onToday: controller.today,
-                      onRefresh: () => controller.load(refresh: true)),
-                  const SizedBox(height: 8),
-                  Expanded(
-                      child: controller.loading
-                          ? const Center(
-                              child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                  CircularProgressIndicator(),
-                                  SizedBox(height: 12),
-                                  Text('Cargando facturas pendientes…')
-                                ]))
-                          : controller.error != null
-                              ? Center(
-                                  child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                      Text(controller.error!,
-                                          textAlign: TextAlign.center),
-                                      const SizedBox(height: 12),
-                                      FilledButton.icon(
-                                          onPressed: () =>
-                                              controller.load(refresh: true),
-                                          icon: const Icon(Icons.refresh),
-                                          label: const Text('Reintentar'))
-                                    ]))
-                              : SingleChildScrollView(
-                                  child: Column(children: [
-                                  CalendarGrid(
-                                      month: controller.visibleMonth,
-                                      grouped: controller.grouped,
-                                      selected: controller.selectedDay,
-                                      onSelect: _select),
-                                  if (controller.entries.isEmpty)
-                                    const Padding(
-                                        padding: EdgeInsets.all(20),
-                                        child: Text(
-                                            'No hay facturas pendientes programadas para este mes.'))
-                                ]))),
-                ]))),
-      );
+  Widget build(BuildContext context) => SafeArea(
+      child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Calendario de cobros',
+                      style: Theme.of(context).textTheme.headlineSmall),
+                  const Text(
+                      'Consulta y reprogramación de facturas pendientes'),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            CalendarHeader(
+                monthLabel:
+                    '${_monthNames[controller.visibleMonth.month - 1]} ${controller.visibleMonth.year}',
+                onPrevious: () => controller.moveMonth(-1),
+                onNext: () => controller.moveMonth(1),
+                onToday: controller.today,
+                onRefresh: () => controller.load(refresh: true)),
+            const SizedBox(height: 8),
+            Expanded(
+                child: controller.loading
+                    ? const Center(
+                        child:
+                            Column(mainAxisSize: MainAxisSize.min, children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 12),
+                        Text('Cargando facturas pendientes…')
+                      ]))
+                    : controller.error != null
+                        ? Center(
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                Text(controller.error!,
+                                    textAlign: TextAlign.center),
+                                const SizedBox(height: 12),
+                                FilledButton.icon(
+                                    onPressed: () =>
+                                        controller.load(refresh: true),
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text('Reintentar'))
+                              ]))
+                        : SingleChildScrollView(
+                            child: Column(children: [
+                            CalendarGrid(
+                                month: controller.visibleMonth,
+                                grouped: controller.grouped,
+                                selected: controller.selectedDay,
+                                onSelect: _select),
+                            if (controller.entries.isEmpty)
+                              const Padding(
+                                  padding: EdgeInsets.all(20),
+                                  child: Text(
+                                      'No hay facturas pendientes programadas para este mes.'))
+                          ]))),
+          ])));
 }
