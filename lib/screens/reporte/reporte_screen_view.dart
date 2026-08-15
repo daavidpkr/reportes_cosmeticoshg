@@ -211,6 +211,18 @@ extension _ReporteScreenView on _ReporteScreenState {
     );
   }
 
+  Widget _textoTablaLargo(String texto, double ancho) => Tooltip(
+        message: texto,
+        child: SizedBox(
+          width: ancho,
+          child: Text(
+            texto,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      );
+
   DataRow _crearFila(int indice, FilaVenta fila) => DataRow(
         key: ValueKey(fila.numero),
         color: fila.anulada
@@ -246,14 +258,9 @@ extension _ReporteScreenView on _ReporteScreenState {
               enviar: true,
             ),
           ),
+          DataCell(_textoTablaLargo(fila.cliente, 190 * _escalaReporte)),
           DataCell(
-            SizedBox(width: 240 * _escalaReporte, child: Text(fila.cliente)),
-          ),
-          DataCell(
-            SizedBox(
-              width: 220 * _escalaReporte,
-              child: Text(fila.nombreComercial),
-            ),
+            _textoTablaLargo(fila.nombreComercial, 175 * _escalaReporte),
           ),
           DataCell(Text(fila.fecha)),
           DataCell(Text(fila.numeroFactura)),
@@ -281,15 +288,21 @@ extension _ReporteScreenView on _ReporteScreenState {
           scrollDirection: Axis.horizontal,
           child: SingleChildScrollView(
             child: _tablaCompartida(
+              mode: ReportTableMode.readOnly,
               filas: _filasGenerales.map(_crearFilaLectura).toList(),
             ),
           ),
         ),
       );
 
-  DataTable _tablaCompartida({required List<DataRow> filas}) => DataTable(
+  DataTable _tablaCompartida({
+    required ReportTableMode mode,
+    required List<DataRow> filas,
+  }) =>
+      DataTable(
+        key: ValueKey(mode),
         horizontalMargin: 7 * _escalaReporte,
-        columnSpacing: 13 * _escalaReporte,
+        columnSpacing: 10 * _escalaReporte,
         dataRowMinHeight: 38 * _escalaReporte,
         dataRowMaxHeight: 58 * _escalaReporte,
         headingRowHeight: 46 * _escalaReporte,
@@ -300,7 +313,7 @@ extension _ReporteScreenView on _ReporteScreenState {
           letterSpacing: .7,
           fontSize: 11 * _escalaReporte,
         ),
-        dataTextStyle: TextStyle(fontSize: 15 * _escalaReporte),
+        dataTextStyle: TextStyle(fontSize: 14 * _escalaReporte),
         columns: [
           DataColumn(label: _encabezadoSinFiltro('NRO')),
           DataColumn(label: _encabezadoSinFiltro('REF. (FACT)')),
@@ -338,12 +351,10 @@ extension _ReporteScreenView on _ReporteScreenState {
             width: 72 * _escalaReporte,
             child: Text(_refSinCeros(fila.referencia)),
           )),
+          DataCell(_textoTablaLargo(fila.cliente, 190 * _escalaReporte)),
           DataCell(
-              SizedBox(width: 240 * _escalaReporte, child: Text(fila.cliente))),
-          DataCell(SizedBox(
-            width: 220 * _escalaReporte,
-            child: Text(fila.nombreComercial),
-          )),
+            _textoTablaLargo(fila.nombreComercial, 175 * _escalaReporte),
+          ),
           DataCell(Text(fila.fecha)),
           DataCell(Text(fila.numeroFactura)),
           DataCell(SizedBox(
@@ -374,6 +385,7 @@ extension _ReporteScreenView on _ReporteScreenState {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   _tablaCompartida(
+                    mode: ReportTableMode.editable,
                     filas: _filasVisibles
                         .map((item) => _crearFila(item.key, item.value))
                         .toList(),
@@ -477,25 +489,6 @@ extension _ReporteScreenView on _ReporteScreenState {
         ),
       );
 
-  Widget _botonZoom() => PopupMenuButton<double>(
-        tooltip: 'Cambiar zoom del reporte',
-        initialValue: _zoom,
-        onSelected: (valor) => setState(() => _zoom = valor),
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: .65, child: Text('65%')),
-          PopupMenuItem(value: .75, child: Text('75%')),
-          PopupMenuItem(value: .85, child: Text('85%')),
-          PopupMenuItem(value: 1, child: Text('100%')),
-          PopupMenuItem(value: 1.15, child: Text('115%')),
-          PopupMenuItem(value: 1.25, child: Text('125%')),
-        ],
-        child: const Tooltip(
-          message: 'Zoom',
-          child:
-              Padding(padding: EdgeInsets.all(10), child: Icon(Icons.zoom_in)),
-        ),
-      );
-
   Widget _barraAcciones() => Card(
         child: Padding(
           padding: const EdgeInsets.all(10),
@@ -560,7 +553,6 @@ extension _ReporteScreenView on _ReporteScreenState {
                   _vistaGeneral ? 'Reporte mes a mes' : 'Reporte general',
                 ),
               ),
-              _botonZoom(),
               FilledButton.icon(
                 onPressed: _guardar,
                 icon: const Icon(Icons.download),
@@ -712,47 +704,54 @@ extension _ReporteScreenView on _ReporteScreenState {
         _vistaClientes = false;
       });
 
-  Widget _barraRedisenada() => Container(
-        padding: const EdgeInsets.all(13),
+  Widget _barraRedisenada(ReportResponsiveLayout layout) => Container(
+        padding: EdgeInsets.all(layout.compact ? 8 : 12),
         decoration: BoxDecoration(
           color: context.hg.panel,
           borderRadius: BorderRadius.circular(14),
           border:
               Border.all(color: Theme.of(context).colorScheme.outlineVariant),
         ),
-        child: Row(
-          children: [
-            Expanded(child: _campoBusquedaRedisenado()),
-            const SizedBox(width: 10),
-            _filtroVendedorRedisenado(),
-            const SizedBox(width: 10),
-            _filtroEstadoRedisenado(),
-            const SizedBox(width: 10),
-            _botonBarra(
-              Icons.upload_file,
-              'Subir facturas (${_facturas.cantidad})',
-              _abrirCargaFacturas,
-            ),
-            const SizedBox(width: 8),
-            _botonBarra(
-              Icons.person_remove_outlined,
-              'Eliminar cliente',
-              _eliminarReporteCliente,
-            ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: _guardar,
-              icon: const Icon(Icons.download, size: 18),
-              label: const Text('Descargar PDF'),
-            ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: _guardarResumenMensual,
-              icon: const Icon(Icons.analytics_outlined, size: 18),
-              label: const Text('Generar reporte mensual'),
-            ),
-            _botonZoom(),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) => Wrap(
+            spacing: layout.compact ? 6 : 10,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              SizedBox(
+                width: constraints.maxWidth >= 1500
+                    ? constraints.maxWidth - (_vistaGeneral ? 310 : 935)
+                    : constraints.maxWidth >= 1280
+                        ? (_vistaGeneral ? constraints.maxWidth - 310 : 260)
+                        : constraints.maxWidth,
+                child: _campoBusquedaRedisenado(),
+              ),
+              _filtroVendedorRedisenado(),
+              _filtroEstadoRedisenado(),
+              if (!_vistaGeneral) ...[
+                _botonBarra(
+                  Icons.upload_file,
+                  'Subir facturas (${_facturas.cantidad})',
+                  _abrirCargaFacturas,
+                ),
+                _botonBarra(
+                  Icons.person_remove_outlined,
+                  'Eliminar cliente',
+                  _eliminarReporteCliente,
+                ),
+                FilledButton.icon(
+                  onPressed: _guardar,
+                  icon: const Icon(Icons.download, size: 18),
+                  label: const Text('Descargar PDF'),
+                ),
+                FilledButton.icon(
+                  onPressed: _guardarResumenMensual,
+                  icon: const Icon(Icons.analytics_outlined, size: 18),
+                  label: const Text('Generar reporte mensual'),
+                ),
+              ],
+            ],
+          ),
         ),
       );
 
@@ -762,12 +761,14 @@ extension _ReporteScreenView on _ReporteScreenState {
     IconData icono,
     Color color,
     Color fondo, {
+    required ReportResponsiveLayout layout,
     bool ultimo = false,
   }) =>
       Expanded(
         child: Container(
-          margin: EdgeInsets.only(right: ultimo ? 0 : 14),
-          padding: const EdgeInsets.all(16),
+          margin:
+              EdgeInsets.only(right: ultimo ? 0 : (layout.compact ? 7 : 14)),
+          padding: EdgeInsets.all(layout.compact ? 10 : 16),
           decoration: BoxDecoration(
             color: fondo,
             borderRadius: BorderRadius.circular(14),
@@ -786,16 +787,16 @@ extension _ReporteScreenView on _ReporteScreenState {
                     Text(
                       titulo,
                       style: TextStyle(
-                        fontSize: 10.5,
+                        fontSize: layout.compact ? 9.5 : 10.5,
                         letterSpacing: 1.1,
                         color: context.hg.mutedText,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: layout.compact ? 3 : 6),
                     Text(
                       valor,
                       style: TextStyle(
-                        fontSize: 21,
+                        fontSize: layout.compact ? 17 : 21,
                         fontWeight: FontWeight.w700,
                         color: color,
                       ),
@@ -804,20 +805,21 @@ extension _ReporteScreenView on _ReporteScreenState {
                 ),
               ),
               Container(
-                width: 30,
-                height: 30,
+                width: layout.compact ? 26 : 30,
+                height: layout.compact ? 26 : 30,
                 decoration: BoxDecoration(
                   color: color.withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(9),
                 ),
-                child: Icon(icono, size: 17, color: color),
+                child:
+                    Icon(icono, size: layout.compact ? 15 : 17, color: color),
               ),
             ],
           ),
         ),
       );
 
-  Widget _tarjetasResumen() => Row(
+  Widget _tarjetasResumen(ReportResponsiveLayout layout) => Row(
         children: [
           _kpi(
             'TOTAL ESMALTES',
@@ -825,6 +827,7 @@ extension _ReporteScreenView on _ReporteScreenState {
             Icons.brush_outlined,
             context.hg.plum,
             context.hg.panel,
+            layout: layout,
           ),
           _kpi(
             'TOTAL VENTAS',
@@ -832,6 +835,7 @@ extension _ReporteScreenView on _ReporteScreenState {
             Icons.payments_outlined,
             context.hg.burgundy,
             context.hg.panel,
+            layout: layout,
           ),
           _kpi(
             'TOTAL COBROS',
@@ -839,6 +843,7 @@ extension _ReporteScreenView on _ReporteScreenState {
             Icons.check_circle_outline,
             context.hg.positive,
             context.hg.positiveContainer,
+            layout: layout,
           ),
           _kpi(
             'POR COBRAR',
@@ -846,12 +851,13 @@ extension _ReporteScreenView on _ReporteScreenState {
             Icons.schedule,
             context.hg.warning,
             context.hg.warningContainer,
+            layout: layout,
             ultimo: true,
           ),
         ],
       );
 
-  Widget _encabezadoPagina() => Row(
+  Widget _encabezadoPagina(ReportResponsiveLayout layout) => Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Column(
@@ -875,41 +881,43 @@ extension _ReporteScreenView on _ReporteScreenState {
             ],
           ),
           const Spacer(),
-          OutlinedButton.icon(
-            onPressed: _nuevoReporte,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Nuevo mes'),
-          ),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 190,
-            child: DropdownButtonFormField<String>(
-              isExpanded: true,
-              initialValue:
-                  _reportes.reportes.isEmpty ? null : _reportes.activo.id,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.calendar_month, size: 19),
-                isDense: true,
-              ),
-              items: _reportes.reportes
-                  .map(
-                    (r) => DropdownMenuItem(
-                      value: r.id,
-                      child: Text(
-                        r.nombre,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                  )
-                  .toList(),
-              onChanged: (id) async {
-                if (id == null) return;
-                await _guardarProgreso();
-                _activarReporte(
-                    _reportes.reportes.firstWhere((r) => r.id == id));
-              },
+          if (!_vistaGeneral)
+            OutlinedButton.icon(
+              onPressed: _nuevoReporte,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Nuevo mes'),
             ),
-          ),
+          if (!_vistaGeneral) SizedBox(width: layout.compact ? 6 : 10),
+          if (!_vistaGeneral)
+            SizedBox(
+              width: 190,
+              child: DropdownButtonFormField<String>(
+                isExpanded: true,
+                initialValue:
+                    _reportes.reportes.isEmpty ? null : _reportes.activo.id,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.calendar_month, size: 19),
+                  isDense: true,
+                ),
+                items: _reportes.reportes
+                    .map(
+                      (r) => DropdownMenuItem(
+                        value: r.id,
+                        child: Text(
+                          r.nombre,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (id) async {
+                  if (id == null) return;
+                  await _guardarProgreso();
+                  _activarReporte(
+                      _reportes.reportes.firstWhere((r) => r.id == id));
+                },
+              ),
+            ),
         ],
       );
 

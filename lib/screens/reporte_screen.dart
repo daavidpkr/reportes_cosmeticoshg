@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -39,6 +38,55 @@ class ReporteScreen extends StatefulWidget {
   State<ReporteScreen> createState() => _ReporteScreenState();
 }
 
+enum ReportDensity { compact, normal, wide }
+
+@immutable
+class ReportResponsiveLayout {
+  const ReportResponsiveLayout._({
+    required this.density,
+    required this.pagePadding,
+    required this.sectionGap,
+    required this.tableScale,
+  });
+
+  static const compactBreakpoint = 1366.0;
+  static const wideBreakpoint = 1600.0;
+
+  factory ReportResponsiveLayout.forWidth(double width) {
+    if (width >= wideBreakpoint) {
+      return const ReportResponsiveLayout._(
+        density: ReportDensity.wide,
+        pagePadding: 28,
+        sectionGap: 18,
+        tableScale: 1,
+      );
+    }
+    if (width >= compactBreakpoint) {
+      return const ReportResponsiveLayout._(
+        density: ReportDensity.normal,
+        pagePadding: 20,
+        sectionGap: 14,
+        tableScale: .9,
+      );
+    }
+    return const ReportResponsiveLayout._(
+      density: ReportDensity.compact,
+      pagePadding: 12,
+      sectionGap: 10,
+      tableScale: .78,
+    );
+  }
+
+  final ReportDensity density;
+  final double pagePadding;
+  final double sectionGap;
+  final double tableScale;
+
+  bool get compact => density == ReportDensity.compact;
+}
+
+enum ReportTableMode { editable, readOnly }
+
 class _ReporteScreenState extends State<ReporteScreen> {
   static const _opcionAnulada = 'ANULADA';
   final _facturas = FacturasStore.instance;
@@ -46,7 +94,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
   final _vendedores = VendedoresStore();
   final _reportes = ReportesStore();
   final _supabaseReportes = SupabaseReportesService();
-  final _focusZoom = FocusNode();
   late List<FilaVenta> _filas;
   String _filtro = '';
   String _filtroVendedor = '';
@@ -54,7 +101,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
   final Map<String, String> _filtrosColumnas = {};
   String? _ordenColumna;
   bool _ordenAscendente = true;
-  double _zoom = .85;
   bool _vistaGeneral = false;
   bool _vistaCobrosMensuales = false;
   bool _vistaEstadisticas = false;
@@ -72,8 +118,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
   int _versionCobrosMensuales = 0;
   List<FilaVenta> _filasConsolidadas = const [];
 
-  // La antigua vista al 90% es ahora la escala base (100%).
-  double get _escalaReporte => _zoom * .99;
+  ReportResponsiveLayout get _reportLayout =>
+      ReportResponsiveLayout.forWidth(MediaQuery.sizeOf(context).width);
+
+  double get _escalaReporte => _reportLayout.tableScale;
 
   @override
   void initState() {
@@ -87,13 +135,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
   void dispose() {
     _filasSubscription?.cancel();
     _busquedaFacturaTimer?.cancel();
-    _focusZoom.dispose();
     _busquedaController.dispose();
     super.dispose();
-  }
-
-  void _cambiarZoom(double cambio) {
-    setState(() => _zoom = (_zoom + cambio).clamp(0.65, 1.25));
   }
 
   void _abrirRecordatorios() => setState(() {
@@ -116,34 +159,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
         _vistaClientes = false;
         _seccionMovil = 0;
       });
-
-  KeyEventResult _atajoZoom(FocusNode node, KeyEvent evento) {
-    if (evento is! KeyDownEvent ||
-        !HardwareKeyboard.instance.isControlPressed) {
-      return KeyEventResult.ignored;
-    }
-    final aumentar = evento.character == '+' ||
-        evento.logicalKey == LogicalKeyboardKey.equal ||
-        evento.logicalKey == LogicalKeyboardKey.add;
-    final reducir = evento.character == '-' ||
-        evento.logicalKey == LogicalKeyboardKey.minus;
-    if (aumentar) {
-      _cambiarZoom(0.1);
-      return KeyEventResult.handled;
-    }
-    if (reducir) {
-      _cambiarZoom(-0.1);
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
-  void _ruedaZoom(PointerSignalEvent evento) {
-    if (evento is PointerScrollEvent &&
-        HardwareKeyboard.instance.isControlPressed) {
-      _cambiarZoom(evento.scrollDelta.dy < 0 ? 0.1 : -0.1);
-    }
-  }
 
   Future<void> _cargarVendedores() async {
     await _vendedores.cargar();
@@ -1599,57 +1614,68 @@ class _ReporteScreenState extends State<ReporteScreen> {
     if (_esReleaseMovil) return _vistaMovil();
 
     return Scaffold(
-      body: Focus(
-        focusNode: _focusZoom,
-        autofocus: true,
-        onKeyEvent: _atajoZoom,
-        child: Listener(
-          onPointerSignal: _ruedaZoom,
-          child: Column(
-            children: [
-              _barraSuperior(),
-              Expanded(
-                child: _vistaCalendario
-                    ? const PaymentCalendarView()
-                    : _vistaCargaFacturas
-                        ? CargaFacturasView(
-                            key: ValueKey(_reportes.activo.id),
-                            mes: _reportes.activo.mes,
-                            anio: _reportes.activo.anio,
-                            onVolver: _mostrarReporteVentas,
-                            onFacturasGuardadas: _guardarProgreso,
-                          )
-                        : _vistaClientes
-                            ? const ClientesScreen()
-                            : _vistaVendedores
-                                ? VendedoresContent(store: _vendedores)
-                                : _vistaEstadisticas
-                                    ? const EstadisticasScreen()
-                                    : _vistaCobrosMensuales
-                                        ? CobrosMensualesView(
-                                            key: ValueKey(
-                                                _versionCobrosMensuales),
-                                          )
-                                        : Padding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                28, 22, 28, 28),
+      body: Column(
+        children: [
+          _barraSuperior(),
+          Expanded(
+            child: _vistaCalendario
+                ? const PaymentCalendarView()
+                : _vistaCargaFacturas
+                    ? CargaFacturasView(
+                        key: ValueKey(_reportes.activo.id),
+                        mes: _reportes.activo.mes,
+                        anio: _reportes.activo.anio,
+                        onVolver: _mostrarReporteVentas,
+                        onFacturasGuardadas: _guardarProgreso,
+                      )
+                    : _vistaClientes
+                        ? const ClientesScreen()
+                        : _vistaVendedores
+                            ? VendedoresContent(store: _vendedores)
+                            : _vistaEstadisticas
+                                ? const EstadisticasScreen()
+                                : _vistaCobrosMensuales
+                                    ? CobrosMensualesView(
+                                        key: ValueKey(_versionCobrosMensuales),
+                                      )
+                                    : LayoutBuilder(
+                                        builder: (context, constraints) {
+                                          final layout =
+                                              ReportResponsiveLayout.forWidth(
+                                            constraints.maxWidth,
+                                          );
+                                          return Padding(
+                                            padding: EdgeInsets.fromLTRB(
+                                              layout.pagePadding,
+                                              layout.compact ? 10 : 18,
+                                              layout.pagePadding,
+                                              layout.compact ? 12 : 22,
+                                            ),
                                             child: Column(
                                               children: [
-                                                _encabezadoPagina(),
-                                                const SizedBox(height: 18),
-                                                _tarjetasResumen(),
-                                                const SizedBox(height: 18),
-                                                _barraRedisenada(),
-                                                const SizedBox(height: 14),
+                                                _encabezadoPagina(layout),
+                                                SizedBox(
+                                                  height: layout.sectionGap,
+                                                ),
+                                                _tarjetasResumen(layout),
+                                                SizedBox(
+                                                  height: layout.sectionGap,
+                                                ),
+                                                _barraRedisenada(layout),
+                                                SizedBox(
+                                                  height:
+                                                      layout.compact ? 8 : 12,
+                                                ),
                                                 Expanded(
-                                                    child: _tarjetaTabla()),
+                                                  child: _tarjetaTabla(),
+                                                ),
                                               ],
                                             ),
-                                          ),
-              ),
-            ],
+                                          );
+                                        },
+                                      ),
           ),
-        ),
+        ],
       ),
     );
   }
