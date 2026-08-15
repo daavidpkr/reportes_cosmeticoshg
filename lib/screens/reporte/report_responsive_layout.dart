@@ -145,3 +145,66 @@ class ReportDesktopFrame extends StatelessWidget {
         ),
       );
 }
+
+class ReportTableContentFrame extends StatefulWidget {
+  const ReportTableContentFrame({
+    required this.minimumWidth,
+    required this.table,
+    this.footer,
+    this.horizontalController,
+    super.key,
+  });
+
+  final double minimumWidth;
+  final Widget table;
+  final Widget? footer;
+  final ScrollController? horizontalController;
+
+  @override
+  State<ReportTableContentFrame> createState() =>
+      _ReportTableContentFrameState();
+}
+
+class _ReportTableContentFrameState extends State<ReportTableContentFrame> {
+  late final ScrollController _ownedController;
+
+  ScrollController get _controller =>
+      widget.horizontalController ?? _ownedController;
+
+  @override
+  void initState() {
+    super.initState();
+    _ownedController = ScrollController(initialScrollOffset: 0);
+  }
+
+  @override
+  void dispose() {
+    _ownedController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+        builder: (context, constraints) => Scrollbar(
+          controller: _controller,
+          child: SingleChildScrollView(
+            key: const ValueKey('report-table-horizontal-scroll'),
+            controller: _controller,
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: math.max(widget.minimumWidth, constraints.maxWidth),
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    widget.table,
+                    if (widget.footer case final footer?)
+                      Align(alignment: Alignment.centerRight, child: footer),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+}

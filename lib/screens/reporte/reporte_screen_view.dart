@@ -292,28 +292,19 @@ extension _ReporteScreenView on _ReporteScreenState {
         ],
       );
 
-  Widget _tablaGeneral() => LayoutBuilder(
-        builder: (context, constraints) {
-          final geometry = _reportLayout.table;
-          return Scrollbar(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: geometry.tableWidth),
-                child: SingleChildScrollView(
-                  child: _tablaCompartida(
-                    geometry: geometry,
-                    mode: ReportTableMode.readOnly,
-                    filas: _filasGenerales
-                        .map((fila) => _crearFilaLectura(fila, geometry))
-                        .toList(),
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      );
+  Widget _tablaGeneral() {
+    final geometry = _reportLayout.table;
+    return ReportTableContentFrame(
+      minimumWidth: geometry.tableWidth,
+      table: _tablaCompartida(
+        geometry: geometry,
+        mode: ReportTableMode.readOnly,
+        filas: _filasGenerales
+            .map((fila) => _crearFilaLectura(fila, geometry))
+            .toList(),
+      ),
+    );
+  }
 
   DataTable _tablaCompartida({
     required ReportTableMode mode,
@@ -403,46 +394,31 @@ extension _ReporteScreenView on _ReporteScreenState {
         ],
       );
 
-  Widget _tabla() => LayoutBuilder(
-        builder: (context, constraints) {
-          final geometry = _reportLayout.table;
-          return Scrollbar(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(minWidth: geometry.tableWidth),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      _tablaCompartida(
-                        geometry: geometry,
-                        mode: ReportTableMode.editable,
-                        filas: _filasVisibles
-                            .map((item) =>
-                                _crearFila(item.key, item.value, geometry))
-                            .toList(),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 10, 28, 12),
-                        child: FilledButton.icon(
-                          onPressed: _reiniciar,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: context.hg.danger,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          icon: const Icon(Icons.delete_outline, size: 18),
-                          label: const Text('Eliminar reporte'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
-      );
+  Widget _tabla() {
+    final geometry = _reportLayout.table;
+    return ReportTableContentFrame(
+      minimumWidth: geometry.tableWidth,
+      table: _tablaCompartida(
+        geometry: geometry,
+        mode: ReportTableMode.editable,
+        filas: _filasVisibles
+            .map((item) => _crearFila(item.key, item.value, geometry))
+            .toList(),
+      ),
+      footer: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 10, 28, 12),
+        child: FilledButton.icon(
+          onPressed: _reiniciar,
+          style: FilledButton.styleFrom(
+            backgroundColor: context.hg.danger,
+            visualDensity: VisualDensity.compact,
+          ),
+          icon: const Icon(Icons.delete_outline, size: 18),
+          label: const Text('Eliminar reporte'),
+        ),
+      ),
+    );
+  }
 
   Widget _barraBusqueda() => LayoutBuilder(
         builder: (context, constraints) => Wrap(

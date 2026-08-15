@@ -93,6 +93,83 @@ void main() {
       });
     }
   });
+
+  group('alineación interna editable y solo lectura', () {
+    for (final size in const [
+      Size(1024, 768),
+      Size(1280, 720),
+      Size(1366, 768),
+      Size(1600, 900),
+      Size(1920, 1080),
+    ]) {
+      testWidgets(
+          '${size.width.toInt()}×${size.height.toInt()} no deja franja antes de NRO',
+          (tester) async {
+        await tester.binding.setSurfaceSize(size);
+        addTearDown(() => tester.binding.setSurfaceSize(null));
+        final layout = ReportResponsiveLayout.forWidth(size.width);
+        final editableController = ScrollController();
+        final readOnlyController = ScrollController();
+        addTearDown(editableController.dispose);
+        addTearDown(readOnlyController.dispose);
+
+        await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+            body: Padding(
+              padding: EdgeInsets.symmetric(horizontal: layout.pagePadding),
+              child: Column(
+                children: [
+                  Expanded(
+                    child: _TableGeometryProbe(
+                      prefix: 'editable',
+                      minimumWidth: layout.table.tableWidth,
+                      controller: editableController,
+                      editable: true,
+                    ),
+                  ),
+                  Expanded(
+                    child: _TableGeometryProbe(
+                      prefix: 'readonly',
+                      minimumWidth: layout.table.tableWidth,
+                      controller: readOnlyController,
+                      editable: false,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ));
+
+        double leadingInset(String prefix) {
+          final surface = tester.getRect(
+            find.byKey(ValueKey('$prefix-surface')),
+          );
+          final nro = tester.getRect(find.byKey(ValueKey('$prefix-nro')));
+          return nro.left - surface.left;
+        }
+
+        double trailingInset(String prefix) {
+          final surface = tester.getRect(
+            find.byKey(ValueKey('$prefix-surface')),
+          );
+          final saldo = tester.getRect(find.byKey(ValueKey('$prefix-saldo')));
+          return surface.right - saldo.right;
+        }
+
+        final editableInset = leadingInset('editable');
+        final readOnlyInset = leadingInset('readonly');
+        expect(editableInset, lessThanOrEqualTo(32));
+        expect(readOnlyInset, lessThanOrEqualTo(32));
+        expect((editableInset - readOnlyInset).abs(), lessThanOrEqualTo(8));
+        expect(trailingInset('editable'), lessThanOrEqualTo(32));
+        expect(trailingInset('readonly'), lessThanOrEqualTo(32));
+        expect(editableController.offset, 0);
+        expect(readOnlyController.offset, 0);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  });
 }
 
 class _MeasuredBlock extends StatelessWidget {
@@ -104,5 +181,46 @@ class _MeasuredBlock extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
         width: double.infinity,
         height: height,
+      );
+}
+
+class _TableGeometryProbe extends StatelessWidget {
+  const _TableGeometryProbe({
+    required this.prefix,
+    required this.minimumWidth,
+    required this.controller,
+    required this.editable,
+  });
+
+  final String prefix;
+  final double minimumWidth;
+  final ScrollController controller;
+  final bool editable;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        key: ValueKey('$prefix-viewport'),
+        child: ReportTableContentFrame(
+          minimumWidth: minimumWidth,
+          horizontalController: controller,
+          footer: editable ? const SizedBox(width: 120, height: 32) : null,
+          table: SizedBox(
+            key: ValueKey('$prefix-surface'),
+            width: minimumWidth - 180,
+            height: 100,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 7,
+                  child: Text('NRO', key: ValueKey('$prefix-nro')),
+                ),
+                Positioned(
+                  right: 7,
+                  child: Text('SALDO', key: ValueKey('$prefix-saldo')),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
 }
