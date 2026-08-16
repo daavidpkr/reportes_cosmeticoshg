@@ -18,12 +18,10 @@ class _ClientesScreenState extends State<ClientesScreen> {
   late final CustomerTermsDataSource _repository =
       widget.repository ?? CustomerTermsRepository();
   late Future<List<BillingCustomer>> _customers = _repository.listCustomers();
-  final Set<String> _busy = {};
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
   Object? _selectedTerm;
   static const pendingTerm = 'pending';
-  String _key(BillingCustomer c) => '${c.name}\u0000${c.commercialName}';
   Future<void> _reload() async {
     final next = _repository.listCustomers();
     setState(() {
@@ -81,20 +79,10 @@ class _ClientesScreenState extends State<ClientesScreen> {
     }
   }
 
-  Future<void> _run(BillingCustomer c, Future<void> Function() action) async {
-    if (_busy.contains(_key(c))) return;
-    setState(() => _busy.add(_key(c)));
-    try {
-      await action();
-    } finally {
-      if (mounted) setState(() => _busy.remove(_key(c)));
-    }
-  }
-
-  Future<void> _edit(BillingCustomer c) async {
+  Future<int?> _edit(BillingCustomer c) async {
     final days = await showDialog<int>(
         context: context, builder: (_) => _PaymentTermDialog(customer: c));
-    if (days == null || !mounted) return;
+    if (days == null || !mounted) return null;
     final impacted = await _repository.previewImpact(c.id, days);
     final count =
         await _repository.savePaymentTerm(c.id, days, applyExisting: true);
@@ -102,9 +90,10 @@ class _ClientesScreenState extends State<ClientesScreen> {
         ? 'Plazo habitual guardado.'
         : 'Plazo guardado y $count facturas programadas.');
     await _reload();
+    return days;
   }
 
-  Future<void> _delete(BillingCustomer c) async {
+  Future<bool> _delete(BillingCustomer c) async {
     final ok = await showDialog<bool>(
         context: context,
         barrierDismissible: false,
@@ -116,10 +105,11 @@ class _ClientesScreenState extends State<ClientesScreen> {
             body:
                 'Se eliminará a este cliente únicamente del apartado Clientes.\n\nLas facturas, abonos y recordatorios relacionados se conservarán sin cambios.',
             operation: () => _repository.deleteCustomer(c)));
-    if (ok != true || !mounted) return;
+    if (ok != true || !mounted) return false;
     _message(
         'Cliente eliminado del apartado Clientes. Sus facturas y recordatorios se conservaron.');
     await _reload();
+    return true;
   }
 
   Future<void> _schedule(BillingCustomer c) async {
@@ -150,10 +140,15 @@ class _ClientesScreenState extends State<ClientesScreen> {
     await _reload();
   }
 
-  Future<void> _openHistory(BillingCustomer customer) =>
-      Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => CustomerHistoryScreen(
-              customer: customer, repository: widget.historyRepository)));
+  Future<void> _openHistory(BillingCustomer customer) => showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => CustomerHistoryScreen(
+          customer: customer,
+          repository: widget.historyRepository,
+          onEditTerm: _edit,
+          onSchedule: _schedule,
+          onDelete: _delete));
 
   @override
   Widget build(BuildContext context) => RefreshIndicator(
@@ -282,15 +277,8 @@ class _ClientesScreenState extends State<ClientesScreen> {
                       filtered: true, onClear: _clearFilters);
                 }
                 final c = filtered[index - 2];
-                final busy = _busy.contains(_key(c));
                 return _CustomerCard(
-                    customer: c,
-                    onOpen: () => _openHistory(c),
-                    busy: busy,
-                    onEdit: () => _run(c, () => _edit(c)),
-                    onSchedule:
-                        c.configured ? () => _run(c, () => _schedule(c)) : null,
-                    onDelete: () => _run(c, () => _delete(c)));
+                    customer: c, onOpen: () => _openHistory(c));
               });
         },
       ));
@@ -452,160 +440,76 @@ class _OperationDialogState extends State<_OperationDialog> {
 }
 
 class _CustomerCard extends StatelessWidget {
-  const _CustomerCard(
-      {required this.customer,
-      required this.onOpen,
-      required this.busy,
-      required this.onEdit,
-      required this.onSchedule,
-      required this.onDelete});
+  const _CustomerCard({required this.customer, required this.onOpen});
   final BillingCustomer customer;
-  final bool busy;
-  final VoidCallback onOpen, onEdit, onDelete;
-  final VoidCallback? onSchedule;
+  final VoidCallback onOpen;
   @override
-  Widget build(BuildContext context) => Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: LayoutBuilder(builder: (_, box) {
-            final compact = box.maxWidth < 1100, mobile = box.maxWidth < 620;
-            final name = _CustomerField(label: 'Cliente', value: customer.name);
-            final commercial = _CustomerField(
-                label: 'Nombre comercial',
-                value: customer.commercialName.isEmpty
-                    ? 'Sin nombre comercial'
-                    : customer.commercialName);
-            final badge = _StatusBadge(customer: customer);
-            final actions = _Actions(
-                customer: customer,
-                compact: compact,
-                busy: busy,
-                onEdit: busy ? null : onEdit,
-                onSchedule: busy ? null : onSchedule,
-                onDelete: busy ? null : onDelete);
-            if (mobile) {
-              return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Semantics(
-                      label:
-                          'Abrir historial de ${customer.name} – ${customer.commercialName.isEmpty ? 'Sin nombre comercial' : customer.commercialName}',
-                      button: true,
-                      child: InkWell(
-                        onTap: onOpen,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                name,
-                                const SizedBox(height: 8),
-                                Row(children: [
-                                  Expanded(child: commercial),
-                                  const Icon(Icons.chevron_right)
-                                ]),
-                              ]),
-                        ),
-                      ),
-                    ),
-                    Row(children: [
-                      Semantics(
-                        label: 'Abrir historial y consultar plazo',
-                        button: true,
-                        child: InkWell(
-                          onTap: onOpen,
-                          child: Padding(
+  Widget build(BuildContext context) => Semantics(
+      label:
+          'Abrir historial de ${customer.name} – ${customer.commercialName.isEmpty ? 'Sin nombre comercial' : customer.commercialName}',
+      button: true,
+      child: Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+              canRequestFocus: true,
+              onTap: onOpen,
+              child: Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: LayoutBuilder(builder: (_, box) {
+                    final mobile = box.maxWidth < 620;
+                    final name =
+                        _CustomerField(label: 'Cliente', value: customer.name);
+                    final commercial = _CustomerField(
+                        label: 'Nombre comercial',
+                        value: customer.commercialName.isEmpty
+                            ? 'Sin nombre comercial'
+                            : customer.commercialName);
+                    final badge = _StatusBadge(customer: customer);
+                    if (mobile) {
+                      return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Padding(
                               padding: const EdgeInsets.symmetric(vertical: 4),
-                              child: badge),
-                        ),
-                      ),
-                      const Spacer(),
-                      actions,
-                    ]),
-                  ]);
-            }
-            return Row(children: [
-              Expanded(
-                  flex: 77,
-                  child: Semantics(
-                    label:
-                        'Abrir historial de ${customer.name} – ${customer.commercialName.isEmpty ? 'Sin nombre comercial' : customer.commercialName}',
-                    button: true,
-                    child: InkWell(
-                        onTap: onOpen,
-                        child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Row(children: [
-                              Expanded(flex: 31, child: name),
-                              const SizedBox(width: 14),
-                              Expanded(flex: 29, child: commercial),
-                              const SizedBox(width: 14),
-                              Expanded(
-                                  flex: 17,
-                                  child: Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: badge)),
-                              const Icon(Icons.chevron_right)
-                            ]))),
-                  )),
-              Expanded(
-                  flex: 23,
-                  child:
-                      Align(alignment: Alignment.centerRight, child: actions))
-            ]);
-          })));
-}
-
-class _Actions extends StatelessWidget {
-  const _Actions(
-      {required this.customer,
-      required this.compact,
-      required this.busy,
-      required this.onEdit,
-      required this.onSchedule,
-      required this.onDelete});
-  final BillingCustomer customer;
-  final bool compact, busy;
-  final VoidCallback? onEdit, onSchedule, onDelete;
-  @override
-  Widget build(BuildContext context) {
-    if (busy) {
-      return const SizedBox.square(
-          dimension: 24, child: CircularProgressIndicator(strokeWidth: 2));
-    }
-    final identity =
-        '${customer.name}, ${customer.commercialName.isEmpty ? 'sin nombre comercial' : customer.commercialName}';
-    Widget action(String tooltip, String semantic, IconData icon,
-            VoidCallback? callback, [Color? color]) =>
-        Semantics(
-            label: semantic,
-            button: true,
-            enabled: callback != null,
-            child: IconButton(
-                tooltip: tooltip,
-                onPressed: callback,
-                color: color,
-                icon: Icon(icon),
-                constraints:
-                    const BoxConstraints(minWidth: 44, minHeight: 44)));
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      action('Editar cliente', 'Editar cliente $identity', Icons.edit_outlined,
-          onEdit),
-      action(
-          customer.configured
-              ? 'Programar facturas pendientes'
-              : 'Configura primero los días de pago',
-          'Programar facturas pendientes de $identity',
-          Icons.event_repeat_outlined,
-          onSchedule,
-          Theme.of(context).colorScheme.primary),
-      if (!compact) const Text('Programar'),
-      action('Eliminar cliente', 'Eliminar cliente $identity',
-          Icons.delete_outline, onDelete, Theme.of(context).colorScheme.error)
-    ]);
-  }
+                              child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    name,
+                                    const SizedBox(height: 8),
+                                    Row(children: [
+                                      Expanded(child: commercial),
+                                      const Icon(Icons.chevron_right)
+                                    ]),
+                                  ]),
+                            ),
+                            Row(children: [
+                              badge,
+                              const Spacer(),
+                              const Icon(Icons.chevron_right),
+                            ]),
+                          ]);
+                    }
+                    return Row(children: [
+                      Expanded(
+                          child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Row(children: [
+                                Expanded(flex: 31, child: name),
+                                const SizedBox(width: 14),
+                                Expanded(flex: 29, child: commercial),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                    flex: 17,
+                                    child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: badge)),
+                                const Icon(Icons.chevron_right)
+                              ]))),
+                    ]);
+                  })))));
 }
 
 class _StatusBadge extends StatelessWidget {

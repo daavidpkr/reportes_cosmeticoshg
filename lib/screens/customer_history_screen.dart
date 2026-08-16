@@ -8,9 +8,17 @@ import '../services/customer_history_repository.dart';
 
 class CustomerHistoryScreen extends StatefulWidget {
   const CustomerHistoryScreen(
-      {required this.customer, this.repository, super.key});
+      {required this.customer,
+      required this.onEditTerm,
+      required this.onSchedule,
+      required this.onDelete,
+      this.repository,
+      super.key});
   final BillingCustomer customer;
   final CustomerHistoryDataSource? repository;
+  final Future<int?> Function(BillingCustomer) onEditTerm;
+  final Future<void> Function(BillingCustomer) onSchedule;
+  final Future<bool> Function(BillingCustomer) onDelete;
   @override
   State<CustomerHistoryScreen> createState() => _CustomerHistoryScreenState();
 }
@@ -26,6 +34,8 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
   int filteredCount = 0;
   bool loading = false, loadingMore = false;
   String? error;
+  late BillingCustomer customer = widget.customer;
+  bool actionBusy = false;
 
   @override
   void initState() {
@@ -52,7 +62,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
     });
     try {
       final page = await repository.load(
-        customerId: widget.customer.id,
+        customerId: customer.id,
         offset: more ? invoices.length : 0,
         status: status,
         search: searchController.text,
@@ -84,59 +94,137 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
     debounce = Timer(const Duration(milliseconds: 350), _load);
   }
 
+  Future<void> _editTerm() async {
+    if (actionBusy) return;
+    setState(() => actionBusy = true);
+    try {
+      final days = await widget.onEditTerm(customer);
+      if (days != null && mounted) {
+        setState(() => customer = BillingCustomer(
+            id: customer.id,
+            name: customer.name,
+            commercialName: customer.commercialName,
+            paymentTermDays: days));
+        await _load();
+      }
+    } finally {
+      if (mounted) setState(() => actionBusy = false);
+    }
+  }
+
+  Future<void> _schedule() async {
+    if (actionBusy || !customer.configured) return;
+    setState(() => actionBusy = true);
+    try {
+      await widget.onSchedule(customer);
+      await _load();
+    } finally {
+      if (mounted) setState(() => actionBusy = false);
+    }
+  }
+
+  Future<void> _delete() async {
+    if (actionBusy) return;
+    setState(() => actionBusy = true);
+    try {
+      if (await widget.onDelete(customer) && mounted) Navigator.pop(context);
+    } finally {
+      if (mounted) setState(() => actionBusy = false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Historial del cliente')),
-        body: SafeArea(child: LayoutBuilder(builder: (context, box) {
-          final wide = box.maxWidth >= 760;
-          return RefreshIndicator(
-            onRefresh: _load,
-            child: ListView(
-              padding: EdgeInsets.all(wide ? 24 : 14),
-              children: [
-                _Header(customer: widget.customer),
-                const SizedBox(height: 16),
-                if (loading && summary == null)
-                  const Padding(
-                      padding: EdgeInsets.all(60),
-                      child: Center(child: CircularProgressIndicator()))
-                else if (error != null && summary == null)
-                  _ErrorState(message: error!, retry: _load)
-                else ...[
-                  _Kpis(summary: summary!, wide: wide),
-                  const SizedBox(height: 12),
-                  _DebtSummary(summary: summary!),
-                  const SizedBox(height: 16),
-                  _toolbar(wide),
-                  const SizedBox(height: 12),
-                  if (invoices.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Center(
-                          child: Text(searchController.text.isEmpty &&
-                                  status == 'all'
-                              ? 'Este cliente todavía no tiene facturas registradas.'
-                              : 'No se encontraron facturas con estos filtros.')),
-                    )
-                  else
-                    for (final invoice in invoices)
-                      _InvoiceCard(invoice: invoice),
-                  if (invoices.length < filteredCount)
-                    Center(
-                        child: FilledButton.tonal(
-                      onPressed: loadingMore ? null : () => _load(more: true),
-                      child: loadingMore
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Text('Cargar más'),
-                    )),
-                ],
-              ],
+  Widget build(BuildContext context) {
+    final viewport = MediaQuery.sizeOf(context);
+    return Dialog(
+      insetPadding: EdgeInsets.symmetric(
+          horizontal: viewport.width < 600 ? 8 : 32,
+          vertical: viewport.height < 700 ? 8 : 24),
+      clipBehavior: Clip.antiAlias,
+      child: SafeArea(
+        child: SizedBox(
+          width: viewport.width < 600 ? viewport.width : 1180,
+          height:
+              viewport.height < 600 ? viewport.height : viewport.height * .9,
+          child: Column(children: [
+            Material(
+              color: Theme.of(context).colorScheme.surfaceContainerHigh,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+                child: Row(children: [
+                  Expanded(
+                      child: Text('Historial del cliente',
+                          style: Theme.of(context).textTheme.titleLarge)),
+                  IconButton(
+                      tooltip: 'Cerrar historial',
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.close))
+                ]),
+              ),
             ),
-          );
-        })),
-      );
+            Expanded(child: LayoutBuilder(builder: (context, box) {
+              final wide = box.maxWidth >= 760;
+              return RefreshIndicator(
+                onRefresh: _load,
+                child: ListView(
+                  padding: EdgeInsets.all(wide ? 24 : 14),
+                  children: [
+                    _Header(customer: customer),
+                    const SizedBox(height: 8),
+                    _CustomerActions(
+                        customer: customer,
+                        busy: actionBusy,
+                        onEdit: _editTerm,
+                        onSchedule: customer.configured ? _schedule : null,
+                        onDelete: _delete),
+                    const SizedBox(height: 16),
+                    if (loading && summary == null)
+                      const Padding(
+                          padding: EdgeInsets.all(60),
+                          child: Center(child: CircularProgressIndicator()))
+                    else if (error != null && summary == null)
+                      _ErrorState(message: error!, retry: _load)
+                    else ...[
+                      _Kpis(summary: summary!, wide: wide),
+                      const SizedBox(height: 12),
+                      _DebtSummary(summary: summary!),
+                      const SizedBox(height: 16),
+                      _toolbar(wide),
+                      const SizedBox(height: 12),
+                      if (invoices.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.all(40),
+                          child: Center(
+                              child: Text(searchController.text.isEmpty &&
+                                      status == 'all'
+                                  ? 'Este cliente todavía no tiene facturas registradas.'
+                                  : 'No se encontraron facturas con estos filtros.')),
+                        )
+                      else
+                        for (final invoice in invoices)
+                          _InvoiceCard(invoice: invoice),
+                      if (invoices.length < filteredCount)
+                        Center(
+                            child: FilledButton.tonal(
+                          onPressed:
+                              loadingMore ? null : () => _load(more: true),
+                          child: loadingMore
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Text('Cargar más'),
+                        )),
+                    ],
+                  ],
+                ),
+              );
+            }))
+          ]),
+        ),
+      ),
+    );
+  }
 
   Widget _toolbar(bool wide) {
     final search = TextField(
@@ -205,6 +293,49 @@ class _Header extends StatelessWidget {
                 ? 'Plazo pendiente'
                 : 'Plazo de pago: ${customer.paymentTermDays} días'),
           ])));
+}
+
+class _CustomerActions extends StatelessWidget {
+  const _CustomerActions(
+      {required this.customer,
+      required this.busy,
+      required this.onEdit,
+      required this.onSchedule,
+      required this.onDelete});
+  final BillingCustomer customer;
+  final bool busy;
+  final VoidCallback onEdit, onDelete;
+  final VoidCallback? onSchedule;
+
+  @override
+  Widget build(BuildContext context) =>
+      Wrap(spacing: 8, runSpacing: 8, children: [
+        FilledButton.tonalIcon(
+            onPressed: busy ? null : onEdit,
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Editar plazo')),
+        Tooltip(
+          message: customer.configured
+              ? 'Programar facturas pendientes'
+              : 'Configura primero los días de pago',
+          child: FilledButton.tonalIcon(
+              onPressed: busy ? null : onSchedule,
+              icon: const Icon(Icons.event_repeat_outlined),
+              label: const Text('Programar pendientes')),
+        ),
+        OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.error),
+            onPressed: busy ? null : onDelete,
+            icon: const Icon(Icons.delete_outline),
+            label: const Text('Eliminar cliente')),
+        if (busy)
+          const Padding(
+              padding: EdgeInsets.all(10),
+              child: SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2)))
+      ]);
 }
 
 class _Kpis extends StatelessWidget {

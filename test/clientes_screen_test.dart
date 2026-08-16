@@ -106,8 +106,28 @@ class FakeHistory implements CustomerHistoryDataSource {
           filteredCount: 0);
 }
 
+class FlakyHistory extends FakeHistory {
+  int attempts = 0;
+  @override
+  Future<CustomerHistoryPage> load(
+      {required String customerId,
+      required int offset,
+      String status = 'all',
+      String search = '',
+      String sort = 'recent'}) async {
+    attempts++;
+    if (attempts == 1) throw Exception('remote error');
+    return super.load(
+        customerId: customerId,
+        offset: offset,
+        status: status,
+        search: search,
+        sort: sort);
+  }
+}
+
 void main() {
-  testWidgets('tocar información abre historial y las acciones no lo abren',
+  testWidgets('toda la tarjeta abre modal y la lista no contiene acciones',
       (tester) async {
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
@@ -119,12 +139,32 @@ void main() {
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(find.text('Historial del cliente'), findsOneWidget);
     expect(find.text('Total histórico'), findsOneWidget);
-    await tester.pageBack();
+    expect(find.byType(Dialog), findsOneWidget);
+    expect(find.byTooltip('Cerrar historial'), findsOneWidget);
+    await tester.tap(find.byTooltip('Cerrar historial'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Editar cliente').first);
-    await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Historial del cliente'), findsNothing);
-    expect(find.text('Plazo habitual en días'), findsOneWidget);
+    expect(find.text('Editar plazo'), findsNothing);
+    expect(find.text('Programar pendientes'), findsNothing);
+    expect(find.text('Eliminar cliente'), findsNothing);
+  });
+
+  testWidgets('un error real permite reintentar y cargar sin cerrar el modal',
+      (tester) async {
+    final history = FlakyHistory();
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: FakeCustomerTerms(), historyRepository: history))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cliente configurado'));
+    await tester.pumpAndSettle();
+    expect(find.text('No se pudo cargar el historial.'), findsOneWidget);
+    await tester.tap(find.text('Reintentar'));
+    await tester.pumpAndSettle();
+    expect(history.attempts, 2);
+    expect(find.text('Total histórico'), findsOneWidget);
+    expect(find.text('No se pudo cargar el historial.'), findsNothing);
   });
 
   testWidgets('busca por código, nombre y nombre comercial sin distinguir caso',
@@ -201,10 +241,14 @@ void main() {
       (tester) async {
     final repository = FakeCustomerTerms()..previewed = 2;
     await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: ClientesScreen(repository: repository))));
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: repository, historyRepository: FakeHistory()))));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Editar cliente').last);
+    await tester.tap(find.text('Cliente pendiente'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editar plazo'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.enterText(find.byType(TextField).last, '10');
     await tester.tap(find.text('Continuar'));
@@ -215,32 +259,37 @@ void main() {
         find.text('Plazo guardado y 2 facturas programadas.'), findsOneWidget);
   });
 
-  testWidgets('muestra tres acciones y deshabilita programar pendiente',
+  testWidgets('muestra acciones solo dentro del modal y deshabilita programar',
       (tester) async {
     await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: ClientesScreen(repository: FakeCustomerTerms()))));
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: FakeCustomerTerms(),
+                historyRepository: FakeHistory()))));
     await tester.pumpAndSettle();
-    expect(find.byTooltip('Editar cliente'), findsNWidgets(2));
-    expect(find.byTooltip('Eliminar cliente'), findsNWidgets(2));
-    expect(find.byTooltip('Programar facturas pendientes'), findsOneWidget);
+    expect(find.text('Editar plazo'), findsNothing);
+    await tester.tap(find.text('Cliente pendiente'));
+    await tester.pumpAndSettle();
+    expect(find.text('Editar plazo'), findsOneWidget);
+    expect(find.text('Eliminar cliente'), findsOneWidget);
     expect(
         find.byTooltip('Configura primero los días de pago'), findsOneWidget);
-    final scheduleButtons = tester
-        .widgetList<IconButton>(find.byType(IconButton))
-        .where((button) =>
-            button.icon is Icon &&
-            (button.icon as Icon).icon == Icons.event_repeat_outlined);
-    expect(scheduleButtons.where((button) => button.onPressed == null),
-        hasLength(1));
+    final schedule = tester.widget<FilledButton>(
+        find.widgetWithText(FilledButton, 'Programar pendientes'));
+    expect(schedule.onPressed, isNull);
   });
 
   testWidgets('confirma, programa una sola vez y muestra resultado',
       (tester) async {
     final repository = FakeCustomerTerms();
     await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: ClientesScreen(repository: repository))));
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: repository, historyRepository: FakeHistory()))));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Programar facturas pendientes'));
+    await tester.tap(find.text('Cliente configurado'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Programar pendientes'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Programar facturas pendientes'), findsOneWidget);
     expect(find.textContaining('Los recordatorios existentes'), findsOneWidget);
@@ -254,9 +303,13 @@ void main() {
   testWidgets('elimina solo después de confirmar', (tester) async {
     final repository = FakeCustomerTerms();
     await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: ClientesScreen(repository: repository))));
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: repository, historyRepository: FakeHistory()))));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Eliminar cliente').first);
+    await tester.tap(find.text('Cliente configurado'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Eliminar cliente'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.textContaining('facturas, abonos y recordatorios'),
         findsOneWidget);
@@ -271,9 +324,13 @@ void main() {
       (tester) async {
     final repository = FakeCustomerTerms()..failDelete = true;
     await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: ClientesScreen(repository: repository))));
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: repository, historyRepository: FakeHistory()))));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('Eliminar cliente').first);
+    await tester.tap(find.text('Cliente configurado'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Eliminar cliente'));
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.widgetWithText(FilledButton, 'Eliminar cliente'));
     await tester.pump(const Duration(milliseconds: 100));
@@ -303,8 +360,10 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(MaterialApp(
-          home:
-              Scaffold(body: ClientesScreen(repository: FakeCustomerTerms()))));
+          home: Scaffold(
+              body: ClientesScreen(
+                  repository: FakeCustomerTerms(),
+                  historyRepository: FakeHistory()))));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       final cards = find.byType(Card);
@@ -313,7 +372,13 @@ void main() {
       expect(firstRect.left, greaterThanOrEqualTo(16));
       expect(firstRect.right, lessThanOrEqualTo(size.width - 16));
       expect(firstRect.height, lessThan(size.width < 620 ? 170 : 100));
-      expect(find.byTooltip('Eliminar cliente'), findsNWidgets(2));
+      expect(find.text('Editar plazo'), findsNothing);
+      await tester.tap(find.text('Cliente configurado'));
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsOneWidget);
+      expect(find.byTooltip('Cerrar historial'), findsOneWidget);
+      expect(find.text('Editar plazo'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   }
 }
