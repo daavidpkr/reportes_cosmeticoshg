@@ -2,6 +2,42 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cosmeticos_hg_reportes/services/supabase_reportes_service.dart';
 
 void main() {
+  test('regresión 608 usa fila canónica de julio para general y KPI', () {
+    final resultado = construirFilasConsolidadas(
+      filas: const [
+        {
+          'mes_reporte': 'Julio 2026',
+          'nro_fila': 17,
+          'ref_fact': '000000608',
+          'vendedor': 'V1',
+          'esmaltes': 0,
+          'abonos': [40],
+          'numeros_recibo': [null],
+          'comentarios_abonos': [null],
+        }
+      ],
+      facturas: const [
+        {
+          'ref_fact': '000000608',
+          'nro_fact': '000000608',
+          'cliente': 'N59 LORENA SUSANA OCHOA CORREA',
+          'nombre_comercial': 'BAZAR LORENA',
+          'fecha': '2026-07-07',
+          'venta': 356.35,
+        }
+      ],
+    );
+    final invoice = resultado.single;
+    expect(invoice.referencia, '000000608');
+    expect(invoice.numeroFactura, '000000608');
+    expect(invoice.abonos.first.valor, 40);
+    expect(invoice.totalAbonos, 40);
+    expect(invoice.saldo, closeTo(316.35, .001));
+    expect(resultado.fold<double>(0, (sum, row) => sum + row.totalAbonos), 40);
+    expect(resultado.fold<double>(0, (sum, row) => sum + row.saldo),
+        closeTo(316.35, .001));
+  });
+
   test('consolida meses, referencias, totales y pagos sin duplicar filas', () {
     final filas = <Map<String, dynamic>>[
       {

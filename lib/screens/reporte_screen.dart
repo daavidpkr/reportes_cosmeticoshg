@@ -182,6 +182,15 @@ class _ReporteScreenState extends State<ReporteScreen> {
     }
   }
 
+  Future<void> _actualizarConsumidoresDeAbonos() async {
+    final consolidadas = await _supabaseReportes.obtenerFilasConsolidadas();
+    if (!mounted) return;
+    setState(() {
+      _filasConsolidadas = consolidadas;
+      _versionCobrosMensuales++;
+    });
+  }
+
   void _activarReporte(ReporteMensual reporte, {bool guardar = true}) {
     _reportes.activo = reporte;
     _filas = reporte.filas;
@@ -1584,7 +1593,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
           _barraSuperior(),
           Expanded(
             child: _vistaCalendario
-                ? const PaymentCalendarView()
+                ? PaymentCalendarView(
+                    onPaymentPersisted: _actualizarConsumidoresDeAbonos)
                 : _vistaCargaFacturas
                     ? CargaFacturasView(
                         key: ValueKey(_reportes.activo.id),

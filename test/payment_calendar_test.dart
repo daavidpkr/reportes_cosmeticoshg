@@ -227,6 +227,35 @@ void main() {
       expect(find.textContaining('Llamar'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+    testWidgets(
+        'regresión 608 confirma persistencia y refresca consumidores antes del éxito',
+        (tester) async {
+      final repository = FakeCalendarRepository(
+          [entry('000000608', DateTime(2026, 8, 6), balance: 356.35)]);
+      var refreshes = 0;
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(MaterialApp(
+          home: Scaffold(
+              body: PaymentCalendarView(
+                  repository: repository,
+                  initialMonth: DateTime(2026, 8),
+                  onPaymentPersisted: () async => refreshes++))));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.bySemanticsLabel(RegExp('6, 1 facturas pendientes')));
+      await tester.pumpAndSettle();
+      expect(find.text('REF. 608'), findsOneWidget);
+      await tester.tap(find.text('Registrar abono'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Valor del abono'), '40');
+      await tester.tap(find.text('Guardar'));
+      await tester.pumpAndSettle();
+      expect(repository.payments, 1);
+      expect(repository.values.single.balance, closeTo(316.35, .001));
+      expect(refreshes, 1);
+      expect(find.text('Abono registrado correctamente.'), findsOneWidget);
+    });
     testWidgets('popup lista varias facturas con datos completos',
         (tester) async {
       await pump(tester, const Size(800, 900), [

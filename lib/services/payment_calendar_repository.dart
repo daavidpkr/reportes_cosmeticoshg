@@ -78,6 +78,36 @@ class PaymentCalendarRepository
       'p_pay_in_full': payInFull,
     });
     final row = (rows as List).single as Map<String, dynamic>;
-    return (row['remaining_balance'] as num).toDouble();
+    final remaining = (row['remaining_balance'] as num).toDouble();
+    await _confirmCanonicalPayment(entry, remaining);
+    return remaining;
+  }
+
+  Future<void> _confirmCanonicalPayment(
+      PaymentCalendarEntry entry, double expectedBalance) async {
+    final invoice = await _client
+        .from('facturas_maestras')
+        .select('ref_fact,nro_fact,venta')
+        .eq('ref_fact', entry.facturaId)
+        .single();
+    final rows = await _client
+        .from('reportes_ventas')
+        .select('ref_fact,mes_reporte,vendedor,abonos')
+        .eq('ref_fact', entry.facturaId);
+    final reportRows = List<Map<String, dynamic>>.from(rows);
+    if (invoice['ref_fact']?.toString() != entry.facturaId ||
+        reportRows.isEmpty) {
+      throw StateError('canonical invoice row was not confirmed');
+    }
+    final paid = reportRows
+        .where((row) =>
+            row['vendedor']?.toString().trim().toUpperCase() != 'ANULADA')
+        .expand((row) => row['abonos'] as List? ?? const [])
+        .fold<double>(0, (sum, value) => sum + (value as num).toDouble());
+    final sale = (invoice['venta'] as num).toDouble();
+    final canonicalBalance = (sale - paid).clamp(0, double.infinity);
+    if ((canonicalBalance - expectedBalance).abs() > .005) {
+      throw StateError('canonical payment balance was not confirmed');
+    }
   }
 }

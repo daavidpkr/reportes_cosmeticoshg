@@ -2041,7 +2041,8 @@ extension _ReporteScreenView on _ReporteScreenState {
           ],
         ),
         body: _vistaCalendario
-            ? const PaymentCalendarView()
+            ? PaymentCalendarView(
+                onPaymentPersisted: _actualizarConsumidoresDeAbonos)
             : _vistaCargaFacturas
                 ? CargaFacturasView(
                     key: ValueKey(_reportes.activo.id),

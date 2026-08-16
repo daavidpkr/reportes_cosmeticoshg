@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../models/payment_calendar_entry.dart';
@@ -44,9 +46,11 @@ class _PaymentCalendarScreenState extends State<PaymentCalendarScreen> {
 }
 
 class PaymentCalendarView extends StatefulWidget {
-  const PaymentCalendarView({this.repository, this.initialMonth, super.key});
+  const PaymentCalendarView(
+      {this.repository, this.initialMonth, this.onPaymentPersisted, super.key});
   final PaymentCalendarDataSource? repository;
   final DateTime? initialMonth;
+  final Future<void> Function()? onPaymentPersisted;
   @override
   State<PaymentCalendarView> createState() => _PaymentCalendarViewState();
 }
@@ -159,9 +163,11 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
                     child: const Text('Guardar')),
               ],
             ));
-    amount.dispose();
-    comment.dispose();
-    receipt.dispose();
+    unawaited(Future<void>.delayed(kThemeAnimationDuration, () {
+      amount.dispose();
+      comment.dispose();
+      receipt.dispose();
+    }));
     if (result == null || !mounted) return;
     await _savePayment(entry, result.$1,
         comment: result.$2, receipt: result.$3);
@@ -186,10 +192,21 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
     if (confirmed == true && mounted) {
       final saved = await controller.payInFull(entry);
       if (!mounted) return;
+      var refreshed = saved;
+      if (saved) {
+        try {
+          await widget.onPaymentPersisted?.call();
+        } catch (_) {
+          refreshed = false;
+        }
+      }
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(saved
+          content: Text(saved && refreshed
               ? 'Factura marcada como pagada.'
-              : 'No fue posible completar el pago. Actualiza e inténtalo nuevamente.')));
+              : saved
+                  ? 'El pago se guardó, pero no se pudieron actualizar los reportes. Usa Actualizar datos.'
+                  : 'No fue posible completar el pago. Actualiza e inténtalo nuevamente.')));
     }
   }
 
@@ -198,10 +215,21 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
     final saved = await controller.recordPayment(entry, amount,
         comment: comment, receiptNumber: receipt);
     if (!mounted) return;
+    var refreshed = saved;
+    if (saved) {
+      try {
+        await widget.onPaymentPersisted?.call();
+      } catch (_) {
+        refreshed = false;
+      }
+    }
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(saved
+        content: Text(saved && refreshed
             ? 'Abono registrado correctamente.'
-            : 'No fue posible registrar el abono. El saldo pudo cambiar; actualiza e inténtalo nuevamente.')));
+            : saved
+                ? 'El abono se guardó, pero no se pudieron actualizar los reportes. Usa Actualizar datos.'
+                : 'No fue posible registrar el abono. El saldo pudo cambiar; actualiza e inténtalo nuevamente.')));
   }
 
   @override
