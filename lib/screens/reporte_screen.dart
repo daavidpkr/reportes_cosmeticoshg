@@ -554,6 +554,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
     );
     final comentarioController = TextEditingController(text: abono.comentario);
     final formKey = GlobalKey<FormState>();
+    var eliminar = false;
     final resultado = await showDialog<(double, int?, String)>(
       context: context,
       builder: (context) => AlertDialog(
@@ -606,6 +607,55 @@ class _ReporteScreenState extends State<ReporteScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancelar'),
           ),
+          if (!nuevo && abono.valor > 0)
+            Semantics(
+              label: 'Eliminar abono ${indice + 1}',
+              button: true,
+              child: Tooltip(
+                message: 'Eliminar abono',
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(context).colorScheme.error),
+                  onPressed: () async {
+                    final factura = fila.numeroFactura.trim().isEmpty
+                        ? fila.referencia
+                        : fila.numeroFactura;
+                    final confirmar = await showDialog<bool>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Eliminar abono'),
+                        content: Text(
+                          'Se eliminará el abono de \$${abono.valor.toStringAsFixed(2)} de la factura $factura.\n\n'
+                          'El saldo pendiente aumentará nuevamente y los totales de cobros serán recalculados.\n\n'
+                          '¿Deseas continuar?',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Volver'),
+                          ),
+                          FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                                backgroundColor:
+                                    Theme.of(context).colorScheme.error),
+                            onPressed: () => Navigator.pop(context, true),
+                            icon: const Icon(Icons.delete_outline),
+                            label: const Text('Eliminar abono'),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirmar == true && context.mounted) {
+                      eliminar = true;
+                      Navigator.pop(context);
+                    }
+                  },
+                  icon: const Icon(Icons.delete_outline),
+                  label: const Text('Eliminar abono'),
+                ),
+              ),
+            ),
           FilledButton(
             onPressed: () {
               if (!(formKey.currentState?.validate() ?? false)) return;
@@ -622,10 +672,16 @@ class _ReporteScreenState extends State<ReporteScreen> {
         ],
       ),
     );
-    montoController.dispose();
-    reciboController.dispose();
-    comentarioController.dispose();
+    unawaited(Future<void>.delayed(kThemeAnimationDuration, () {
+      montoController.dispose();
+      reciboController.dispose();
+      comentarioController.dispose();
+    }));
     if (!mounted) return;
+    if (eliminar) {
+      await _eliminarAbono(fila, indice, abono);
+      return;
+    }
     if (resultado != null) {
       final totalPropuesto = fila.totalAbonos - abono.valor + resultado.$1;
       if (totalPropuesto > fila.venta + 0.005) {
@@ -683,6 +739,32 @@ class _ReporteScreenState extends State<ReporteScreen> {
       _asegurarFilaVacia();
     });
     await _guardarProgreso();
+  }
+
+  Future<void> _eliminarAbono(
+      FilaVenta fila, int indice, Abono esperado) async {
+    late final FilaVenta confirmada;
+    try {
+      confirmada = await _supabaseReportes.eliminarAbono(
+          fila, _reportes.activo.nombre, indice, esperado);
+      await _actualizarConsumidoresDeAbonos();
+    } catch (_) {
+      if (!mounted) return;
+      _mostrarErrorNube(
+          'No fue posible eliminar el abono. Pudo cambiar en otro dispositivo; actualiza e inténtalo nuevamente.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      fila.abonos
+        ..clear()
+        ..addAll(confirmada.abonos);
+      _asegurarFilaVacia();
+    });
+    await _guardarProgreso();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Abono eliminado correctamente.')));
   }
 
   Future<void> _agregarAbono(FilaVenta fila) async {

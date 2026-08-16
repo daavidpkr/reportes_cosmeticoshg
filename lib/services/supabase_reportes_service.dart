@@ -41,6 +41,23 @@ Map<String, dynamic> construirParametrosGuardarFila({
   };
 }
 
+Map<String, dynamic> construirParametrosEliminarAbono({
+  required FilaVenta fila,
+  required String mesReporte,
+  required int indice,
+  required Abono esperado,
+  required String requestId,
+}) =>
+    {
+      'p_request_id': requestId,
+      'p_row_number': fila.numero,
+      'p_report_name': mesReporte,
+      'p_payment_index': indice,
+      'p_expected_amount': esperado.valor,
+      'p_expected_receipt': esperado.numeroRecibo,
+      'p_expected_comment': esperado.comentario.trim(),
+    };
+
 class CobroMensual {
   const CobroMensual({
     required this.anio,
@@ -350,6 +367,56 @@ class SupabaseReportesService {
               : null,
           comentario: indice < comentarios.length
               ? comentarios[indice]?.toString() ?? ''
+              : '',
+        );
+      }));
+    while (confirmada.abonos.length < 2) {
+      confirmada.abonos.add(Abono());
+    }
+    return confirmada;
+  }
+
+  Future<FilaVenta> eliminarAbono(
+      FilaVenta fila, String mesReporte, int indice, Abono esperado) async {
+    final canonicalCount = fila.abonos
+        .where((payment) =>
+            payment.valor != 0 ||
+            payment.numeroRecibo != null ||
+            payment.comentario.trim().isNotEmpty)
+        .length;
+    await _client.rpc('enterprise_delete_report_payment',
+        params: construirParametrosEliminarAbono(
+          fila: fila,
+          mesReporte: mesReporte,
+          indice: indice,
+          esperado: esperado,
+          requestId: newRequestId(),
+        ));
+    final persistida = await _client
+        .from('reportes_ventas')
+        .select('abonos,numeros_recibo,comentarios_abonos')
+        .eq('nro_fila', fila.numero)
+        .eq('mes_reporte', mesReporte)
+        .single();
+    final abonos = persistida['abonos'] as List? ?? const [];
+    final recibos = persistida['numeros_recibo'] as List? ?? const [];
+    final comentarios = persistida['comentarios_abonos'] as List? ?? const [];
+    if (abonos.length != canonicalCount - 1 ||
+        recibos.length != abonos.length ||
+        comentarios.length != abonos.length) {
+      throw StateError('payment deletion was not confirmed');
+    }
+    final confirmada = FilaVenta.fromJson(fila.toJson());
+    confirmada.abonos
+      ..clear()
+      ..addAll(List<Abono>.generate(abonos.length, (index) {
+        return Abono(
+          valor: (abonos[index] as num).toDouble(),
+          numeroRecibo: index < recibos.length && recibos[index] != null
+              ? int.parse(recibos[index].toString())
+              : null,
+          comentario: index < comentarios.length
+              ? comentarios[index]?.toString() ?? ''
               : '',
         );
       }));

@@ -3,6 +3,27 @@ import 'package:cosmeticos_hg_reportes/services/supabase_reportes_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('delete payment uses canonical row and exact aligned tuple', () {
+    final payment =
+        Abono(valor: 40, numeroRecibo: 6080, comentario: 'Transferencia');
+    final params = construirParametrosEliminarAbono(
+      fila: FilaVenta(numero: 17, referencia: '000000608'),
+      mesReporte: 'Julio 2026',
+      indice: 1,
+      esperado: payment,
+      requestId: '00000000-0000-0000-0000-000000000006',
+    );
+    expect(params, {
+      'p_request_id': '00000000-0000-0000-0000-000000000006',
+      'p_row_number': 17,
+      'p_report_name': 'Julio 2026',
+      'p_payment_index': 1,
+      'p_expected_amount': 40,
+      'p_expected_receipt': 6080,
+      'p_expected_comment': 'Transferencia',
+    });
+  });
+
   test('a new invoice sends the complete RPC signature with empty arrays', () {
     final params = construirParametrosGuardarFila(
       fila: FilaVenta(
