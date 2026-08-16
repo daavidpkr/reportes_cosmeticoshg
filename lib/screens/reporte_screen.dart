@@ -18,6 +18,7 @@ import 'cobros_mensuales_view.dart';
 import 'clientes_screen.dart';
 import 'estadisticas_screen.dart';
 import 'payment_calendar/payment_calendar_screen.dart';
+import 'payment_reminders_screen.dart';
 import 'reporte/report_responsive_layout.dart';
 import 'vendedores_screen.dart';
 
@@ -112,6 +113,16 @@ class _ReporteScreenState extends State<ReporteScreen> {
         _vistaVendedores = false;
         _vistaClientes = false;
         _seccionMovil = 0;
+      });
+
+  void _mostrarClientes() => setState(() {
+        _vistaCalendario = false;
+        _vistaCargaFacturas = false;
+        _vistaClientes = true;
+        _vistaVendedores = false;
+        _vistaCobrosMensuales = false;
+        _vistaEstadisticas = false;
+        _vistaGeneral = false;
       });
 
   Future<void> _cargarVendedores() async {

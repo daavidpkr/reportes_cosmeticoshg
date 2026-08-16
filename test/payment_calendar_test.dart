@@ -20,11 +20,13 @@ PaymentCalendarEntry entry(String id, DateTime date,
         balance: balance,
         comment: comment);
 
-class FakeCalendarRepository implements PaymentCalendarDataSource {
+class FakeCalendarRepository
+    implements PaymentCalendarDataSource, CalendarPaymentDataSource {
   FakeCalendarRepository(this.values);
   List<PaymentCalendarEntry> values;
   bool fail = false;
   int reads = 0;
+  int payments = 0;
 
   @override
   Future<List<PaymentCalendarEntry>> listMonth(DateTime month) async {
@@ -52,6 +54,39 @@ class FakeCalendarRepository implements PaymentCalendarDataSource {
       saved
     ];
     return saved;
+  }
+
+  @override
+  Future<double> recordPayment(
+      {required PaymentCalendarEntry entry,
+      required double amount,
+      String comment = '',
+      int? receiptNumber,
+      bool payInFull = false}) async {
+    if (fail || amount <= 0 || amount > entry.balance + .005) {
+      throw Exception('remote');
+    }
+    payments++;
+    final remaining = payInFull
+        ? 0.0
+        : (entry.balance - amount).clamp(0, double.infinity).toDouble();
+    values = [
+      for (final value in values)
+        if (value.reminderId == entry.reminderId)
+          PaymentCalendarEntry(
+              reminderId: value.reminderId,
+              facturaId: value.facturaId,
+              invoiceNumber: value.invoiceNumber,
+              cliente: value.cliente,
+              nombreComercial: value.nombreComercial,
+              invoiceDate: value.invoiceDate,
+              reminderDate: value.reminderDate,
+              balance: remaining,
+              comment: value.comment)
+        else
+          value
+    ];
+    return remaining;
   }
 }
 
@@ -144,6 +179,20 @@ void main() {
       repo.values = [entry('1', DateTime(2026, 8, 10), balance: 0)];
       await controller.load(refresh: true);
       expect(controller.entries, isEmpty);
+    });
+    test('abono parcial actualiza saldo y pago total retira la factura',
+        () async {
+      final repo = FakeCalendarRepository(
+          [entry('1', DateTime(2026, 8, 10), balance: 100)]);
+      final controller = PaymentCalendarController(
+          repository: repo, initialMonth: DateTime(2026, 8));
+      await controller.load();
+      expect(await controller.recordPayment(controller.entries.single, 40),
+          isTrue);
+      expect(controller.entries.single.balance, 60);
+      expect(await controller.payInFull(controller.entries.single), isTrue);
+      expect(controller.entries, isEmpty);
+      expect(repo.payments, 2);
     });
   });
 

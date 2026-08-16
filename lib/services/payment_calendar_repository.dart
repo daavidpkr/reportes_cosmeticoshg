@@ -12,7 +12,18 @@ abstract interface class PaymentCalendarDataSource {
   });
 }
 
-class PaymentCalendarRepository implements PaymentCalendarDataSource {
+abstract interface class CalendarPaymentDataSource {
+  Future<double> recordPayment({
+    required PaymentCalendarEntry entry,
+    required double amount,
+    String comment,
+    int? receiptNumber,
+    bool payInFull,
+  });
+}
+
+class PaymentCalendarRepository
+    implements PaymentCalendarDataSource, CalendarPaymentDataSource {
   PaymentCalendarRepository({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
   final SupabaseClient _client;
@@ -48,5 +59,25 @@ class PaymentCalendarRepository implements PaymentCalendarDataSource {
       reminderDate: DateTime.parse(row['effective_payment_date'].toString()),
       comment: row['comment']?.toString() ?? '',
     );
+  }
+
+  @override
+  Future<double> recordPayment({
+    required PaymentCalendarEntry entry,
+    required double amount,
+    String comment = '',
+    int? receiptNumber,
+    bool payInFull = false,
+  }) async {
+    final rows = await _client.rpc('record_calendar_payment', params: {
+      'p_request_id': newRequestId(),
+      'p_reminder_id': entry.reminderId,
+      'p_amount': amount,
+      'p_comment': comment.trim(),
+      'p_receipt_number': receiptNumber,
+      'p_pay_in_full': payInFull,
+    });
+    final row = (rows as List).single as Map<String, dynamic>;
+    return (row['remaining_balance'] as num).toDouble();
   }
 }

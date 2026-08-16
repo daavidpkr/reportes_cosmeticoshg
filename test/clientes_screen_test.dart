@@ -56,7 +56,91 @@ class FakeCustomerTerms implements CustomerTermsDataSource {
   }
 }
 
+class FilterCustomerTerms extends FakeCustomerTerms {
+  @override
+  Future<List<BillingCustomer>> listCustomers() async => const [
+        BillingCustomer(
+            id: '1',
+            name: 'N97 ANGELITA NOEMI SANCHEZ LLANOS',
+            commercialName: 'Farmacia Esperanza',
+            paymentTermDays: 30),
+        BillingCustomer(
+            id: '2',
+            name: 'Cliente contado',
+            commercialName: 'Comercial Cero',
+            paymentTermDays: 0),
+        BillingCustomer(
+            id: '3',
+            name: 'Cliente pendiente',
+            commercialName: 'Farmacia Norte',
+            paymentTermDays: null),
+        BillingCustomer(
+            id: '4',
+            name: 'Cliente diez',
+            commercialName: 'Tienda Sur',
+            paymentTermDays: 10),
+      ];
+}
+
 void main() {
+  testWidgets('busca por código, nombre y nombre comercial sin distinguir caso',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home:
+            Scaffold(body: ClientesScreen(repository: FilterCustomerTerms()))));
+    await tester.pumpAndSettle();
+    final search = find.byKey(const ValueKey('customer-search'));
+    await tester.enterText(search, '  n97  ');
+    await tester.pump();
+    expect(find.text('N97 ANGELITA NOEMI SANCHEZ LLANOS'), findsOneWidget);
+    expect(find.text('Cliente contado'), findsNothing);
+    await tester.enterText(search, 'FARMACIA ESPERANZA');
+    await tester.pump();
+    expect(find.text('N97 ANGELITA NOEMI SANCHEZ LLANOS'), findsOneWidget);
+    await tester.tap(find.byTooltip('Limpiar búsqueda'));
+    await tester.pump();
+    expect(find.text('Cliente contado'), findsOneWidget);
+  });
+
+  testWidgets(
+      'genera, ordena y combina plazos reales distinguiendo cero y null',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home:
+            Scaffold(body: ClientesScreen(repository: FilterCustomerTerms()))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<Object?>));
+    await tester.pumpAndSettle();
+    expect(find.text('0 días'), findsWidgets);
+    expect(find.text('10 días'), findsWidgets);
+    expect(find.text('30 días'), findsWidgets);
+    expect(find.text('Pendiente'), findsWidgets);
+    expect(find.text('15 días'), findsNothing);
+    await tester.tap(find.text('30 días').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('customer-search')), 'farmacia');
+    await tester.pump();
+    expect(find.text('N97 ANGELITA NOEMI SANCHEZ LLANOS'), findsOneWidget);
+    expect(find.text('Cliente pendiente'), findsNothing);
+  });
+
+  testWidgets('explica resultados vacíos y limpia ambos filtros',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home:
+            Scaffold(body: ClientesScreen(repository: FilterCustomerTerms()))));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.byKey(const ValueKey('customer-search')), 'inexistente');
+    await tester.pump();
+    expect(find.text('No se encontraron clientes'), findsOneWidget);
+    expect(find.textContaining('Prueba con otro nombre'), findsOneWidget);
+    await tester.tap(find.text('Limpiar filtros').last);
+    await tester.pump();
+    expect(find.text('Cliente contado'), findsOneWidget);
+  });
+
   testWidgets('muestra clientes configurados y pendientes', (tester) async {
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(body: ClientesScreen(repository: FakeCustomerTerms()))));
@@ -78,7 +162,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Editar cliente').last);
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.enterText(find.byType(TextField), '10');
+    await tester.enterText(find.byType(TextField).last, '10');
     await tester.tap(find.text('Continuar'));
     await tester.pumpAndSettle();
 
@@ -157,12 +241,15 @@ void main() {
   });
 
   for (final size in <Size>[
+    const Size(360, 800),
+    const Size(390, 844),
+    const Size(412, 915),
+    const Size(768, 1024),
     const Size(1024, 768),
     const Size(1280, 720),
     const Size(1366, 768),
     const Size(1600, 900),
     const Size(1920, 1080),
-    const Size(390, 844),
   ]) {
     testWidgets(
         'tarjetas compactas sin overflow en ${size.width.toInt()}x${size.height.toInt()}',

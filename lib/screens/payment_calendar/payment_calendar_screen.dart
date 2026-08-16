@@ -77,7 +77,7 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
     controller.select(day);
     final entries =
         controller.grouped[dateOnly(day)] ?? const <PaymentCalendarEntry>[];
-    await showDayInvoicesDialog(context, day, entries, _edit);
+    await showDayInvoicesDialog(context, day, entries, _edit, _payment, _paid);
   }
 
   Future<void> _edit(PaymentCalendarEntry entry) async {
@@ -94,9 +94,114 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
           const <PaymentCalendarEntry>[];
       if (edit.date.year == controller.visibleMonth.year &&
           edit.date.month == controller.visibleMonth.month) {
-        await showDayInvoicesDialog(context, edit.date, dayEntries, _edit);
+        await showDayInvoicesDialog(
+            context, edit.date, dayEntries, _edit, _payment, _paid);
       }
     }
+  }
+
+  Future<void> _payment(PaymentCalendarEntry entry) async {
+    final amount = TextEditingController();
+    final comment = TextEditingController();
+    final receipt = TextEditingController();
+    final result = await showDialog<(double, String, int?)>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('Registrar abono'),
+              content: SingleChildScrollView(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                        'Factura ${entry.invoiceNumber.isEmpty ? entry.facturaId : entry.invoiceNumber}'),
+                    subtitle: Text(
+                        '${entry.cliente}\nSaldo actual: \$${entry.balance.toStringAsFixed(2)}')),
+                TextField(
+                    controller: amount,
+                    autofocus: true,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration:
+                        const InputDecoration(labelText: 'Valor del abono')),
+                const SizedBox(height: 10),
+                TextField(
+                    controller: comment,
+                    decoration: const InputDecoration(
+                        labelText: 'Comentario opcional')),
+                const SizedBox(height: 10),
+                TextField(
+                    controller: receipt,
+                    keyboardType: TextInputType.number,
+                    decoration:
+                        const InputDecoration(labelText: 'Recibo opcional')),
+              ])),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancelar')),
+                FilledButton(
+                    onPressed: () {
+                      final value =
+                          double.tryParse(amount.text.replaceAll(',', '.'));
+                      final receiptValue = receipt.text.trim().isEmpty
+                          ? null
+                          : int.tryParse(receipt.text.trim());
+                      if (value == null ||
+                          value <= 0 ||
+                          value > entry.balance + .005 ||
+                          (receipt.text.trim().isNotEmpty &&
+                              receiptValue == null)) {
+                        return;
+                      }
+                      Navigator.pop(
+                          context, (value, comment.text, receiptValue));
+                    },
+                    child: const Text('Guardar')),
+              ],
+            ));
+    amount.dispose();
+    comment.dispose();
+    receipt.dispose();
+    if (result == null || !mounted) return;
+    await _savePayment(entry, result.$1,
+        comment: result.$2, receipt: result.$3);
+  }
+
+  Future<void> _paid(PaymentCalendarEntry entry) async {
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+              title: const Text('Marcar factura como pagada'),
+              content: Text(
+                  'Factura: ${entry.invoiceNumber.isEmpty ? entry.facturaId : entry.invoiceNumber}\nCliente: ${entry.cliente}\nSaldo pendiente: \$${entry.balance.toStringAsFixed(2)}\n\nSe registrará un abono final por el saldo pendiente.\nLa factura no será anulada ni eliminada.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Cancelar')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Marcar como pagada'))
+              ],
+            ));
+    if (confirmed == true && mounted) {
+      final saved = await controller.payInFull(entry);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(saved
+              ? 'Factura marcada como pagada.'
+              : 'No fue posible completar el pago. Actualiza e inténtalo nuevamente.')));
+    }
+  }
+
+  Future<void> _savePayment(PaymentCalendarEntry entry, double amount,
+      {String comment = '', int? receipt}) async {
+    final saved = await controller.recordPayment(entry, amount,
+        comment: comment, receiptNumber: receipt);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(saved
+            ? 'Abono registrado correctamente.'
+            : 'No fue posible registrar el abono. El saldo pudo cambiar; actualiza e inténtalo nuevamente.')));
   }
 
   @override

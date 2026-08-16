@@ -914,7 +914,7 @@ extension _ReporteScreenView on _ReporteScreenState {
           if (!_vistaGeneral)
             OutlinedButton.icon(
               onPressed: _nuevoReporte,
-              icon: const Icon(Icons.add, size: 18),
+              icon: const Icon(Icons.calendar_month_outlined, size: 18),
               label: const Text('Nuevo mes'),
             ),
           if (!_vistaGeneral) SizedBox(width: layout.compact ? 6 : 10),
@@ -978,22 +978,10 @@ extension _ReporteScreenView on _ReporteScreenState {
         ),
         child: Row(
           children: [
-            Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFC9A24C),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: const Text(
-                'HG',
-                style: TextStyle(
-                  color: Color(0xFF591530),
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                ),
-              ),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(9),
+              child: Image.asset('web/icons/Icon-192.png',
+                  width: 34, height: 34, fit: BoxFit.cover),
             ),
             const SizedBox(width: 12),
             const Column(
@@ -1847,7 +1835,7 @@ extension _ReporteScreenView on _ReporteScreenState {
           IconButton.filledTonal(
             tooltip: 'Crear nuevo mes',
             onPressed: _nuevoReporte,
-            icon: const Icon(Icons.add, size: 18),
+            icon: const Icon(Icons.calendar_month_outlined, size: 18),
           ),
           const SizedBox(width: 6),
           SizedBox(
@@ -1893,25 +1881,10 @@ extension _ReporteScreenView on _ReporteScreenState {
           titleSpacing: 16,
           title: Row(
             children: [
-              Container(
-                width: 32,
-                height: 32,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(9),
-                  gradient: const RadialGradient(
-                    center: Alignment(-.4, -.4),
-                    colors: [Color(0xFFF1E4C0), Color(0xFFC9A24C)],
-                  ),
-                ),
-                child: const Text(
-                  'HG',
-                  style: TextStyle(
-                    color: Color(0xFF591530),
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
-                ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(9),
+                child: Image.asset('web/icons/Icon-192.png',
+                    width: 32, height: 32, fit: BoxFit.cover),
               ),
               const SizedBox(width: 10),
               const Column(
@@ -1934,49 +1907,83 @@ extension _ReporteScreenView on _ReporteScreenState {
             ],
           ),
           actions: [
-            IconButton(
-              tooltip: 'Calendario de cobros',
-              onPressed: _abrirRecordatorios,
-              style: IconButton.styleFrom(
-                backgroundColor: _vistaCalendario
-                    ? Colors.white.withValues(alpha: .18)
-                    : null,
-              ),
-              icon: const Icon(Icons.calendar_month_outlined),
+            PopupMenuButton<String>(
+              tooltip: 'Abrir menú',
+              icon: const Icon(Icons.menu),
+              onSelected: (value) async {
+                switch (value) {
+                  case 'clients':
+                    _mostrarClientes();
+                  case 'sellers':
+                    _gestionarVendedores();
+                  case 'notifications':
+                    await Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => const PaymentRemindersScreen()));
+                  case 'refresh':
+                    await _actualizarDesdeSupabase();
+                  case 'theme':
+                    widget.onCambiarTema?.call();
+                  case 'logout':
+                    widget.onCerrarSesion?.call();
+                }
+              },
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                    enabled: false,
+                    child: Row(children: [
+                      ClipRRect(
+                          borderRadius: BorderRadius.circular(7),
+                          child: Image.asset('web/icons/Icon-192.png',
+                              width: 30, height: 30)),
+                      const SizedBox(width: 10),
+                      const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Cosméticos HG',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text('PERFECT NAILS',
+                                style: TextStyle(fontSize: 10))
+                          ])
+                    ])),
+                const PopupMenuDivider(),
+                CheckedPopupMenuItem(
+                    value: 'clients',
+                    checked: _vistaClientes,
+                    child: const ListTile(
+                        leading: Icon(Icons.groups_outlined),
+                        title: Text('Clientes'))),
+                CheckedPopupMenuItem(
+                    value: 'sellers',
+                    checked: _vistaVendedores,
+                    child: const ListTile(
+                        leading: Icon(Icons.people_outline),
+                        title: Text('Vendedores'))),
+                const PopupMenuDivider(),
+                const PopupMenuItem(
+                    value: 'notifications',
+                    child: ListTile(
+                        leading: Icon(Icons.notifications_outlined),
+                        title: Text('Notificaciones'))),
+                const PopupMenuItem(
+                    value: 'refresh',
+                    child: ListTile(
+                        leading: Icon(Icons.refresh),
+                        title: Text('Actualizar datos'))),
+                PopupMenuItem(
+                    value: 'theme',
+                    child: ListTile(
+                        leading: Icon(widget.modoOscuro
+                            ? Icons.light_mode_outlined
+                            : Icons.dark_mode_outlined),
+                        title: const Text('Cambiar tema'))),
+                const PopupMenuItem(
+                    value: 'logout',
+                    child: ListTile(
+                        leading: Icon(Icons.logout),
+                        title: Text('Cerrar sesión'))),
+              ],
             ),
-            IconButton(
-              tooltip: 'Actualizar datos',
-              onPressed: _actualizando ? null : _actualizarDesdeSupabase,
-              icon: _actualizando
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.refresh),
-            ),
-            IconButton(
-              tooltip: widget.modoOscuro ? 'Modo claro' : 'Modo oscuro',
-              onPressed: widget.onCambiarTema,
-              icon: Icon(
-                widget.modoOscuro
-                    ? Icons.light_mode_outlined
-                    : Icons.dark_mode_outlined,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 10),
-              child: IconButton.filled(
-                tooltip: 'Cerrar sesión',
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: .12),
-                ),
-                onPressed: widget.onCerrarSesion,
-                icon: const Icon(Icons.logout, size: 19),
-              ),
-            ),
+            const SizedBox(width: 8),
           ],
         ),
         floatingActionButton: _vistaCobrosMensuales ||
@@ -2006,10 +2013,11 @@ extension _ReporteScreenView on _ReporteScreenState {
               _vistaCalendario = false;
               _vistaCargaFacturas = false;
               _seccionMovil = indice;
-              _vistaCobrosMensuales = indice == 2;
-              _vistaClientes = indice == 3;
-              _vistaVendedores = indice == 4;
-              _vistaEstadisticas = indice == 5;
+              _vistaCalendario = indice == 2;
+              _vistaCobrosMensuales = false;
+              _vistaClientes = false;
+              _vistaVendedores = false;
+              _vistaEstadisticas = indice == 3;
               _vistaGeneral = indice == 1;
             });
           },
@@ -2024,15 +2032,7 @@ extension _ReporteScreenView on _ReporteScreenState {
             ),
             NavigationDestination(
               icon: Icon(Icons.calendar_month_outlined),
-              label: 'Cobros mensuales',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.groups_outlined),
-              label: 'Clientes',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.people_outline),
-              label: 'Vendedores',
+              label: 'Cobros',
             ),
             NavigationDestination(
               icon: Icon(Icons.insights_outlined),

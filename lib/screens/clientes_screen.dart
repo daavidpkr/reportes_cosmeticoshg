@@ -16,6 +16,10 @@ class _ClientesScreenState extends State<ClientesScreen> {
       widget.repository ?? CustomerTermsRepository();
   late Future<List<BillingCustomer>> _customers = _repository.listCustomers();
   final Set<String> _busy = {};
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  Object? _selectedTerm;
+  static const pendingTerm = 'pending';
   String _key(BillingCustomer c) => '${c.name}\u0000${c.commercialName}';
   Future<void> _reload() async {
     final next = _repository.listCustomers();
@@ -23,6 +27,49 @@ class _ClientesScreenState extends State<ClientesScreen> {
       _customers = next;
     });
     await next;
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String _normalizedSearch(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  List<Object> _terms(List<BillingCustomer> customers) {
+    final numeric = customers
+        .map((customer) => customer.paymentTermDays)
+        .whereType<int>()
+        .toSet()
+        .toList()
+      ..sort();
+    return <Object>[
+      ...numeric,
+      if (customers.any((customer) => customer.paymentTermDays == null))
+        pendingTerm,
+    ];
+  }
+
+  bool _matches(BillingCustomer customer) {
+    final query = _normalizedSearch(_query);
+    final searchable =
+        _normalizedSearch('${customer.name} ${customer.commercialName}');
+    final matchesQuery = query.isEmpty || searchable.contains(query);
+    final matchesTerm = _selectedTerm == null ||
+        (_selectedTerm == pendingTerm
+            ? customer.paymentTermDays == null
+            : customer.paymentTermDays == _selectedTerm);
+    return matchesQuery && matchesTerm;
+  }
+
+  void _clearFilters() {
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _selectedTerm = null;
+    });
   }
 
   void _message(String text) {
@@ -122,9 +169,17 @@ class _ClientesScreenState extends State<ClientesScreen> {
             ]);
           }
           final values = snapshot.data ?? const [];
+          final terms = _terms(values);
+          if (_selectedTerm != null && !terms.contains(_selectedTerm)) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) setState(() => _selectedTerm = null);
+            });
+          }
+          final filtered = values.where(_matches).toList();
           return ListView.builder(
               padding: const EdgeInsets.all(16),
-              itemCount: values.length + 1,
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              itemCount: filtered.isEmpty ? 3 : filtered.length + 2,
               itemBuilder: (_, index) {
                 if (index == 0) {
                   return const Padding(
@@ -140,7 +195,85 @@ class _ClientesScreenState extends State<ClientesScreen> {
                                 'Configura los plazos de pago y administra la programación de cobros.')
                           ]));
                 }
-                final c = values[index - 1];
+                if (index == 1) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(children: [
+                      LayoutBuilder(builder: (context, box) {
+                        final search = TextField(
+                          key: const ValueKey('customer-search'),
+                          controller: _searchController,
+                          textInputAction: TextInputAction.search,
+                          onChanged: (value) => setState(() => _query = value),
+                          decoration: InputDecoration(
+                            hintText: 'Buscar cliente o nombre comercial',
+                            prefixIcon: const Icon(Icons.search),
+                            suffixIcon: _query.isEmpty
+                                ? null
+                                : IconButton(
+                                    tooltip: 'Limpiar búsqueda',
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _query = '');
+                                    },
+                                    icon: const Icon(Icons.close)),
+                          ),
+                        );
+                        final term = DropdownButtonFormField<Object?>(
+                          key: ValueKey('payment-term-filter-$_selectedTerm'),
+                          initialValue: terms.contains(_selectedTerm)
+                              ? _selectedTerm
+                              : null,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Plazo de pago',
+                            prefixIcon: Icon(Icons.filter_alt_outlined),
+                          ),
+                          items: <DropdownMenuItem<Object?>>[
+                            const DropdownMenuItem(
+                                value: null, child: Text('Todos los plazos')),
+                            ...terms.map((value) => DropdownMenuItem<Object?>(
+                                value: value,
+                                child: Text(value == pendingTerm
+                                    ? 'Pendiente'
+                                    : '$value días'))),
+                          ],
+                          onChanged: (value) =>
+                              setState(() => _selectedTerm = value),
+                        );
+                        if (box.maxWidth < 650) {
+                          return Column(children: [
+                            search,
+                            const SizedBox(height: 10),
+                            term,
+                          ]);
+                        }
+                        return Row(children: [
+                          Expanded(flex: 7, child: search),
+                          const SizedBox(width: 12),
+                          Expanded(flex: 3, child: term),
+                        ]);
+                      }),
+                      if (_query.trim().isNotEmpty || _selectedTerm != null)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton.icon(
+                            onPressed: _clearFilters,
+                            icon: const Icon(Icons.filter_alt_off_outlined),
+                            label: const Text('Limpiar filtros'),
+                          ),
+                        ),
+                    ]),
+                  );
+                }
+                if (values.isEmpty) {
+                  return const _CustomersEmptyState(filtered: false);
+                }
+                if (filtered.isEmpty) {
+                  return _CustomersEmptyState(
+                      filtered: true, onClear: _clearFilters);
+                }
+                final c = filtered[index - 2];
                 final busy = _busy.contains(_key(c));
                 return _CustomerCard(
                     customer: c,
@@ -152,6 +285,38 @@ class _ClientesScreenState extends State<ClientesScreen> {
               });
         },
       ));
+}
+
+class _CustomersEmptyState extends StatelessWidget {
+  const _CustomersEmptyState({required this.filtered, this.onClear});
+  final bool filtered;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 16),
+        child: Column(children: [
+          Icon(filtered ? Icons.search_off : Icons.groups_outlined, size: 44),
+          const SizedBox(height: 12),
+          Text(
+              filtered
+                  ? 'No se encontraron clientes'
+                  : 'La organización todavía no tiene clientes',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center),
+          const SizedBox(height: 6),
+          Text(
+              filtered
+                  ? 'Prueba con otro nombre, nombre comercial o plazo de pago.'
+                  : 'Los clientes aparecerán aquí cuando estén disponibles.',
+              textAlign: TextAlign.center),
+          if (filtered) ...[
+            const SizedBox(height: 12),
+            TextButton(
+                onPressed: onClear, child: const Text('Limpiar filtros')),
+          ],
+        ]),
+      );
 }
 
 class _PaymentTermDialog extends StatefulWidget {

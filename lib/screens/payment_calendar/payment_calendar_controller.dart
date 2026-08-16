@@ -80,4 +80,36 @@ class PaymentCalendarController extends ChangeNotifier {
       return false;
     }
   }
+
+  Future<bool> recordPayment(PaymentCalendarEntry entry, double amount,
+      {String comment = '', int? receiptNumber}) async {
+    if (repository is! CalendarPaymentDataSource) return false;
+    final paymentRepository = repository as CalendarPaymentDataSource;
+    try {
+      await paymentRepository.recordPayment(
+          entry: entry,
+          amount: amount,
+          comment: comment,
+          receiptNumber: receiptNumber,
+          payInFull: false);
+      _cache.clear();
+      await load(refresh: true);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> payInFull(PaymentCalendarEntry entry) async {
+    if (repository is! CalendarPaymentDataSource) return false;
+    try {
+      await (repository as CalendarPaymentDataSource)
+          .recordPayment(entry: entry, amount: entry.balance, payInFull: true);
+      _cache.clear();
+      await load(refresh: true);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

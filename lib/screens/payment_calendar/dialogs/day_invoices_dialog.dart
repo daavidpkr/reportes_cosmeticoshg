@@ -33,7 +33,9 @@ Future<void> showDayInvoicesDialog(
     BuildContext context,
     DateTime day,
     List<PaymentCalendarEntry> entries,
-    Future<void> Function(PaymentCalendarEntry) onEdit) async {
+    Future<void> Function(PaymentCalendarEntry) onEdit,
+    Future<void> Function(PaymentCalendarEntry) onPayment,
+    Future<void> Function(PaymentCalendarEntry) onPaid) async {
   await showDialog<void>(
       context: context,
       builder: (context) => Dialog(
@@ -44,6 +46,7 @@ Future<void> showDayInvoicesDialog(
                 child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(children: [
@@ -64,16 +67,25 @@ Future<void> showDayInvoicesDialog(
                                 icon: const Icon(Icons.close))
                           ]),
                           const SizedBox(height: 12),
-                          Expanded(
+                          Flexible(
                               child: entries.isEmpty
                                   ? const Center(
                                       child: Text(
                                           'No hay facturas pendientes para este día.'))
                                   : ListView.builder(
+                                      shrinkWrap: true,
                                       itemCount: entries.length,
                                       itemBuilder: (_, index) =>
                                           PendingInvoiceCard(
                                               entry: entries[index],
+                                              onPayment: () async {
+                                                Navigator.pop(context);
+                                                await onPayment(entries[index]);
+                                              },
+                                              onPaid: () async {
+                                                Navigator.pop(context);
+                                                await onPaid(entries[index]);
+                                              },
                                               onEdit: () async {
                                                 Navigator.pop(context);
                                                 await onEdit(entries[index]);

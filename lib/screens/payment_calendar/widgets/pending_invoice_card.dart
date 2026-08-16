@@ -14,9 +14,14 @@ String visibleInvoiceReference(String value) {
 
 class PendingInvoiceCard extends StatelessWidget {
   const PendingInvoiceCard(
-      {required this.entry, required this.onEdit, super.key});
+      {required this.entry,
+      required this.onEdit,
+      this.onPayment,
+      this.onPaid,
+      super.key});
   final PaymentCalendarEntry entry;
   final VoidCallback onEdit;
+  final VoidCallback? onPayment, onPaid;
 
   @override
   Widget build(BuildContext context) => Card(
@@ -43,12 +48,24 @@ class PendingInvoiceCard extends StatelessWidget {
             _line('Comentario',
                 entry.comment.isEmpty ? 'Sin comentario' : entry.comment),
             const SizedBox(height: 10),
-            Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.event_repeat_outlined),
-                    label: const Text('Reprogramar'))),
+            Wrap(
+                alignment: WrapAlignment.end,
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                      onPressed: onPayment,
+                      icon: const Icon(Icons.payments_outlined),
+                      label: const Text('Registrar abono')),
+                  OutlinedButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.event_repeat_outlined),
+                      label: const Text('Reprogramar')),
+                  FilledButton.icon(
+                      onPressed: onPaid,
+                      icon: const Icon(Icons.task_alt),
+                      label: const Text('Marcar como pagada')),
+                ]),
           ]),
         ),
       );
