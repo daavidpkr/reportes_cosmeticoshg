@@ -1,6 +1,8 @@
 import 'package:cosmeticos_hg_reportes/models/billing_customer.dart';
+import 'package:cosmeticos_hg_reportes/models/customer_history.dart';
 import 'package:cosmeticos_hg_reportes/screens/clientes_screen.dart';
 import 'package:cosmeticos_hg_reportes/services/customer_terms_repository.dart';
+import 'package:cosmeticos_hg_reportes/services/customer_history_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -82,7 +84,49 @@ class FilterCustomerTerms extends FakeCustomerTerms {
       ];
 }
 
+class FakeHistory implements CustomerHistoryDataSource {
+  @override
+  Future<CustomerHistoryPage> load(
+          {required String customerId,
+          required int offset,
+          String status = 'all',
+          String search = '',
+          String sort = 'recent'}) async =>
+      const CustomerHistoryPage(
+          summary: CustomerHistorySummary(
+              totalSales: 300,
+              totalPaid: 150,
+              balance: 150,
+              totalInvoices: 3,
+              paidInvoices: 1,
+              pendingInvoices: 1,
+              overdueInvoices: 1,
+              cancelledInvoices: 1),
+          invoices: [],
+          filteredCount: 0);
+}
+
 void main() {
+  testWidgets('tocar información abre historial y las acciones no lo abren',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: FakeCustomerTerms(),
+                historyRepository: FakeHistory()))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cliente configurado'));
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+    expect(find.text('Historial del cliente'), findsOneWidget);
+    expect(find.text('Total histórico'), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Editar cliente').first);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Historial del cliente'), findsNothing);
+    expect(find.text('Plazo habitual en días'), findsOneWidget);
+  });
+
   testWidgets('busca por código, nombre y nombre comercial sin distinguir caso',
       (tester) async {
     await tester.pumpWidget(MaterialApp(

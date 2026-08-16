@@ -3,10 +3,13 @@ import 'package:flutter/services.dart';
 
 import '../models/billing_customer.dart';
 import '../services/customer_terms_repository.dart';
+import '../services/customer_history_repository.dart';
+import 'customer_history_screen.dart';
 
 class ClientesScreen extends StatefulWidget {
-  const ClientesScreen({this.repository, super.key});
+  const ClientesScreen({this.repository, this.historyRepository, super.key});
   final CustomerTermsDataSource? repository;
+  final CustomerHistoryDataSource? historyRepository;
   @override
   State<ClientesScreen> createState() => _ClientesScreenState();
 }
@@ -147,6 +150,11 @@ class _ClientesScreenState extends State<ClientesScreen> {
     await _reload();
   }
 
+  Future<void> _openHistory(BillingCustomer customer) =>
+      Navigator.of(context).push(MaterialPageRoute<void>(
+          builder: (_) => CustomerHistoryScreen(
+              customer: customer, repository: widget.historyRepository)));
+
   @override
   Widget build(BuildContext context) => RefreshIndicator(
       onRefresh: _reload,
@@ -277,6 +285,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
                 final busy = _busy.contains(_key(c));
                 return _CustomerCard(
                     customer: c,
+                    onOpen: () => _openHistory(c),
                     busy: busy,
                     onEdit: () => _run(c, () => _edit(c)),
                     onSchedule:
@@ -445,13 +454,14 @@ class _OperationDialogState extends State<_OperationDialog> {
 class _CustomerCard extends StatelessWidget {
   const _CustomerCard(
       {required this.customer,
+      required this.onOpen,
       required this.busy,
       required this.onEdit,
       required this.onSchedule,
       required this.onDelete});
   final BillingCustomer customer;
   final bool busy;
-  final VoidCallback onEdit, onDelete;
+  final VoidCallback onOpen, onEdit, onDelete;
   final VoidCallback? onSchedule;
   @override
   Widget build(BuildContext context) => Card(
@@ -479,21 +489,67 @@ class _CustomerCard extends StatelessWidget {
               return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    name,
-                    const SizedBox(height: 8),
-                    commercial,
-                    const SizedBox(height: 8),
-                    Row(children: [badge, const Spacer(), actions])
+                    Semantics(
+                      label:
+                          'Abrir historial de ${customer.name} – ${customer.commercialName.isEmpty ? 'Sin nombre comercial' : customer.commercialName}',
+                      button: true,
+                      child: InkWell(
+                        onTap: onOpen,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                name,
+                                const SizedBox(height: 8),
+                                Row(children: [
+                                  Expanded(child: commercial),
+                                  const Icon(Icons.chevron_right)
+                                ]),
+                              ]),
+                        ),
+                      ),
+                    ),
+                    Row(children: [
+                      Semantics(
+                        label: 'Abrir historial y consultar plazo',
+                        button: true,
+                        child: InkWell(
+                          onTap: onOpen,
+                          child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              child: badge),
+                        ),
+                      ),
+                      const Spacer(),
+                      actions,
+                    ]),
                   ]);
             }
             return Row(children: [
-              Expanded(flex: 31, child: name),
-              const SizedBox(width: 14),
-              Expanded(flex: 29, child: commercial),
-              const SizedBox(width: 14),
               Expanded(
-                  flex: 17,
-                  child: Align(alignment: Alignment.centerLeft, child: badge)),
+                  flex: 77,
+                  child: Semantics(
+                    label:
+                        'Abrir historial de ${customer.name} – ${customer.commercialName.isEmpty ? 'Sin nombre comercial' : customer.commercialName}',
+                    button: true,
+                    child: InkWell(
+                        onTap: onOpen,
+                        child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(children: [
+                              Expanded(flex: 31, child: name),
+                              const SizedBox(width: 14),
+                              Expanded(flex: 29, child: commercial),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                  flex: 17,
+                                  child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: badge)),
+                              const Icon(Icons.chevron_right)
+                            ]))),
+                  )),
               Expanded(
                   flex: 23,
                   child:
