@@ -11,6 +11,31 @@ abstract interface class CustomerTermsDataSource {
   Future<InvoicePaymentPlan?> getInvoicePlan(String facturaId);
   Future<DateTime?> saveInvoiceException(String facturaId, int? days,
       {required bool confirmManualOverride});
+  Future<void> deleteCustomer(BillingCustomer customer);
+  Future<CustomerSchedulingResult> schedulePending(BillingCustomer customer);
+}
+
+class CustomerSchedulingResult {
+  const CustomerSchedulingResult({
+    required this.eligibleCount,
+    required this.createdCount,
+    required this.skippedExistingCount,
+    required this.skippedCount,
+  });
+
+  final int eligibleCount;
+  final int createdCount;
+  final int skippedExistingCount;
+  final int skippedCount;
+
+  factory CustomerSchedulingResult.fromJson(Map<String, dynamic> json) =>
+      CustomerSchedulingResult(
+        eligibleCount: (json['eligible_count'] as num?)?.toInt() ?? 0,
+        createdCount: (json['created_count'] as num?)?.toInt() ?? 0,
+        skippedExistingCount:
+            (json['skipped_existing_count'] as num?)?.toInt() ?? 0,
+        skippedCount: (json['skipped_count'] as num?)?.toInt() ?? 0,
+      );
 }
 
 class CustomerTermsRepository implements CustomerTermsDataSource {
@@ -22,9 +47,35 @@ class CustomerTermsRepository implements CustomerTermsDataSource {
   Future<List<BillingCustomer>> listCustomers() async => (await _client
           .from('billing_customers')
           .select('id,name,commercial_name,payment_term_days')
+          .eq('configuration_active', true)
           .order('name'))
       .map<BillingCustomer>((row) => BillingCustomer.fromJson(row))
       .toList();
+
+  Map<String, dynamic> _identity(BillingCustomer customer) => {
+        'p_name': customer.name,
+        'p_commercial_name': customer.commercialName,
+      };
+
+  @override
+  Future<void> deleteCustomer(BillingCustomer customer) async {
+    await _client.rpc('delete_enterprise_customer_configuration', params: {
+      'p_request_id': newRequestId(),
+      ..._identity(customer),
+    });
+  }
+
+  @override
+  Future<CustomerSchedulingResult> schedulePending(
+      BillingCustomer customer) async {
+    final value =
+        await _client.rpc('schedule_enterprise_customer_pending', params: {
+      'p_request_id': newRequestId(),
+      ..._identity(customer),
+    });
+    return CustomerSchedulingResult.fromJson(
+        Map<String, dynamic>.from(value as Map));
+  }
 
   @override
   Future<int> previewImpact(String customerId, int days) async =>
