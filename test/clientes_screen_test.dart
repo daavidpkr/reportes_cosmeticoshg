@@ -1,6 +1,7 @@
 import 'package:cosmeticos_hg_reportes/models/billing_customer.dart';
 import 'package:cosmeticos_hg_reportes/models/customer_history.dart';
 import 'package:cosmeticos_hg_reportes/screens/clientes_screen.dart';
+import 'package:cosmeticos_hg_reportes/screens/customer_history_screen.dart';
 import 'package:cosmeticos_hg_reportes/services/customer_terms_repository.dart';
 import 'package:cosmeticos_hg_reportes/services/customer_history_repository.dart';
 import 'package:flutter/material.dart';
@@ -85,6 +86,37 @@ class FilterCustomerTerms extends FakeCustomerTerms {
 }
 
 class FakeHistory implements CustomerHistoryDataSource {
+  InvoiceTermRecalculation? preview;
+  int reprogrammed = 0;
+
+  @override
+  Future<InvoiceTermRecalculation> previewRecalculation(
+          String reference) async =>
+      preview ??
+      InvoiceTermRecalculation(
+          reference: reference,
+          invoiceDate: DateTime(2026, 7, 3),
+          termDays: 45,
+          currentDate: DateTime(2026, 9, 1),
+          newDate: DateTime(2026, 8, 17),
+          manualSchedule: false,
+          alreadyCurrent: false);
+
+  @override
+  Future<InvoiceTermRecalculation> reprogramInvoice(
+      InvoiceTermRecalculation preview) async {
+    reprogrammed++;
+    return InvoiceTermRecalculation(
+        reference: preview.reference,
+        invoiceDate: preview.invoiceDate,
+        termDays: preview.termDays,
+        currentDate: preview.currentDate,
+        newDate: preview.newDate,
+        manualSchedule: preview.manualSchedule,
+        alreadyCurrent: false,
+        updatedCount: 1);
+  }
+
   @override
   Future<CustomerHistoryPage> load(
           {required String customerId,
@@ -126,7 +158,94 @@ class FlakyHistory extends FakeHistory {
   }
 }
 
+class RosaHistory extends FakeHistory {
+  int loads = 0;
+  @override
+  Future<CustomerHistoryPage> load(
+      {required String customerId,
+      required int offset,
+      String status = 'all',
+      String search = '',
+      String sort = 'recent'}) async {
+    loads++;
+    return CustomerHistoryPage(
+        summary: const CustomerHistorySummary(
+            totalSales: 21.86,
+            totalPaid: 0,
+            balance: 21.86,
+            totalInvoices: 2,
+            paidInvoices: 0,
+            pendingInvoices: 2,
+            overdueInvoices: 0,
+            cancelledInvoices: 0),
+        invoices: [
+          CustomerHistoryInvoice(
+              reference: '000000601',
+              invoiceNumber: '601',
+              date: DateTime(2026, 7, 3),
+              seller: 'Vendedor',
+              reportMonth: 'JULIO 2026',
+              sale: 21.86,
+              paid: 0,
+              balance: 21.86,
+              cancelled: false,
+              overdue: false,
+              reminderDate: DateTime(2026, 9, 1),
+              calendarComment: 'Conservar',
+              payments: const []),
+          CustomerHistoryInvoice(
+              reference: '000000664',
+              invoiceNumber: '664',
+              date: DateTime(2026, 7, 29),
+              seller: 'Vendedor',
+              reportMonth: 'JULIO 2026',
+              sale: 10,
+              paid: 0,
+              balance: 10,
+              cancelled: false,
+              overdue: false,
+              payments: const []),
+        ],
+        filteredCount: 2);
+  }
+}
+
 void main() {
+  testWidgets('reprograma solo la referencia completa 601 con plazo 45',
+      (tester) async {
+    final history = RosaHistory();
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: CustomerHistoryScreen(
+                customer: const BillingCustomer(
+                    id: 'rosa',
+                    name: 'N55 ROSA OLALLA JARA',
+                    commercialName: 'FARMCIA AMIGA',
+                    paymentTermDays: 45),
+                repository: history,
+                onEditTerm: (_) async => null,
+                onSchedule: (_) async {},
+                onDelete: (_) async => false))));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Factura 601'), 300,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Factura 601'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('reprogram-000000601')), findsOneWidget);
+    await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('reprogram-000000601')));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Fecha programada actual: 01/09/2026'), findsOneWidget);
+    expect(find.text('Nueva fecha calculada: 17/08/2026'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Reprogramar factura'));
+    await tester.pumpAndSettle();
+    expect(history.reprogrammed, 1);
+    expect(history.loads, 2); // initial load plus authoritative second read
+    expect(find.text('Comentario del calendario: Conservar'), findsOneWidget);
+    expect(find.text('Factura 664'), findsOneWidget);
+  });
+
   testWidgets('toda la tarjeta abre modal y la lista no contiene acciones',
       (tester) async {
     await tester.pumpWidget(MaterialApp(

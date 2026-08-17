@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../models/payment_calendar_entry.dart';
 import '../../models/payment_calendar_rules.dart';
 import '../../services/payment_calendar_repository.dart';
+import '../../services/payment_calendar_refresh.dart';
 import 'dialogs/day_invoices_dialog.dart';
 import 'dialogs/reschedule_reminder_dialog.dart';
 import 'payment_calendar_controller.dart';
@@ -63,8 +64,11 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
   @override
   void initState() {
     super.initState();
+    paymentCalendarRefresh.addListener(_externalRefresh);
     controller.load();
   }
+
+  void _externalRefresh() => controller.load(refresh: true);
 
   void _changed() {
     if (mounted) setState(() {});
@@ -72,6 +76,7 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
 
   @override
   void dispose() {
+    paymentCalendarRefresh.removeListener(_externalRefresh);
     controller.removeListener(_changed);
     controller.dispose();
     super.dispose();

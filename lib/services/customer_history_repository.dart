@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/customer_history.dart';
+import 'request_id.dart';
 
 abstract interface class CustomerHistoryDataSource {
   Future<CustomerHistoryPage> load({
@@ -11,6 +12,9 @@ abstract interface class CustomerHistoryDataSource {
     String search,
     String sort,
   });
+  Future<InvoiceTermRecalculation> previewRecalculation(String reference);
+  Future<InvoiceTermRecalculation> reprogramInvoice(
+      InvoiceTermRecalculation preview);
 }
 
 class CustomerHistoryRepository implements CustomerHistoryDataSource {
@@ -49,6 +53,32 @@ class CustomerHistoryRepository implements CustomerHistoryDataSource {
           'CustomerHistoryError type=PostgrestException rpc=$rpc code=${error.code} stage=rpc message=${_safeMessage(error.message)}');
       rethrow;
     }
+  }
+
+  @override
+  Future<InvoiceTermRecalculation> previewRecalculation(
+      String reference) async {
+    final result = await _client.rpc('preview_invoice_term_recalculation',
+        params: {'p_ref_fact': reference});
+    return InvoiceTermRecalculation.fromJson(
+        Map<String, dynamic>.from(result as Map));
+  }
+
+  @override
+  Future<InvoiceTermRecalculation> reprogramInvoice(
+      InvoiceTermRecalculation preview) async {
+    final result =
+        await _client.rpc('reprogram_invoice_with_current_term', params: {
+      'p_request_id': newRequestId(),
+      'p_ref_fact': preview.reference,
+      'p_expected_term_days': preview.termDays,
+      'p_expected_invoice_date':
+          preview.invoiceDate.toIso8601String().split('T').first,
+      'p_expected_current_date':
+          preview.currentDate?.toIso8601String().split('T').first,
+    });
+    return InvoiceTermRecalculation.fromJson(
+        Map<String, dynamic>.from(result as Map));
   }
 
   String _safeMessage(String message) => message

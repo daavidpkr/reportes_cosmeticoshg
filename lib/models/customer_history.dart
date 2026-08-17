@@ -46,10 +46,12 @@ class CustomerHistoryInvoice {
     required this.payments,
     this.reminderDate,
     this.calendarComment = '',
+    this.scheduleSource,
   });
   final String reference, invoiceNumber, seller, reportMonth, calendarComment;
   final DateTime date;
   final DateTime? reminderDate;
+  final String? scheduleSource;
   final double sale, paid, balance;
   final bool cancelled, overdue;
   final List<CustomerHistoryPayment> payments;
@@ -76,10 +78,43 @@ class CustomerHistoryInvoice {
         overdue: json['overdue'] == true,
         reminderDate: _date(json['reminder_date']),
         calendarComment: json['calendar_comment']?.toString() ?? '',
+        scheduleSource: json['schedule_source']?.toString(),
         payments: (json['payments'] as List? ?? const [])
             .map((item) => CustomerHistoryPayment.fromJson(
                 Map<String, dynamic>.from(item as Map)))
             .toList(),
+      );
+}
+
+class InvoiceTermRecalculation {
+  const InvoiceTermRecalculation({
+    required this.reference,
+    required this.invoiceDate,
+    required this.termDays,
+    required this.newDate,
+    required this.manualSchedule,
+    required this.alreadyCurrent,
+    this.currentDate,
+    this.confirmationRequired = false,
+    this.updatedCount = 0,
+  });
+  final String reference;
+  final DateTime invoiceDate, newDate;
+  final DateTime? currentDate;
+  final int termDays, updatedCount;
+  final bool manualSchedule, alreadyCurrent, confirmationRequired;
+
+  factory InvoiceTermRecalculation.fromJson(Map<String, dynamic> json) =>
+      InvoiceTermRecalculation(
+        reference: json['reference'].toString(),
+        invoiceDate: DateTime.parse(json['invoice_date'].toString()),
+        termDays: (json['term_days'] as num).toInt(),
+        currentDate: _date(json['current_date']),
+        newDate: DateTime.parse(json['new_date'].toString()),
+        manualSchedule: json['manual_schedule'] == true,
+        alreadyCurrent: json['already_current'] == true,
+        confirmationRequired: json['confirmation_required'] == true,
+        updatedCount: (json['updated_count'] as num?)?.toInt() ?? 0,
       );
 }
 

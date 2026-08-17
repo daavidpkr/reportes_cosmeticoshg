@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models/billing_customer.dart';
 import '../models/customer_history.dart';
 import '../services/customer_history_repository.dart';
+import '../services/payment_calendar_refresh.dart';
 
 class CustomerHistoryScreen extends StatefulWidget {
   const CustomerHistoryScreen(
@@ -36,6 +37,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
   String? error;
   late BillingCustomer customer = widget.customer;
   bool actionBusy = false;
+  final reprogramming = <String>{};
 
   @override
   void initState() {
@@ -133,6 +135,97 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
     }
   }
 
+  String _date(DateTime value) =>
+      '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+
+  Future<void> _reprogram(CustomerHistoryInvoice invoice) async {
+    if (reprogramming.contains(invoice.reference)) return;
+    if (!customer.configured) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Configura primero el plazo de pago del cliente')));
+      return;
+    }
+    setState(() => reprogramming.add(invoice.reference));
+    try {
+      var preview = await repository.previewRecalculation(invoice.reference);
+      if (!mounted) return;
+      if (preview.alreadyCurrent) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'Esta factura ya estÃ¡ programada de acuerdo con el plazo actual.')));
+        return;
+      }
+      while (mounted) {
+        final confirmed = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+                  title: const Text('Reprogramar factura'),
+                  content: SingleChildScrollView(
+                      child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                        Text('Factura: ${preview.reference}'),
+                        Text('Fecha de factura: ${_date(preview.invoiceDate)}'),
+                        Text(
+                            'Plazo actual del cliente: ${preview.termDays} dÃ­as'),
+                        const SizedBox(height: 16),
+                        Text(
+                            'Fecha programada actual: ${preview.currentDate == null ? 'Sin programar' : _date(preview.currentDate!)}'),
+                        Text('Nueva fecha calculada: ${_date(preview.newDate)}',
+                            style:
+                                const TextStyle(fontWeight: FontWeight.bold)),
+                        if (preview.manualSchedule) ...[
+                          const SizedBox(height: 12),
+                          Text(
+                              'Esta factura tiene una fecha reprogramada manualmente. Al continuar, se reemplazarÃ¡ por la fecha calculada con el plazo actual.',
+                              style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error)),
+                        ],
+                        const SizedBox(height: 12),
+                        const Text(
+                            'Se modificarÃ¡ Ãºnicamente esta factura.\nLas demÃ¡s facturas del cliente conservarÃ¡n sus fechas.\n\nÂ¿Deseas continuar?'),
+                      ])),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancelar')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Reprogramar factura')),
+                  ],
+                ));
+        if (confirmed != true || !mounted) return;
+        final result = await repository.reprogramInvoice(preview);
+        if (!mounted) return;
+        if (result.confirmationRequired) {
+          preview = result;
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Los datos cambiaron en otro dispositivo. Revisa la nueva fecha antes de confirmar.')));
+          continue;
+        }
+        await _load(); // Required authoritative second read; preserves modal/filter/scroll.
+        paymentCalendarRefresh.refresh();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(result.alreadyCurrent
+                ? 'Esta factura ya estÃ¡ programada de acuerdo con el plazo actual.'
+                : 'Factura ${result.reference} reprogramada para el ${_date(result.newDate)}.')));
+        return;
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text(
+                'No se pudo reprogramar la factura. Verifica que siga siendo elegible.')));
+      }
+    } finally {
+      if (mounted) setState(() => reprogramming.remove(invoice.reference));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final viewport = MediaQuery.sizeOf(context);
@@ -202,7 +295,11 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                         )
                       else
                         for (final invoice in invoices)
-                          _InvoiceCard(invoice: invoice),
+                          _InvoiceCard(
+                              invoice: invoice,
+                              termDays: customer.paymentTermDays,
+                              busy: reprogramming.contains(invoice.reference),
+                              onReprogram: () => _reprogram(invoice)),
                       if (invoices.length < filteredCount)
                         Center(
                             child: FilledButton.tonal(
@@ -400,8 +497,15 @@ class _DebtSummary extends StatelessWidget {
 }
 
 class _InvoiceCard extends StatelessWidget {
-  const _InvoiceCard({required this.invoice});
+  const _InvoiceCard(
+      {required this.invoice,
+      required this.termDays,
+      required this.busy,
+      required this.onReprogram});
   final CustomerHistoryInvoice invoice;
+  final int? termDays;
+  final bool busy;
+  final VoidCallback onReprogram;
   String money(double v) => '\$${v.toStringAsFixed(2)}';
   String date(DateTime v) =>
       '${v.day.toString().padLeft(2, '0')}/${v.month.toString().padLeft(2, '0')}/${v.year}';
@@ -429,6 +533,34 @@ class _InvoiceCard extends StatelessWidget {
                       if (invoice.calendarComment.isNotEmpty)
                         Text(
                             'Comentario del calendario: ${invoice.calendarComment}'),
+                      const SizedBox(height: 8),
+                      Tooltip(
+                          message: termDays == null
+                              ? 'Configura primero el plazo de pago del cliente'
+                              : 'Recalcular esta factura con el plazo actual del cliente',
+                          child: Semantics(
+                              button: true,
+                              label: termDays == null
+                                  ? 'Configura primero el plazo de pago del cliente'
+                                  : 'Reprogramar factura ${invoice.reference} con el plazo actual de $termDays dÃ­as',
+                              child: FilledButton.tonalIcon(
+                                  key: ValueKey(
+                                      'reprogram-${invoice.reference}'),
+                                  onPressed: termDays == null ||
+                                          invoice.cancelled ||
+                                          invoice.isPaid ||
+                                          invoice.reference.isEmpty ||
+                                          busy
+                                      ? null
+                                      : onReprogram,
+                                  icon: busy
+                                      ? const SizedBox.square(
+                                          dimension: 16,
+                                          child: CircularProgressIndicator(
+                                              strokeWidth: 2))
+                                      : const Icon(Icons.event_repeat_outlined),
+                                  label: const Text(
+                                      'Reprogramar con plazo actual')))),
                       for (var i = 0; i < invoice.payments.length; i++)
                         Text(
                             'Abono ${i + 1}: ${money(invoice.payments[i].amount)} · Recibo: ${invoice.payments[i].receiptNumber ?? 'Sin recibo'}${invoice.payments[i].comment.isEmpty ? '' : ' · ${invoice.payments[i].comment}'}')
