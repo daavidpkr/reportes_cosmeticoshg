@@ -58,6 +58,30 @@ Map<String, dynamic> construirParametrosEliminarAbono({
       'p_expected_comment': esperado.comentario.trim(),
     };
 
+Map<String, dynamic> construirParametrosImportarFacturas({
+  required Iterable<Factura> facturas,
+  required int anio,
+  required int mes,
+  required String requestId,
+}) =>
+    {
+      'p_request_id': requestId,
+      'p_year': anio,
+      'p_month': mes,
+      'p_invoices': facturas
+          .map((factura) => {
+                'ref_fact': factura.secuencial.trim(),
+                'nro_fact': factura.secuencial.trim(),
+                'cliente': factura.cliente.trim(),
+                'nombre_comercial': factura.nombreComercial.trim(),
+                'fecha': parseInvoiceDate(factura.fecha)
+                    ?.toIso8601String()
+                    .substring(0, 10),
+                'venta': factura.total,
+              })
+          .toList(),
+    };
+
 class CobroMensual {
   const CobroMensual({
     required this.anio,
@@ -329,6 +353,22 @@ class SupabaseReportesService {
     for (final factura in facturas) {
       await _guardarFacturaRpc(factura);
     }
+  }
+
+  Future<int> importarFacturasMensuales(
+      Iterable<Factura> facturas, int anio, int mes) async {
+    final lote = facturas.toList(growable: false);
+    if (lote.any((factura) => parseInvoiceDate(factura.fecha) == null)) {
+      throw const FormatException('Fecha de factura inválida.');
+    }
+    final result = await _client.rpc('enterprise_import_monthly_invoices',
+        params: construirParametrosImportarFacturas(
+          facturas: lote,
+          anio: anio,
+          mes: mes,
+          requestId: newRequestId(),
+        ));
+    return (result as num).toInt();
   }
 
   Future<FilaVenta> guardarFila(FilaVenta fila, String mesReporte) async {

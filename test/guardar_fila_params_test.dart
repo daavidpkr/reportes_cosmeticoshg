@@ -1,8 +1,37 @@
 import 'package:cosmeticos_hg_reportes/models/fila_venta.dart';
+import 'package:cosmeticos_hg_reportes/models/factura.dart';
 import 'package:cosmeticos_hg_reportes/services/supabase_reportes_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('monthly import preserves full references and the selected period', () {
+    final params = construirParametrosImportarFacturas(
+      facturas: [
+        const Factura(
+          cliente: 'Cliente',
+          nombreComercial: 'Local',
+          fecha: '27/07/2026',
+          secuencial: '000000656',
+          total: 42.5,
+        ),
+      ],
+      anio: 2026,
+      mes: 7,
+      requestId: '00000000-0000-0000-0000-000000000007',
+    );
+
+    expect(params['p_year'], 2026);
+    expect(params['p_month'], 7);
+    expect((params['p_invoices'] as List).single, {
+      'ref_fact': '000000656',
+      'nro_fact': '000000656',
+      'cliente': 'Cliente',
+      'nombre_comercial': 'Local',
+      'fecha': '2026-07-27',
+      'venta': 42.5,
+    });
+  });
+
   test('delete payment uses canonical row and exact aligned tuple', () {
     final payment =
         Abono(valor: 40, numeroRecibo: 6080, comentario: 'Transferencia');

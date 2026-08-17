@@ -115,7 +115,8 @@ class _CargaFacturasViewState extends State<CargaFacturasView> {
       }
       if (procesados > 0) {
         await (_supabaseReportes ??= SupabaseReportesService())
-            .guardarFacturas(_store.facturas);
+            .importarFacturasMensuales(
+                _store.facturas, widget.anio, widget.mes);
         await widget.onFacturasGuardadas?.call();
       }
     } catch (error) {
