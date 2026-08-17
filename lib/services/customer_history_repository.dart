@@ -60,8 +60,11 @@ class CustomerHistoryRepository implements CustomerHistoryDataSource {
       String reference) async {
     final result = await _client.rpc('preview_invoice_term_recalculation',
         params: {'p_ref_fact': reference});
-    return InvoiceTermRecalculation.fromJson(
-        Map<String, dynamic>.from(result as Map));
+    final json = Map<String, dynamic>.from(result as Map);
+    if (json['status'] == 'not_found' || json['status'] == 'not_eligible') {
+      throw InvoiceReprogramException(json['reason']?.toString() ?? 'conflict');
+    }
+    return InvoiceTermRecalculation.fromJson(json);
   }
 
   @override
@@ -76,6 +79,8 @@ class CustomerHistoryRepository implements CustomerHistoryDataSource {
           preview.invoiceDate.toIso8601String().split('T').first,
       'p_expected_current_date':
           preview.currentDate?.toIso8601String().split('T').first,
+      'p_expected_reminder_updated_at':
+          preview.reminderUpdatedAt?.toUtc().toIso8601String(),
     });
     return InvoiceTermRecalculation.fromJson(
         Map<String, dynamic>.from(result as Map));

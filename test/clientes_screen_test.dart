@@ -114,7 +114,8 @@ class FakeHistory implements CustomerHistoryDataSource {
         newDate: preview.newDate,
         manualSchedule: preview.manualSchedule,
         alreadyCurrent: false,
-        updatedCount: 1);
+        updatedCount: 1,
+        status: 'updated');
   }
 
   @override
@@ -160,6 +161,16 @@ class FlakyHistory extends FakeHistory {
 
 class RosaHistory extends FakeHistory {
   int loads = 0;
+  bool saved = false;
+
+  @override
+  Future<InvoiceTermRecalculation> reprogramInvoice(
+      InvoiceTermRecalculation preview) async {
+    final result = await super.reprogramInvoice(preview);
+    saved = true;
+    return result;
+  }
+
   @override
   Future<CustomerHistoryPage> load(
       {required String customerId,
@@ -190,7 +201,8 @@ class RosaHistory extends FakeHistory {
               balance: 21.86,
               cancelled: false,
               overdue: false,
-              reminderDate: DateTime(2026, 9, 1),
+              reminderDate:
+                  saved ? DateTime(2026, 8, 17) : DateTime(2026, 9, 1),
               calendarComment: 'Conservar',
               payments: const []),
           CustomerHistoryInvoice(
@@ -238,6 +250,19 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Fecha programada actual: 01/09/2026'), findsOneWidget);
     expect(find.text('Nueva fecha calculada: 17/08/2026'), findsOneWidget);
+    expect(find.textContaining('45 días'), findsOneWidget);
+    expect(find.textContaining('Se modificará únicamente esta factura.'),
+        findsOneWidget);
+    expect(find.textContaining('Las demás facturas del cliente conservarán'),
+        findsOneWidget);
+    expect(find.textContaining('¿Deseas continuar?'), findsOneWidget);
+    final forbiddenEncodingMarkers =
+        String.fromCharCodes([0x00c3, 0x00c2, 0xfffd]);
+    for (final text in tester.widgetList<Text>(find.byType(Text))) {
+      expect(
+          text.data?.contains(RegExp('[$forbiddenEncodingMarkers]')) ?? false,
+          isFalse);
+    }
     await tester.tap(find.widgetWithText(FilledButton, 'Reprogramar factura'));
     await tester.pumpAndSettle();
     expect(history.reprogrammed, 1);

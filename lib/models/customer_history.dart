@@ -97,12 +97,18 @@ class InvoiceTermRecalculation {
     this.currentDate,
     this.confirmationRequired = false,
     this.updatedCount = 0,
+    this.status = 'confirmation_required',
+    this.reason,
+    this.reminderUpdatedAt,
   });
   final String reference;
   final DateTime invoiceDate, newDate;
   final DateTime? currentDate;
   final int termDays, updatedCount;
   final bool manualSchedule, alreadyCurrent, confirmationRequired;
+  final String status;
+  final String? reason;
+  final DateTime? reminderUpdatedAt;
 
   factory InvoiceTermRecalculation.fromJson(Map<String, dynamic> json) =>
       InvoiceTermRecalculation(
@@ -115,7 +121,18 @@ class InvoiceTermRecalculation {
         alreadyCurrent: json['already_current'] == true,
         confirmationRequired: json['confirmation_required'] == true,
         updatedCount: (json['updated_count'] as num?)?.toInt() ?? 0,
+        status: json['status']?.toString() ??
+            (json['already_current'] == true
+                ? 'already_current'
+                : 'confirmation_required'),
+        reason: json['reason']?.toString(),
+        reminderUpdatedAt: _date(json['reminder_updated_at']),
       );
+}
+
+class InvoiceReprogramException implements Exception {
+  const InvoiceReprogramException(this.reason);
+  final String reason;
 }
 
 class CustomerHistoryPayment {

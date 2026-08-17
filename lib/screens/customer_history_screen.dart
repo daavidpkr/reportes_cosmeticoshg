@@ -152,7 +152,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
       if (preview.alreadyCurrent) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text(
-                'Esta factura ya estÃ¡ programada de acuerdo con el plazo actual.')));
+                'Esta factura ya está programada de acuerdo con el plazo actual.')));
         return;
       }
       while (mounted) {
@@ -169,7 +169,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                         Text('Factura: ${preview.reference}'),
                         Text('Fecha de factura: ${_date(preview.invoiceDate)}'),
                         Text(
-                            'Plazo actual del cliente: ${preview.termDays} dÃ­as'),
+                            'Plazo actual del cliente: ${preview.termDays} ${preview.termDays == 1 ? 'día' : 'días'}'),
                         const SizedBox(height: 16),
                         Text(
                             'Fecha programada actual: ${preview.currentDate == null ? 'Sin programar' : _date(preview.currentDate!)}'),
@@ -179,13 +179,13 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                         if (preview.manualSchedule) ...[
                           const SizedBox(height: 12),
                           Text(
-                              'Esta factura tiene una fecha reprogramada manualmente. Al continuar, se reemplazarÃ¡ por la fecha calculada con el plazo actual.',
+                              'Esta factura tiene una fecha reprogramada manualmente. Al continuar, se reemplazará por la fecha calculada con el plazo actual.',
                               style: TextStyle(
                                   color: Theme.of(context).colorScheme.error)),
                         ],
                         const SizedBox(height: 12),
                         const Text(
-                            'Se modificarÃ¡ Ãºnicamente esta factura.\nLas demÃ¡s facturas del cliente conservarÃ¡n sus fechas.\n\nÂ¿Deseas continuar?'),
+                            'Se modificará únicamente esta factura.\nLas demás facturas del cliente conservarán sus fechas.\n\n¿Deseas continuar?'),
                       ])),
                   actions: [
                     TextButton(
@@ -199,31 +199,77 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
         if (confirmed != true || !mounted) return;
         final result = await repository.reprogramInvoice(preview);
         if (!mounted) return;
-        if (result.confirmationRequired) {
+        if (result.status == 'confirmation_required' ||
+            result.confirmationRequired) {
           preview = result;
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text(
                   'Los datos cambiaron en otro dispositivo. Revisa la nueva fecha antes de confirmar.')));
           continue;
         }
-        await _load(); // Required authoritative second read; preserves modal/filter/scroll.
+        if (result.status == 'already_current' || result.alreadyCurrent) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text(
+                  'Esta factura ya está programada de acuerdo con el plazo actual.')));
+          return;
+        }
+        if (result.status != 'updated' && result.status != 'created') {
+          _showReprogramError(invoice, result.reason ?? result.status);
+          return;
+        }
+        await _load(); // Authoritative second read; preserves modal/filter/scroll.
+        final persisted = invoices
+            .where((item) => item.reference == result.reference)
+            .firstOrNull;
+        if (persisted?.reminderDate != result.newDate) {
+          _showReprogramError(invoice, 'schedule_changed');
+          return;
+        }
         paymentCalendarRefresh.refresh();
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result.alreadyCurrent
-                ? 'Esta factura ya estÃ¡ programada de acuerdo con el plazo actual.'
+            content: Text(result.status == 'created'
+                ? 'Recordatorio creado para el ${_date(result.newDate)}.'
                 : 'Factura ${result.reference} reprogramada para el ${_date(result.newDate)}.')));
         return;
       }
+    } on InvoiceReprogramException catch (error) {
+      if (mounted) _showReprogramError(invoice, error.reason);
     } catch (_) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'No se pudo reprogramar la factura. Verifica que siga siendo elegible.')));
+        _showReprogramError(invoice, 'conflict');
       }
     } finally {
       if (mounted) setState(() => reprogramming.remove(invoice.reference));
     }
+  }
+
+  void _showReprogramError(CustomerHistoryInvoice invoice, String reason) {
+    if (!mounted) return;
+    final message = switch (reason) {
+      'paid' => 'La factura ya se encuentra pagada.',
+      'cancelled' => 'No se puede reprogramar una factura anulada.',
+      'payment_term_missing' =>
+        'Configura primero el plazo de pago del cliente.',
+      'invoice_not_found' ||
+      'not_found' =>
+        'No se encontró la factura con su referencia completa.',
+      'monthly_row_missing' => 'La factura no tiene una fila mensual válida.',
+      'schedule_changed' ||
+      'customer_changed' ||
+      'conflict' =>
+        'La información cambió desde que abriste el historial. Revisa las fechas e inténtalo nuevamente.',
+      _ => 'No se pudo reprogramar esta factura.',
+    };
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 6),
+        backgroundColor: Theme.of(context).colorScheme.errorContainer,
+        content: Text(message,
+            style: TextStyle(
+                color: Theme.of(context).colorScheme.onErrorContainer)),
+        action: SnackBarAction(
+            label: 'Reintentar', onPressed: () => _reprogram(invoice))));
   }
 
   @override
@@ -512,6 +558,7 @@ class _InvoiceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
           child: ExpansionTile(
+              key: PageStorageKey(invoice.reference),
               title: Text('Factura ${invoice.invoiceNumber}'),
               subtitle: Text('${date(invoice.date)} · ${invoice.status}'),
               trailing: Text(money(invoice.balance),
@@ -542,7 +589,7 @@ class _InvoiceCard extends StatelessWidget {
                               button: true,
                               label: termDays == null
                                   ? 'Configura primero el plazo de pago del cliente'
-                                  : 'Reprogramar factura ${invoice.reference} con el plazo actual de $termDays dÃ­as',
+                                  : 'Reprogramar factura ${invoice.reference} con el plazo actual de $termDays ${termDays == 1 ? 'día' : 'días'}',
                               child: FilledButton.tonalIcon(
                                   key: ValueKey(
                                       'reprogram-${invoice.reference}'),
