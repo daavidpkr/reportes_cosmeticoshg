@@ -181,13 +181,13 @@ class _ClientesScreenState extends State<ClientesScreen> {
             context: context,
             barrierDismissible: false,
             builder: (context) => AlertDialog(
-                  title: const Text('Confirmar reprogramaciones excepcionales'),
+                  title: const Text('Confirmar actualizaci\u00f3n masiva'),
                   content: Text(
-                      'Has autorizado ${authorized.length} facturas con diferencias mayores a ${preview.toleranceDays} d\u00edas o fechas especiales.\n\nSupabase recalcular\u00e1 nuevamente sus fechas antes de guardar.\n\n\u00bfDeseas continuar?'),
+                      'Programaciones seguras: ${preview.count('safe_to_update')}\nRecordatorios nuevos: ${preview.count('missing_reminders')}\nExcepciones autorizadas: ${authorized.length}\nTotal de facturas que podr\u00edan modificarse: ${preview.count('safe_to_update') + preview.count('missing_reminders') + authorized.length}\n\nSupabase volver\u00e1 a validar cada factura antes de guardar.\n\nLos clientes con plazo cero, sin plazo y las facturas no elegibles permanecer\u00e1n intactos.\n\n\u00bfDeseas continuar?'),
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Volver')),
+                        child: const Text('Volver a revisar')),
                     FilledButton(
                         onPressed: () => Navigator.pop(context, true),
                         child: const Text('Confirmar y actualizar'))
@@ -403,6 +403,38 @@ class _BulkScheduleDialog extends StatefulWidget {
 class _BulkScheduleDialogState extends State<_BulkScheduleDialog> {
   String query = '', reason = 'all';
   final selected = <String>{};
+  bool selectAllConfirmed = false;
+
+  Future<void> _toggleAll(List<BulkScheduleItem> authorizable) async {
+    final refs = authorizable.map((item) => item.reference).toSet();
+    final allSelected = refs.isNotEmpty && selected.containsAll(refs);
+    if (allSelected) {
+      setState(() => selected.removeAll(refs));
+      return;
+    }
+    if (!selectAllConfirmed) {
+      final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+                title: const Text('Autorizar todas las excepciones'),
+                content: Text(
+                    'Se seleccionar\u00e1n ${refs.length} facturas que superan la tolerancia de ${widget.review.toleranceDays} d\u00edas, tienen fechas manuales o requieren autorizaci\u00f3n especial.\n\nLas fechas todav\u00eda no se modificar\u00e1n. Podr\u00e1s revisar y desmarcar facturas antes de confirmar la actualizaci\u00f3n.\n\n\u00bfDeseas seleccionarlas?'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Seleccionar todas'))
+                ],
+              ));
+      if (confirmed != true || !mounted) return;
+      selectAllConfirmed = true;
+    }
+    setState(() => selected.addAll(refs));
+  }
+
   String date(DateTime? value) => value == null
       ? 'Sin programar'
       : '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
@@ -419,6 +451,12 @@ class _BulkScheduleDialogState extends State<_BulkScheduleDialog> {
   @override
   Widget build(BuildContext context) {
     final review = widget.review;
+    final authorizable = review.authorizableItems;
+    final authorizableRefs = authorizable.map((item) => item.reference).toSet();
+    final selectedCount = selected.intersection(authorizableRefs).length;
+    final allSelected =
+        authorizableRefs.isNotEmpty && selectedCount == authorizableRefs.length;
+    final partiallySelected = selectedCount > 0 && !allSelected;
     final reasons = review.reviewItems.map((item) => item.reason).toSet();
     final visible = review.reviewItems.where((item) {
       final text = '${item.customer} ${item.commercialName} ${item.reference}'
@@ -488,32 +526,72 @@ class _BulkScheduleDialogState extends State<_BulkScheduleDialog> {
                   ],
                   onChanged: (value) =>
                       setState(() => reason = value ?? 'all')),
-              for (final item in visible)
-                Card(
-                    child: ExpansionTile(
-                  title: CheckboxListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: selected.contains(item.reference),
-                      onChanged: item.classification == 'missing_term'
-                          ? null
-                          : (value) => setState(() => value == true
-                              ? selected.add(item.reference)
-                              : selected.remove(item.reference)),
-                      title: Text('Factura ${item.reference}'),
-                      subtitle: const Text('Autorizar reprogramaci\u00f3n')),
-                  subtitle: Text('${item.customer}\n${item.commercialName}'),
-                  children: [
-                    ListTile(
-                      title: Text(
-                          'Fecha de factura: ${date(item.invoiceDate)}\nPlazo actual: ${item.termDays == null ? 'Pendiente' : '${item.termDays} d\u00edas'}\nFecha programada: ${date(item.currentDate)}\nFecha calculada: ${date(item.expectedDate)}\nDiferencia: ${item.differenceDays ?? 0} d\u00edas\nFuente: ${item.dateSource ?? 'Sin fuente'}\nSaldo: \$${item.balance.toStringAsFixed(2)}'),
-                      subtitle:
-                          Text(reasonText(item.reason, review.toleranceDays)),
-                      trailing: TextButton(
-                          onPressed: () => widget.onOpenCustomer(item),
-                          child: const Text('Abrir historial')),
-                    )
-                  ],
-                ))
+              LayoutBuilder(builder: (context, box) {
+                final status = selectedCount == 0
+                    ? '0 seleccionadas'
+                    : allSelected
+                        ? '$selectedCount seleccionadas'
+                        : '$selectedCount de ${authorizable.length} seleccionadas';
+                return Semantics(
+                    label: allSelected
+                        ? 'Deseleccionar todas las facturas autorizables. $status'
+                        : 'Seleccionar todas las facturas autorizables. $status',
+                    child: CheckboxListTile(
+                        key: const ValueKey('select-all-bulk-exceptions'),
+                        tristate: true,
+                        value: partiallySelected ? null : allSelected,
+                        onChanged: authorizable.isEmpty
+                            ? null
+                            : (_) => _toggleAll(authorizable),
+                        title: Text(box.maxWidth < 500
+                            ? 'Seleccionar todas (${authorizable.length})'
+                            : 'Seleccionar todas las facturas autorizables (${authorizable.length})'),
+                        subtitle: Text(status),
+                        controlAffinity: ListTileControlAffinity.leading));
+              }),
+              SizedBox(
+                height: 300,
+                child: ListView(
+                    key: const ValueKey('bulk-exceptions-list'),
+                    children: [
+                      for (final item in visible)
+                        Card(
+                            child: ExpansionTile(
+                          title: Row(children: [
+                            Semantics(
+                                label:
+                                    'Autorizar reprogramaci\u00f3n de factura ${item.reference}',
+                                child: Checkbox(
+                                    key:
+                                        ValueKey('authorize-${item.reference}'),
+                                    value: selected.contains(item.reference),
+                                    onChanged: item.classification ==
+                                            'manual_review'
+                                        ? (value) => setState(() => value ==
+                                                true
+                                            ? selected.add(item.reference)
+                                            : selected.remove(item.reference))
+                                        : null)),
+                            Expanded(child: Text('Factura ${item.reference}'))
+                          ]),
+                          subtitle:
+                              Text('${item.customer}\n${item.commercialName}'),
+                          children: [
+                            ListTile(
+                              title: Text(
+                                  'Fecha de factura: ${date(item.invoiceDate)}\nPlazo actual: ${item.termDays == null ? 'Pendiente' : '${item.termDays} d\u00edas'}\nFecha programada: ${date(item.currentDate)}\nFecha calculada: ${date(item.expectedDate)}\nDiferencia: ${item.differenceDays ?? 0} d\u00edas\nFuente: ${item.dateSource ?? 'Sin fuente'}\nSaldo: \$${item.balance.toStringAsFixed(2)}'),
+                              subtitle: Text(reasonText(
+                                  item.reason, review.toleranceDays)),
+                              trailing: TextButton(
+                                  onPressed: () => widget.onOpenCustomer(item),
+                                  child: const Text('Abrir historial')),
+                            )
+                          ],
+                        ))
+                    ]),
+              ),
+              Text('${review.count('safe_to_update')} seguras + '
+                  '$selectedCount autorizadas')
             ]
           ]),
         ),

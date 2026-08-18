@@ -60,6 +60,8 @@ class BulkScheduleReview {
           item.classification == 'changed_since_preview' ||
           item.classification == 'missing_term')
       .toList();
+  List<BulkScheduleItem> get authorizableItems =>
+      items.where((item) => item.classification == 'manual_review').toList();
 
   factory BulkScheduleReview.fromJson(Map<String, dynamic> json) =>
       BulkScheduleReview(

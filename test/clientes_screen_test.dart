@@ -344,11 +344,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('review-bulk-schedules')));
     await tester.pump(const Duration(milliseconds: 300));
-    final exception =
-        find.widgetWithText(CheckboxListTile, 'Factura 000000608');
+    final exception = find.byKey(const ValueKey('authorize-000000608'));
     expect(exception, findsOneWidget);
-    await tester.scrollUntilVisible(exception, 300,
-        scrollable: find.byType(Scrollable).last);
+    await tester.ensureVisible(exception);
     await tester.tap(exception);
     await tester.pump();
     final update =
@@ -356,13 +354,89 @@ void main() {
     await tester.ensureVisible(update);
     await tester.tap(update);
     await tester.pump(const Duration(milliseconds: 300));
-    expect(
-        find.text('Confirmar reprogramaciones excepcionales'), findsOneWidget);
+    expect(find.text('Confirmar actualizaci\u00f3n masiva'), findsOneWidget);
     await tester
         .tap(find.widgetWithText(FilledButton, 'Confirmar y actualizar'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(bulk.authorized, {'000000608'});
     expect(bulk.applies, 1);
+  });
+
+  testWidgets('seleccionar todas usa tres estados y permite excluir una',
+      (tester) async {
+    final bulk = FakeBulkReview();
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: FakeCustomerTerms(),
+                historyRepository: FakeHistory(),
+                bulkReviewRepository: bulk))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('review-bulk-schedules')));
+    await tester.pump(const Duration(milliseconds: 300));
+    final selectAll = find.byKey(const ValueKey('select-all-bulk-exceptions'));
+    expect(selectAll, findsOneWidget);
+    expect(tester.widget<CheckboxListTile>(selectAll).value, isFalse);
+    expect(find.text('0 seleccionadas'), findsOneWidget);
+
+    await tester.ensureVisible(selectAll);
+    await tester.tap(selectAll);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Autorizar todas las excepciones'), findsOneWidget);
+    expect(bulk.applies, 0);
+    await tester.tap(find.widgetWithText(FilledButton, 'Seleccionar todas'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<CheckboxListTile>(selectAll).value, isTrue);
+    expect(find.text('2 seleccionadas'), findsOneWidget);
+
+    await tester.tap(selectAll);
+    await tester.pump();
+    expect(tester.widget<CheckboxListTile>(selectAll).value, isFalse);
+    expect(find.text('0 seleccionadas'), findsOneWidget);
+    await tester.tap(selectAll);
+    await tester.pump();
+    expect(tester.widget<CheckboxListTile>(selectAll).value, isTrue);
+
+    final manual = find.byKey(const ValueKey('authorize-000000665'));
+    final exceptionsList = find.descendant(
+        of: find.byKey(const ValueKey('bulk-exceptions-list')),
+        matching: find.byType(Scrollable));
+    await tester.scrollUntilVisible(manual, 150, scrollable: exceptionsList);
+    await tester.ensureVisible(manual);
+    await tester.tap(manual);
+    await tester.pump();
+    expect(tester.widget<CheckboxListTile>(selectAll).value, isNull);
+    expect(find.text('1 de 2 seleccionadas'), findsOneWidget);
+
+    final update =
+        find.widgetWithText(FilledButton, 'Actualizar seguras y autorizadas');
+    await tester.ensureVisible(update);
+    await tester.tap(update);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester
+        .tap(find.widgetWithText(FilledButton, 'Confirmar y actualizar'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(bulk.authorized, {'000000608'});
+    expect(bulk.authorized.contains('000000665'), isFalse);
+  });
+
+  testWidgets('selector masivo no desborda en m\u00f3vil', (tester) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: FakeCustomerTerms(),
+                historyRepository: FakeHistory(),
+                bulkReviewRepository: FakeBulkReview()))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('review-bulk-schedules')));
+    await tester.pump(const Duration(milliseconds: 300));
+    final selectAll = find.byKey(const ValueKey('select-all-bulk-exceptions'));
+    await tester.ensureVisible(selectAll);
+    expect(find.text('Seleccionar todas (2)'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('reprograma solo la referencia completa 601 con plazo 45',
@@ -392,7 +466,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(find.text('Fecha programada actual: 01/09/2026'), findsOneWidget);
     expect(find.text('Nueva fecha calculada: 17/08/2026'), findsOneWidget);
-    expect(find.textContaining('45 días'), findsOneWidget);
+    expect(find.text('Plazo actual del cliente: 45 d\u00edas'), findsOneWidget);
     expect(find.textContaining('Se modificará únicamente esta factura.'),
         findsOneWidget);
     expect(find.textContaining('Las demás facturas del cliente conservarán'),
