@@ -1,17 +1,27 @@
 import 'dart:convert';
 
 class NotificationOpenRequest {
-  const NotificationOpenRequest({required this.facturaId});
+  const NotificationOpenRequest({required this.localDate, this.facturaId});
 
   static const supportedType = 'recordatorio_pago';
 
-  final String facturaId;
+  final DateTime localDate;
+  final String? facturaId;
 
   static NotificationOpenRequest? fromData(Map<String, dynamic> data) {
     if (data['type']?.toString().trim() != supportedType) return null;
-    final facturaId = data['factura_id']?.toString().trim() ?? '';
-    if (facturaId.isEmpty || facturaId.length > 128) return null;
-    return NotificationOpenRequest(facturaId: facturaId);
+    final parsedDate =
+        DateTime.tryParse(data['local_date']?.toString().trim() ?? '');
+    final facturaId = data['factura_id']?.toString().trim();
+    if (parsedDate == null && (facturaId == null || facturaId.isEmpty)) {
+      return null;
+    }
+    if (facturaId != null && facturaId.length > 128) return null;
+    final now = DateTime.now();
+    return NotificationOpenRequest(
+      localDate: parsedDate ?? DateTime(now.year, now.month, now.day),
+      facturaId: facturaId,
+    );
   }
 
   static NotificationOpenRequest? fromPayload(String? payload) {

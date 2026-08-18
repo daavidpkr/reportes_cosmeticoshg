@@ -8,7 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/reporte_screen.dart';
-import 'screens/payment_reminders_screen.dart';
+import 'screens/payment_calendar/payment_calendar_screen.dart';
 import 'services/fcm_device_repository.dart';
 import 'services/firebase_messaging_service.dart';
 import 'services/notification_open_request.dart';
@@ -87,8 +87,10 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
     final navigator = _navigatorKey.currentState;
     if (navigator == null || _auth.currentSession == null) return;
     await navigator.push<void>(MaterialPageRoute(
-        builder: (_) =>
-            PaymentRemindersScreen(initialFacturaId: request.facturaId)));
+        builder: (_) => PaymentCalendarScreen(
+              initialMonth: request.localDate,
+              initialDate: request.localDate,
+            )));
   }
 
   Future<void> _cargarTema() async {

@@ -28,9 +28,11 @@ const _monthNames = [
 ];
 
 class PaymentCalendarScreen extends StatefulWidget {
-  const PaymentCalendarScreen({this.repository, this.initialMonth, super.key});
+  const PaymentCalendarScreen(
+      {this.repository, this.initialMonth, this.initialDate, super.key});
   final PaymentCalendarDataSource? repository;
   final DateTime? initialMonth;
+  final DateTime? initialDate;
   @override
   State<PaymentCalendarScreen> createState() => _PaymentCalendarScreenState();
 }
@@ -42,15 +44,21 @@ class _PaymentCalendarScreenState extends State<PaymentCalendarScreen> {
         body: PaymentCalendarView(
           repository: widget.repository,
           initialMonth: widget.initialMonth,
+          initialDate: widget.initialDate,
         ),
       );
 }
 
 class PaymentCalendarView extends StatefulWidget {
   const PaymentCalendarView(
-      {this.repository, this.initialMonth, this.onPaymentPersisted, super.key});
+      {this.repository,
+      this.initialMonth,
+      this.initialDate,
+      this.onPaymentPersisted,
+      super.key});
   final PaymentCalendarDataSource? repository;
   final DateTime? initialMonth;
+  final DateTime? initialDate;
   final Future<void> Function()? onPaymentPersisted;
   @override
   State<PaymentCalendarView> createState() => _PaymentCalendarViewState();
@@ -59,7 +67,8 @@ class PaymentCalendarView extends StatefulWidget {
 class _PaymentCalendarViewState extends State<PaymentCalendarView> {
   late final PaymentCalendarController controller = PaymentCalendarController(
       repository: widget.repository ?? PaymentCalendarRepository(),
-      initialMonth: widget.initialMonth)
+      initialMonth: widget.initialMonth,
+      initialDate: widget.initialDate)
     ..addListener(_changed);
   @override
   void initState() {

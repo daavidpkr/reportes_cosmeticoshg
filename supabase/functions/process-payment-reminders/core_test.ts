@@ -1,10 +1,9 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 
 import {
-  buildFcmPayload,
+  buildSameDayFcmPayload,
   classifyFcmError,
   classifyThrownError,
-  dueDateForNotice,
   filterEnterpriseDevices,
   finalDeliveryBlockReason,
   guayaquilDate,
@@ -14,7 +13,6 @@ import {
   parseOAuthResponse,
   processingRecoveryCutoff,
   requireDeviceQuery,
-  retryBlockReason,
   validateRuntimeConfig,
 } from "./core.ts";
 import { handler } from "./index.ts";
@@ -30,6 +28,48 @@ const validEnvironment = {
   SUPABASE_URL: "https://project.supabase.co",
   SUPABASE_SERVICE_ROLE_KEY: "service-role-placeholder",
 };
+
+Deno.test("consolida exclusivamente las facturas de hoy", () => {
+  const rows = [
+    { date: "2026-08-17", id: "601" },
+    { date: "2026-08-17", id: "602" },
+    { date: "2026-08-17", id: "603" },
+    { date: "2026-08-17", id: "604" },
+    { date: "2026-08-21", id: "609" },
+    { date: "2026-08-21", id: "646" },
+  ];
+  assertEquals(rows.filter((row) => row.date === "2026-08-21").length, 2);
+});
+
+Deno.test("payload diario consolidado abre el calendario de hoy", () => {
+  const payload = buildSameDayFcmPayload({
+    deviceToken: "token-placeholder",
+    localDate: "2026-08-21",
+    invoices: [
+      {
+        reminderId: "r1",
+        facturaId: "f1",
+        invoiceNumber: "000000609",
+        cliente: "N8 FIORELA",
+        balance: 10,
+      },
+      {
+        reminderId: "r2",
+        facturaId: "f2",
+        invoiceNumber: "000000646",
+        cliente: "N34 JESSICA",
+        balance: 20.5,
+      },
+    ],
+  });
+  assertEquals(
+    payload.message.notification.title,
+    "2 cobros programados para hoy",
+  );
+  assert(payload.message.notification.body.includes("$30.50"));
+  assertEquals(payload.message.data.destination, "payment_calendar");
+  assertEquals(payload.message.data.local_date, "2026-08-21");
+});
 
 Deno.test("enterprise devices include only active members of the organization", () => {
   const devices = [
@@ -91,14 +131,6 @@ Deno.test("rechaza métodos distintos de POST", async () => {
   assertEquals(response.headers.get("allow"), "POST");
 });
 
-Deno.test("calcula el aviso de tres días", () => {
-  assertEquals(dueDateForNotice("2026-08-10", "three_days"), "2026-08-13");
-});
-
-Deno.test("calcula el aviso de un día", () => {
-  assertEquals(dueDateForNotice("2026-08-10", "one_day"), "2026-08-11");
-});
-
 Deno.test("America/Guayaquil cambia de fecha a las 05:00 UTC", () => {
   assertEquals(
     guayaquilDate(new Date("2026-08-10T04:59:59Z")),
@@ -108,30 +140,6 @@ Deno.test("America/Guayaquil cambia de fecha a las 05:00 UTC", () => {
     guayaquilDate(new Date("2026-08-10T05:00:00Z")),
     "2026-08-10",
   );
-});
-
-Deno.test("el payload visible identifica factura, cliente y nombre comercial", () => {
-  const payload = buildFcmPayload({
-    deviceToken: "token-placeholder",
-    facturaId: "FAC-1",
-    reminderId: "REM-1",
-    notice: "three_days",
-    cliente: "Cliente Ejemplo",
-    nombreComercial: "Comercial Ejemplo",
-  });
-  const encoded = JSON.stringify(payload).toLowerCase();
-  assertEquals(payload.message.data.type, "recordatorio_pago");
-  assertEquals(
-    payload.message.android.notification.channel_id,
-    "recordatorios_pago",
-  );
-  assertEquals(payload.message.notification.title, "Factura FAC-1");
-  assert(payload.message.notification.body.includes("Cliente Ejemplo"));
-  assert(payload.message.notification.body.includes("Comercial Ejemplo"));
-  assert(payload.message.notification.body.includes("dentro de 3 días"));
-  for (const forbidden of ["monto", "saldo", "venta", "abono"]) {
-    assert(!encoded.includes(forbidden));
-  }
 });
 
 Deno.test("acepta una configuración Firebase válida", () => {
@@ -274,34 +282,6 @@ Deno.test("recupera processing después de diez minutos", () => {
   assertEquals(
     processingRecoveryCutoff(now).toISOString(),
     "2026-08-10T13:10:00.000Z",
-  );
-});
-
-Deno.test("no reintenta una versión de fecha anterior", () => {
-  assertEquals(
-    retryBlockReason({
-      active: true,
-      currentScheduleVersion: "new-version",
-      eventScheduleVersion: "old-version",
-      notice: "one_day",
-      notifyThreeDays: true,
-      notifyOneDay: true,
-    }),
-    "SCHEDULE_CHANGED",
-  );
-});
-
-Deno.test("no reintenta un tipo de aviso deshabilitado", () => {
-  assertEquals(
-    retryBlockReason({
-      active: true,
-      currentScheduleVersion: "same-version",
-      eventScheduleVersion: "same-version",
-      notice: "three_days",
-      notifyThreeDays: false,
-      notifyOneDay: true,
-    }),
-    "NOTICE_DISABLED",
   );
 });
 

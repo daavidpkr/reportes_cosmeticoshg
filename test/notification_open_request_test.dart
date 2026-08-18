@@ -31,6 +31,16 @@ void main() {
     });
   });
 
+  test('abre el calendario en la fecha local indicada', () {
+    final result = NotificationOpenRequest.fromData(const {
+      'type': 'recordatorio_pago',
+      'destination': 'payment_calendar',
+      'local_date': '2026-08-21',
+    });
+    expect(result?.localDate, DateTime(2026, 8, 21));
+    expect(result?.facturaId, isNull);
+  });
+
   test('NotificationOpeningGuard evita procesar dos veces la apertura', () {
     final guard = NotificationOpeningGuard();
     expect(guard.markIfNew('mensaje-1'), isTrue);

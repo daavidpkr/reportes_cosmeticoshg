@@ -5,9 +5,11 @@ import '../../models/payment_calendar_rules.dart';
 import '../../services/payment_calendar_repository.dart';
 
 class PaymentCalendarController extends ChangeNotifier {
-  PaymentCalendarController({required this.repository, DateTime? initialMonth})
+  PaymentCalendarController(
+      {required this.repository, DateTime? initialMonth, DateTime? initialDate})
       : visibleMonth = DateTime((initialMonth ?? DateTime.now()).year,
-            (initialMonth ?? DateTime.now()).month);
+            (initialMonth ?? DateTime.now()).month),
+        selectedDay = initialDate == null ? null : dateOnly(initialDate);
 
   final PaymentCalendarDataSource repository;
   DateTime visibleMonth;

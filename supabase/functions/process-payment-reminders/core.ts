@@ -4,7 +4,54 @@ export const PAGE_SIZE = 200;
 export const DEVICE_CONCURRENCY = 6;
 export const PROCESSING_RECOVERY_MINUTES = 10;
 
-export type Notice = "three_days" | "one_day";
+export type EligibleInvoice = {
+  reminderId: string;
+  facturaId: string;
+  invoiceNumber: string;
+  cliente: string;
+  balance: number;
+};
+
+export function sameDayVisibleContent(invoices: EligibleInvoice[]) {
+  const total = invoices.reduce((sum, invoice) => sum + invoice.balance, 0);
+  if (invoices.length === 1) {
+    const invoice = invoices[0];
+    return {
+      title: "Cobro programado para hoy",
+      body: `Factura ${invoice.invoiceNumber || invoice.facturaId} - ${
+        invoice.cliente.trim() || "Cliente sin registrar"
+      } - $${invoice.balance.toFixed(2)}`,
+    };
+  }
+  return {
+    title: `${invoices.length} cobros programados para hoy`,
+    body: `Total pendiente: $${
+      total.toFixed(2)
+    }. Toca para abrir el calendario.`,
+  };
+}
+
+export function buildSameDayFcmPayload(input: {
+  deviceToken: string;
+  localDate: string;
+  invoices: EligibleInvoice[];
+}) {
+  return {
+    message: {
+      token: input.deviceToken,
+      notification: sameDayVisibleContent(input.invoices),
+      data: {
+        type: "recordatorio_pago",
+        destination: "payment_calendar",
+        local_date: input.localDate,
+      },
+      android: {
+        priority: "high",
+        notification: { channel_id: "recordatorios_pago" },
+      },
+    },
+  };
+}
 
 export type ServiceAccount = {
   client_email: string;
@@ -93,59 +140,6 @@ export function guayaquilDate(now = new Date()): string {
     month: "2-digit",
     day: "2-digit",
   }).format(now);
-}
-
-export function addDays(date: string, days: number): string {
-  const value = new Date(`${date}T12:00:00Z`);
-  value.setUTCDate(value.getUTCDate() + days);
-  return value.toISOString().slice(0, 10);
-}
-
-export function dueDateForNotice(today: string, notice: Notice): string {
-  return addDays(today, notice === "three_days" ? 3 : 1);
-}
-
-export function visibleContent(input: {
-  facturaId: string;
-  cliente: string;
-  nombreComercial: string;
-  notice: Notice;
-}) {
-  const cliente = input.cliente.trim() || "Sin registrar";
-  const nombreComercial = input.nombreComercial.trim() || "Sin registrar";
-  const reminder = input.notice === "three_days"
-    ? "Tienes un pago programado dentro de 3 días."
-    : "Recuerda revisar el pago pendiente para mañana.";
-  return {
-    title: `Factura ${input.facturaId}`,
-    body:
-      `Cliente: ${cliente} · Nombre comercial: ${nombreComercial} · ${reminder}`,
-  };
-}
-
-export function buildFcmPayload(input: {
-  deviceToken: string;
-  facturaId: string;
-  reminderId: string;
-  notice: Notice;
-  cliente: string;
-  nombreComercial: string;
-}) {
-  return {
-    message: {
-      token: input.deviceToken,
-      notification: visibleContent(input),
-      data: {
-        type: "recordatorio_pago",
-        factura_id: input.facturaId,
-        recordatorio_id: input.reminderId,
-      },
-      android: {
-        priority: "high",
-        notification: { channel_id: "recordatorios_pago" },
-      },
-    },
-  };
 }
 
 function required(value: string | undefined, name: string): string {
@@ -318,27 +312,6 @@ export function nextRetryAt(
 
 export function processingRecoveryCutoff(now = new Date()): Date {
   return new Date(now.getTime() - PROCESSING_RECOVERY_MINUTES * 60_000);
-}
-
-export function retryBlockReason(input: {
-  active: boolean;
-  currentScheduleVersion: string;
-  eventScheduleVersion: string;
-  notice: Notice;
-  notifyThreeDays: boolean;
-  notifyOneDay: boolean;
-}): string | null {
-  if (!input.active) return "REMINDER_INACTIVE";
-  if (input.currentScheduleVersion !== input.eventScheduleVersion) {
-    return "SCHEDULE_CHANGED";
-  }
-  if (input.notice === "three_days" && !input.notifyThreeDays) {
-    return "NOTICE_DISABLED";
-  }
-  if (input.notice === "one_day" && !input.notifyOneDay) {
-    return "NOTICE_DISABLED";
-  }
-  return null;
 }
 
 export function requireDeviceQuery<T>(
