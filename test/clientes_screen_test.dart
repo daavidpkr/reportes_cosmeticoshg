@@ -63,8 +63,9 @@ class FakeCustomerTerms implements CustomerTermsDataSource {
 
 class FakeBulkReview implements BulkScheduleReviewDataSource {
   int previews = 0, applies = 0;
+  Set<String> authorized = {};
   BulkScheduleReview get value =>
-      BulkScheduleReview(toleranceDays: 7, counts: const {
+      BulkScheduleReview(previewId: 'preview-token', toleranceDays: 7, counts: {
         'total_reviewed': 4,
         'already_correct': 1,
         'safe_to_update': 1,
@@ -75,6 +76,10 @@ class FakeBulkReview implements BulkScheduleReviewDataSource {
         'created': 0,
         'changed_since_preview': 0,
         'errors': 0,
+        'zero_term_customers': 2,
+        'zero_term_invoices': 2,
+        'authorized_updated': authorized.length,
+        'unauthorized_exceptions': 2 - authorized.length,
       }, items: [
         BulkScheduleItem(
             customerId: '1',
@@ -87,19 +92,22 @@ class FakeBulkReview implements BulkScheduleReviewDataSource {
             expectedDate: DateTime(2026, 8, 31),
             differenceDays: 2,
             dateSource: 'customer_term',
+            versionToken: 'safe-token',
             classification: 'safe_to_update',
             reason: 'within_tolerance'),
         BulkScheduleItem(
             customerId: '1',
             customer: 'Cliente configurado',
             commercialName: 'Comercial Uno',
-            reference: '000000664',
-            invoiceDate: DateTime(2026, 7, 27),
-            termDays: 30,
-            currentDate: DateTime(2026, 9, 10),
-            expectedDate: DateTime(2026, 8, 26),
-            differenceDays: 15,
+            reference: '000000608',
+            invoiceDate: DateTime(2026, 7, 7),
+            termDays: 60,
+            currentDate: DateTime(2026, 8, 6),
+            expectedDate: DateTime(2026, 9, 7),
+            differenceDays: 32,
             dateSource: 'customer_term',
+            versionToken: 'exception-token',
+            balance: 356.35,
             classification: 'manual_review',
             reason: 'outside_tolerance'),
         BulkScheduleItem(
@@ -113,6 +121,7 @@ class FakeBulkReview implements BulkScheduleReviewDataSource {
             expectedDate: DateTime(2026, 8, 17),
             differenceDays: 3,
             dateSource: 'manual',
+            versionToken: 'manual-token',
             classification: 'manual_review',
             reason: 'manual_date'),
       ]);
@@ -123,8 +132,10 @@ class FakeBulkReview implements BulkScheduleReviewDataSource {
   }
 
   @override
-  Future<BulkScheduleReview> apply(BulkScheduleReview preview) async {
+  Future<BulkScheduleReview> apply(BulkScheduleReview preview,
+      {Set<String> authorizedExceptionRefs = const {}}) async {
     applies++;
+    authorized = authorizedExceptionRefs;
     return value;
   }
 }
@@ -309,16 +320,49 @@ void main() {
     expect(find.text('Revisión de programaciones'), findsOneWidget);
     expect(find.text('Listas para actualizar: 1'), findsOneWidget);
     expect(find.text('Requieren revisión manual: 2'), findsOneWidget);
-    expect(find.text('Factura 000000664'), findsOneWidget);
+    expect(find.text('Factura 000000608'), findsOneWidget);
     expect(find.text('Factura 000000665'), findsOneWidget);
     await tester.tap(
-        find.widgetWithText(FilledButton, 'Actualizar programaciones seguras'));
+        find.widgetWithText(FilledButton, 'Actualizar seguras y autorizadas'));
     await tester.pump(const Duration(milliseconds: 300));
     expect(bulk.applies, 1);
     expect(bulk.previews, 2); // preview plus authoritative second read
     expect(find.text('Actualización completada'), findsOneWidget);
-    expect(find.text('Actualizadas: 1'), findsOneWidget);
-    expect(find.text('Factura 000000664'), findsOneWidget);
+    expect(find.text('Actualizadas autom\u00e1ticamente: 1'), findsOneWidget);
+    expect(find.text('Factura 000000608'), findsOneWidget);
+  });
+
+  testWidgets('autoriza expresamente la excepciÃ³n 608 de 32 dÃ­as',
+      (tester) async {
+    final bulk = FakeBulkReview();
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: FakeCustomerTerms(),
+                historyRepository: FakeHistory(),
+                bulkReviewRepository: bulk))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('review-bulk-schedules')));
+    await tester.pump(const Duration(milliseconds: 300));
+    final exception =
+        find.widgetWithText(CheckboxListTile, 'Factura 000000608');
+    expect(exception, findsOneWidget);
+    await tester.scrollUntilVisible(exception, 300,
+        scrollable: find.byType(Scrollable).last);
+    await tester.tap(exception);
+    await tester.pump();
+    final update =
+        find.widgetWithText(FilledButton, 'Actualizar seguras y autorizadas');
+    await tester.ensureVisible(update);
+    await tester.tap(update);
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(
+        find.text('Confirmar reprogramaciones excepcionales'), findsOneWidget);
+    await tester
+        .tap(find.widgetWithText(FilledButton, 'Confirmar y actualizar'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(bulk.authorized, {'000000608'});
+    expect(bulk.applies, 1);
   });
 
   testWidgets('reprograma solo la referencia completa 601 con plazo 45',

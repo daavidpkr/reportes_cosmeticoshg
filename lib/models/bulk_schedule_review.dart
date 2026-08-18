@@ -12,12 +12,16 @@ class BulkScheduleItem {
     this.expectedDate,
     this.differenceDays,
     this.dateSource,
+    this.versionToken = '',
+    this.balance = 0,
   });
   final String customerId, customer, commercialName, reference;
   final DateTime invoiceDate;
   final int? termDays, differenceDays;
   final DateTime? currentDate, expectedDate;
   final String? dateSource;
+  final String versionToken;
+  final double balance;
   final String classification, reason;
 
   factory BulkScheduleItem.fromJson(Map<String, dynamic> json) =>
@@ -32,13 +36,19 @@ class BulkScheduleItem {
           expectedDate: _date(json['expected_scheduled_date']),
           differenceDays: (json['difference_days'] as num?)?.toInt(),
           dateSource: json['date_source']?.toString(),
+          versionToken: json['version_token']?.toString() ?? '',
+          balance: (json['balance'] as num?)?.toDouble() ?? 0,
           classification: json['classification'].toString(),
           reason: json['reason']?.toString() ?? 'unknown_source');
 }
 
 class BulkScheduleReview {
   const BulkScheduleReview(
-      {required this.toleranceDays, required this.counts, required this.items});
+      {required this.toleranceDays,
+      required this.counts,
+      required this.items,
+      this.previewId = ''});
+  final String previewId;
   final int toleranceDays;
   final Map<String, int> counts;
   final List<BulkScheduleItem> items;
@@ -54,6 +64,7 @@ class BulkScheduleReview {
   factory BulkScheduleReview.fromJson(Map<String, dynamic> json) =>
       BulkScheduleReview(
           toleranceDays: (json['tolerance_days'] as num?)?.toInt() ?? 7,
+          previewId: json['preview_id']?.toString() ?? '',
           counts: Map<String, dynamic>.from(json['counts'] as Map? ?? const {})
               .map(
                   (key, value) => MapEntry(key, (value as num?)?.toInt() ?? 0)),

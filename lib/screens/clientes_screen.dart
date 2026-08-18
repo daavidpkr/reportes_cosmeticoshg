@@ -168,15 +168,35 @@ class _ClientesScreenState extends State<ClientesScreen> {
     try {
       final preview = await _bulkReviewRepository.preview();
       if (!mounted) return;
-      final confirmed = await showDialog<bool>(
+      final authorized = await showDialog<Set<String>>(
           context: context,
           barrierDismissible: false,
           builder: (_) => _BulkScheduleDialog(
               review: preview,
               preview: true,
               onOpenCustomer: _openBulkCustomer));
-      if (confirmed != true || !mounted) return;
-      final result = await _bulkReviewRepository.apply(preview);
+      if (authorized == null || !mounted) return;
+      if (authorized.isNotEmpty) {
+        final confirmed = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+                  title: const Text('Confirmar reprogramaciones excepcionales'),
+                  content: Text(
+                      'Has autorizado ${authorized.length} facturas con diferencias mayores a ${preview.toleranceDays} d\u00edas o fechas especiales.\n\nSupabase recalcular\u00e1 nuevamente sus fechas antes de guardar.\n\n\u00bfDeseas continuar?'),
+                  actions: [
+                    TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Volver')),
+                    FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Confirmar y actualizar'))
+                  ],
+                ));
+        if (confirmed != true || !mounted) return;
+      }
+      final result = await _bulkReviewRepository.apply(preview,
+          authorizedExceptionRefs: authorized);
       if (!mounted) return;
       await _bulkReviewRepository.preview();
       if (!mounted) return;
@@ -382,6 +402,7 @@ class _BulkScheduleDialog extends StatefulWidget {
 
 class _BulkScheduleDialogState extends State<_BulkScheduleDialog> {
   String query = '', reason = 'all';
+  final selected = <String>{};
   String date(DateTime? value) => value == null
       ? 'Sin programar'
       : '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
@@ -420,18 +441,30 @@ class _BulkScheduleDialogState extends State<_BulkScheduleDialog> {
             Text('Ya correctas: ${review.count('already_correct')}'),
             Text('Listas para actualizar: ${review.count('safe_to_update')}'),
             Text('Sin recordatorio: ${review.count('missing_reminders')}'),
-            Text('Actualizadas: ${review.count('updated')}'),
+            Text(
+                'Actualizadas autom\u00e1ticamente: ${review.count('updated')}'),
             Text('Recordatorios creados: ${review.count('created')}'),
+            Text(
+                'Excepciones autorizadas y actualizadas: ${review.count('authorized_updated')}'),
+            Text(
+                'Excepciones no autorizadas: ${review.count('unauthorized_exceptions')}'),
             Text(
                 'Requieren revisi\u00f3n manual: ${review.count('manual_review')}'),
             Text(
                 'Cambiaron durante el proceso: ${review.count('changed_since_preview')}'),
             Text(
                 'Sin plazo configurado: ${review.count('missing_payment_term')}'),
+            Text(
+                'Clientes con plazo cero: ${review.count('zero_term_customers')}'),
+            Text(
+                'Facturas ignoradas por plazo cero: ${review.count('zero_term_invoices')}'),
             Text('Errores: ${review.count('errors')}'),
             const SizedBox(height: 12),
-            Text(
-                'Se actualizar\u00e1n \u00fanicamente las programaciones seguras. Las fechas manuales y las diferencias mayores a ${review.toleranceDays} d\u00edas no ser\u00e1n modificadas.'),
+            const Text(
+                'Se actualizar\u00e1n las programaciones seguras y las excepciones seleccionadas expresamente. Las excepciones no seleccionadas, los clientes con plazo cero y los clientes sin plazo no ser\u00e1n modificados.'),
+            if (review.count('zero_term_invoices') > 0)
+              const Text(
+                  'Las facturas de clientes con plazo de 0 d\u00edas fueron ignoradas y no se modificaron.'),
             if (review.reviewItems.isNotEmpty) ...[
               const Divider(height: 28),
               const Text('Facturas para revisi\u00f3n manual',
@@ -458,12 +491,21 @@ class _BulkScheduleDialogState extends State<_BulkScheduleDialog> {
               for (final item in visible)
                 Card(
                     child: ExpansionTile(
-                  title: Text('Factura ${item.reference}'),
+                  title: CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: selected.contains(item.reference),
+                      onChanged: item.classification == 'missing_term'
+                          ? null
+                          : (value) => setState(() => value == true
+                              ? selected.add(item.reference)
+                              : selected.remove(item.reference)),
+                      title: Text('Factura ${item.reference}'),
+                      subtitle: const Text('Autorizar reprogramaci\u00f3n')),
                   subtitle: Text('${item.customer}\n${item.commercialName}'),
                   children: [
                     ListTile(
                       title: Text(
-                          'Fecha de factura: ${date(item.invoiceDate)}\nPlazo actual: ${item.termDays == null ? 'Pendiente' : '${item.termDays} d\u00edas'}\nFecha programada: ${date(item.currentDate)}\nFecha calculada: ${date(item.expectedDate)}\nDiferencia: ${item.differenceDays ?? 0} d\u00edas\nFuente: ${item.dateSource ?? 'Sin fuente'}'),
+                          'Fecha de factura: ${date(item.invoiceDate)}\nPlazo actual: ${item.termDays == null ? 'Pendiente' : '${item.termDays} d\u00edas'}\nFecha programada: ${date(item.currentDate)}\nFecha calculada: ${date(item.expectedDate)}\nDiferencia: ${item.differenceDays ?? 0} d\u00edas\nFuente: ${item.dateSource ?? 'Sin fuente'}\nSaldo: \$${item.balance.toStringAsFixed(2)}'),
                       subtitle:
                           Text(reasonText(item.reason, review.toleranceDays)),
                       trailing: TextButton(
@@ -479,11 +521,11 @@ class _BulkScheduleDialogState extends State<_BulkScheduleDialog> {
       actions: widget.preview
           ? [
               TextButton(
-                  onPressed: () => Navigator.pop(context, false),
+                  onPressed: () => Navigator.pop(context),
                   child: const Text('Cancelar')),
               FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Actualizar programaciones seguras'))
+                  onPressed: () => Navigator.pop(context, selected),
+                  child: const Text('Actualizar seguras y autorizadas'))
             ]
           : [
               TextButton(
