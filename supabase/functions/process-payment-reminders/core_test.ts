@@ -71,6 +71,11 @@ Deno.test("payload diario consolidado abre el calendario de hoy", () => {
   assert(payload.message.notification.body.includes("$30.50"));
   assertEquals(payload.message.data.destination, "payment_calendar");
   assertEquals(payload.message.data.local_date, "2026-08-21");
+  assertEquals(payload.message.android.notification, {
+    channel_id: "recordatorios_pago",
+    icon: "ic_notification_cosmeticos_hg",
+    color: "#7A1F4D",
+  });
 });
 
 Deno.test("payload sintético informa las 05:00 y abre la fecha enviada", () => {
@@ -87,6 +92,11 @@ Deno.test("payload sintético informa las 05:00 y abre la fecha enviada", () => 
     type: "notification_test",
     destination: "payment_calendar",
     local_date: "2026-08-21",
+  });
+  assertEquals(payload.message.android.notification, {
+    channel_id: "recordatorios_pago",
+    icon: "ic_notification_cosmeticos_hg",
+    color: "#7A1F4D",
   });
 });
 

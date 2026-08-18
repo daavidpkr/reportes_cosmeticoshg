@@ -7,6 +7,12 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_notification_cosmeticos_hg" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_accent" />
+        <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="recordatorios_pago" />
         <activity

@@ -17,10 +17,12 @@ class FirebaseMessagingService {
 
   static final FirebaseMessagingService instance = FirebaseMessagingService._();
 
+  static const notificationIcon = 'ic_notification_cosmeticos_hg';
+
   static const channel = AndroidNotificationChannel(
     'recordatorios_pago',
     'Recordatorios de pago',
-    description: 'Avisos de fechas próximas de pago',
+    description: 'Cobros programados para el día',
     importance: Importance.high,
     playSound: true,
     enableVibration: true,
@@ -68,7 +70,7 @@ class FirebaseMessagingService {
 
     try {
       const settings = InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        android: AndroidInitializationSettings(notificationIcon),
       );
       await _localNotifications.initialize(
         settings: settings,
@@ -175,7 +177,8 @@ class FirebaseMessagingService {
           android: AndroidNotificationDetails(
             'recordatorios_pago',
             'Recordatorios de pago',
-            channelDescription: 'Avisos de fechas próximas de pago',
+            channelDescription: 'Cobros programados para el día',
+            icon: notificationIcon,
             importance: Importance.high,
             priority: Priority.high,
             playSound: true,

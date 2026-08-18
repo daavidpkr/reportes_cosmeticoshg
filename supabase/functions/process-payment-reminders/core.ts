@@ -1,6 +1,8 @@
 export const TIME_ZONE = "America/Guayaquil";
 export const NOTIFICATION_LOCAL_TIME = "05:00";
 export const NOTIFICATION_CRON_UTC = "0 10 * * *";
+export const ANDROID_NOTIFICATION_ICON = "ic_notification_cosmeticos_hg";
+export const ANDROID_NOTIFICATION_COLOR = "#7A1F4D";
 export const MAX_ATTEMPTS = 5;
 export const PAGE_SIZE = 200;
 export const DEVICE_CONCURRENCY = 6;
@@ -49,7 +51,11 @@ export function buildSameDayFcmPayload(input: {
       },
       android: {
         priority: "high",
-        notification: { channel_id: "recordatorios_pago" },
+        notification: {
+          channel_id: "recordatorios_pago",
+          icon: ANDROID_NOTIFICATION_ICON,
+          color: ANDROID_NOTIFICATION_COLOR,
+        },
       },
     },
   };
@@ -74,7 +80,11 @@ export function buildNotificationTestPayload(input: {
       },
       android: {
         priority: "high",
-        notification: { channel_id: "recordatorios_pago" },
+        notification: {
+          channel_id: "recordatorios_pago",
+          icon: ANDROID_NOTIFICATION_ICON,
+          color: ANDROID_NOTIFICATION_COLOR,
+        },
       },
     },
   };
