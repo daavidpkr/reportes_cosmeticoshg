@@ -41,6 +41,15 @@ void main() {
     expect(result?.facturaId, isNull);
   });
 
+  test('rechaza fechas imposibles sin desplazarlas de día', () {
+    expect(
+        NotificationOpenRequest.fromData(const {
+          'type': 'notification_test',
+          'local_date': '2026-02-30',
+        }),
+        isNull);
+  });
+
   test('NotificationOpeningGuard evita procesar dos veces la apertura', () {
     final guard = NotificationOpeningGuard();
     expect(guard.markIfNew('mensaje-1'), isTrue);

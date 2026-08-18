@@ -3,15 +3,15 @@ import 'dart:convert';
 class NotificationOpenRequest {
   const NotificationOpenRequest({required this.localDate, this.facturaId});
 
-  static const supportedType = 'recordatorio_pago';
+  static const supportedTypes = {'recordatorio_pago', 'notification_test'};
 
   final DateTime localDate;
   final String? facturaId;
 
   static NotificationOpenRequest? fromData(Map<String, dynamic> data) {
-    if (data['type']?.toString().trim() != supportedType) return null;
+    if (!supportedTypes.contains(data['type']?.toString().trim())) return null;
     final parsedDate =
-        DateTime.tryParse(data['local_date']?.toString().trim() ?? '');
+        _parseCalendarDate(data['local_date']?.toString().trim() ?? '');
     final facturaId = data['factura_id']?.toString().trim();
     if (parsedDate == null && (facturaId == null || facturaId.isEmpty)) {
       return null;
@@ -22,6 +22,18 @@ class NotificationOpenRequest {
       localDate: parsedDate ?? DateTime(now.year, now.month, now.day),
       facturaId: facturaId,
     );
+  }
+
+  static DateTime? _parseCalendarDate(String value) {
+    final match = RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(value);
+    if (match == null) return null;
+    final year = int.parse(match.group(1)!);
+    final month = int.parse(match.group(2)!);
+    final day = int.parse(match.group(3)!);
+    final result = DateTime(year, month, day);
+    return result.year == year && result.month == month && result.day == day
+        ? result
+        : null;
   }
 
   static NotificationOpenRequest? fromPayload(String? payload) {

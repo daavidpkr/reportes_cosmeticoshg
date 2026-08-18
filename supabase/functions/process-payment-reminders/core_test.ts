@@ -1,12 +1,14 @@
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 
 import {
+  buildNotificationTestPayload,
   buildSameDayFcmPayload,
   classifyFcmError,
   classifyThrownError,
   filterEnterpriseDevices,
   finalDeliveryBlockReason,
   guayaquilDate,
+  guayaquilDateTime,
   mapLimit,
   MAX_ATTEMPTS,
   nextRetryAt,
@@ -69,6 +71,23 @@ Deno.test("payload diario consolidado abre el calendario de hoy", () => {
   assert(payload.message.notification.body.includes("$30.50"));
   assertEquals(payload.message.data.destination, "payment_calendar");
   assertEquals(payload.message.data.local_date, "2026-08-21");
+});
+
+Deno.test("payload sintético informa las 05:00 y abre la fecha enviada", () => {
+  const payload = buildNotificationTestPayload({
+    deviceToken: "token-autorizado",
+    localDate: "2026-08-21",
+  });
+  assertEquals(payload.message.notification, {
+    title: "Prueba de notificaciones",
+    body:
+      "Las notificaciones de cobros se enviarán diariamente a las 05:00, hora de Ecuador.",
+  });
+  assertEquals(payload.message.data, {
+    type: "notification_test",
+    destination: "payment_calendar",
+    local_date: "2026-08-21",
+  });
 });
 
 Deno.test("enterprise devices include only active members of the organization", () => {
@@ -139,6 +158,29 @@ Deno.test("America/Guayaquil cambia de fecha a las 05:00 UTC", () => {
   assertEquals(
     guayaquilDate(new Date("2026-08-10T05:00:00Z")),
     "2026-08-10",
+  );
+});
+
+Deno.test("Cron 10:00 UTC equivale a 05:00 Ecuador", () => {
+  assertEquals(
+    guayaquilDateTime(new Date("2026-08-21T09:59:00Z")),
+    "2026-08-21, 04:59",
+  );
+  assertEquals(
+    guayaquilDateTime(new Date("2026-08-21T10:00:00Z")),
+    "2026-08-21, 05:00",
+  );
+  assertEquals(
+    guayaquilDateTime(new Date("2026-08-21T10:01:00Z")),
+    "2026-08-21, 05:01",
+  );
+  assertEquals(
+    guayaquilDateTime(new Date("2026-08-21T04:59:00Z")),
+    "2026-08-20, 23:59",
+  );
+  assertEquals(
+    guayaquilDateTime(new Date("2026-08-21T05:00:00Z")),
+    "2026-08-21, 00:00",
   );
 });
 

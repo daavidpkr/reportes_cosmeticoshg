@@ -1,56 +1,39 @@
-# Recordatorios de pago: despliegue pendiente
+# Notificaciones de cobros
 
-Todo lo descrito aquí está preparado localmente. No se ha aplicado ninguna migración, función, secreto ni Cron al proyecto remoto.
+## Configuración canónica
 
-## Orden de revisión y despliegue
+- Zona empresarial: `America/Guayaquil`.
+- Hora visible: `05:00` Ecuador.
+- Cron UTC: `0 10 * * *`.
+- Arquitectura: Supabase Cron → `process-payment-reminders` → FCM → Android.
+- Flutter no programa entregas: solicita permiso, registra el token, recibe FCM y abre el calendario.
 
-1. Revisar `supabase/migrations/20260810130000_payment_reminders.sql` y confirmar que `facturas_maestras.ref_fact` es `text` y tiene una restricción única o clave primaria. La aplicación usa actualmente `onConflict: ref_fact`, pero la definición remota no pudo consultarse con la clave pública.
-2. Aplicar la migración en un entorno de prueba. No usar `supabase db reset` contra un proyecto remoto.
-3. Crear una cuenta de servicio de Firebase con el privilegio mínimo necesario para enviar mensajes FCM. No descargarla ni generarla hasta contar con autorización administrativa.
-4. Cargar los secretos en Supabase, sin incorporarlos al repositorio:
+## Regla empresarial
 
-   - `FIREBASE_PROJECT_ID=cosmeticoshg-reportes`
-   - `FIREBASE_SERVICE_ACCOUNT_JSON` con el JSON completo como valor secreto
-   - `CRON_SECRET` con un valor aleatorio largo
+La fuente canónica es `payment_reminders.payment_date`, el mismo campo usado por
+el Calendario de cobros. Solo se incluyen facturas cuya fecha coincide con el día
+actual en Ecuador, con recordatorio activo y saldo canónico superior a `0.005`.
+Facturas anteriores, futuras, pagadas, anuladas, huérfanas o pertenecientes a una
+organización inactiva quedan excluidas.
 
-   `SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` se suministran al entorno de Edge Functions. Nunca se incluyen en Flutter.
+La entrega se consolida por organización y dispositivo. Una restricción única
+impide más de una entrega empresarial por usuario, dispositivo, fecha local y
+tipo, aunque el Cron sea reintentado o ejecutado concurrentemente.
 
-5. Desplegar `process-payment-reminders` y probarla manualmente con el encabezado `Authorization: Bearer <CRON_SECRET>`.
-6. Solo después de validar el envío real, crear el Cron remoto.
+## Programación segura
 
-## Programación propuesta
+La migración crea exactamente el trabajo `process-same-day-payment-reminders` y
+elimina únicamente trabajos cuyo nombre o comando invoca inequívocamente la misma
+Edge Function. La credencial de invocación se genera dentro de Vault y nunca se
+incorpora al repositorio ni a la salida del CLI.
 
-Supabase Cron usa UTC. Para ejecutar a las 08:00 de `America/Guayaquil` (UTC-5), la expresión es:
+## Comportamiento después de las 05:00
 
-```cron
-0 13 * * *
-```
+Una factura programada o reprogramada para el mismo día después de las 05:00
+permanece visible en el calendario, pero no genera una entrega inmediata. Se
+mantiene una sola ejecución diaria; actualizar la aplicación no envía avisos.
 
-La llamada programada debe obtener el secreto desde Supabase Vault. No debe escribirse el secreto literal en SQL versionado. Un ejemplo conceptual, que debe adaptarse desde el panel remoto después de confirmar los nombres disponibles de Vault, es invocar `pg_net.http_post` hacia la URL de la función con `Authorization: Bearer <valor recuperado de Vault>`.
+## Plataforma
 
-## Reglas de fecha e idempotencia
-
-- Solo se seleccionan pagos cuya fecha sea exactamente hoy + 3 o hoy + 1 en `America/Guayaquil`.
-- No se envían avisos retroactivos, vencidos ni para el propio día del pago.
-- Cambiar `payment_date` genera un `schedule_version` nuevo; los avisos futuros pertenecen a la fecha nueva.
-- Desactivar impide el envío. Reactivar conserva la versión: un aviso ya enviado no se repite.
-- La función administrativa reclama atómicamente cada combinación de recordatorio, versión, aviso y dispositivo.
-- El éxito de un dispositivo no se revierte si otro falla. Los fallos temporales se reintentan y los permanentes desactivan solamente el token afectado.
-- Si no hay dispositivos se registra `no_devices`, pero no se considera entregado; si aparece un dispositivo mientras todavía corresponde al día del aviso, su evento individual puede enviarse.
-- El borrado de una factura elimina sus recordatorios mediante la clave foránea propuesta. Debe confirmarse este comportamiento antes de aplicar la migración.
-
-## Prueba física Android pendiente
-
-Con dos usuarios y, cuando corresponda, dos teléfonos:
-
-1. Probar permiso aceptado, rechazado y apertura de ajustes.
-2. Iniciar sesión y comprobar en Supabase que se registra solo un token activo, sin mostrarlo completo en logs.
-3. Renovar el token y verificar que la misma sesión queda actualizada.
-4. Cerrar sesión y comprobar que solo ese token queda inactivo.
-5. Crear pagos a tres días y a un día; ejecutar la función de forma controlada.
-6. Repetir la ejecución y confirmar que no hay un segundo mensaje.
-7. Probar app abierta, en segundo plano y cerrada, y tocar la notificación.
-8. Confirmar que se abre el editor correspondiente a una factura existente y que una factura eliminada muestra un aviso seguro.
-9. Probar un token inválido y un fallo temporal, y revisar los eventos por dispositivo.
-
-Una compilación exitosa no sustituye esta prueba ni confirma que FCM esté operativo en producción.
+La entrega remota está soportada en Android. Web y Windows no están habilitados
+por esta arquitectura.

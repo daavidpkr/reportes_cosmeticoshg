@@ -26,7 +26,7 @@ Future<AuthorizationStatus?> requestNotificationPermissionWithExplanation(
         builder: (dialogContext) => AlertDialog(
           title: const Text('Notificaciones de pagos'),
           content: const Text(
-            'Activa las notificaciones para recibir avisos antes de los pagos programados.',
+            'Activa las notificaciones para recibir los cobros programados del día.',
           ),
           actions: [
             TextButton(

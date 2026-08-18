@@ -1,4 +1,6 @@
 export const TIME_ZONE = "America/Guayaquil";
+export const NOTIFICATION_LOCAL_TIME = "05:00";
+export const NOTIFICATION_CRON_UTC = "0 10 * * *";
 export const MAX_ATTEMPTS = 5;
 export const PAGE_SIZE = 200;
 export const DEVICE_CONCURRENCY = 6;
@@ -42,6 +44,31 @@ export function buildSameDayFcmPayload(input: {
       notification: sameDayVisibleContent(input.invoices),
       data: {
         type: "recordatorio_pago",
+        destination: "payment_calendar",
+        local_date: input.localDate,
+      },
+      android: {
+        priority: "high",
+        notification: { channel_id: "recordatorios_pago" },
+      },
+    },
+  };
+}
+
+export function buildNotificationTestPayload(input: {
+  deviceToken: string;
+  localDate: string;
+}) {
+  return {
+    message: {
+      token: input.deviceToken,
+      notification: {
+        title: "Prueba de notificaciones",
+        body:
+          "Las notificaciones de cobros se enviarán diariamente a las 05:00, hora de Ecuador.",
+      },
+      data: {
+        type: "notification_test",
         destination: "payment_calendar",
         local_date: input.localDate,
       },
@@ -139,6 +166,18 @@ export function guayaquilDate(now = new Date()): string {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
+  }).format(now);
+}
+
+export function guayaquilDateTime(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
   }).format(now);
 }
 

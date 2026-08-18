@@ -7,6 +7,8 @@ import '../models/factura.dart';
 import '../models/billing_customer.dart';
 import '../models/payment_reminder.dart';
 import '../services/firebase_messaging_service.dart';
+import '../services/notification_diagnostics_repository.dart';
+import '../services/notification_schedule.dart';
 import '../services/customer_terms_repository.dart';
 import '../services/payment_reminders_repository.dart';
 import '../widgets/notification_permission_dialog.dart';
@@ -80,6 +82,64 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
     if (selected != null && mounted) await _edit(selected);
   }
 
+  Future<void> _showDiagnostics() async {
+    final repository = NotificationDiagnosticsRepository();
+    final devices = await repository.listOwnDevices();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Diagnóstico de notificaciones'),
+        content: SizedBox(
+          width: 420,
+          child: devices.isEmpty
+              ? const Text(
+                  'No hay un dispositivo Android activo. Inicia sesión en Android y acepta el permiso de notificaciones.')
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                        'Hora de envío: ${NotificationSchedule.localTime}'),
+                    const Text(
+                        'Zona horaria: ${NotificationSchedule.timeZoneLabel}'),
+                    const Text(
+                        'Frecuencia: ${NotificationSchedule.frequencyLabel}'),
+                    const SizedBox(height: 12),
+                    ...devices.map((device) => ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: const Icon(Icons.android),
+                          title: Text(
+                              '${device.platform.toUpperCase()} · ••••${device.fingerprint}'),
+                          subtitle: Text(
+                              'Última actividad: ${device.lastSeenAt.toLocal()}'),
+                          trailing: FilledButton(
+                            onPressed: () async {
+                              final status =
+                                  await repository.sendTest(device.id);
+                              if (!dialogContext.mounted || !mounted) return;
+                              Navigator.pop(dialogContext);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                      content: Text(status == 'sent'
+                                          ? 'Prueba aceptada por el proveedor.'
+                                          : 'Resultado de la prueba: $status')));
+                            },
+                            child: const Text('Probar'),
+                          ),
+                        )),
+                  ],
+                ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar')),
+        ],
+      ),
+    );
+  }
+
   Future<void> _edit(Factura invoice, [PaymentReminder? existing]) async {
     existing ??= await _repository.findForInvoice(invoice.secuencial);
     if (!mounted) return;
@@ -123,6 +183,14 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
                     },
                     child: Text(_disabled ? 'Configurar' : 'Activar')),
               )),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _showDiagnostics,
+                  icon: const Icon(Icons.monitor_heart_outlined),
+                  label: const Text('Diagnóstico y prueba'),
+                ),
+              ),
               const SizedBox(height: 8),
               FutureBuilder<List<PaymentReminder>>(
                   future: _reminders,
@@ -151,7 +219,7 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
                                       : Icons.event_busy_outlined),
                                   title: Text('Factura ${item.facturaId}'),
                                   subtitle: Text(
-                                      'Cliente: ${_valueOrFallback(item.cliente)}\nNombre comercial: ${_valueOrFallback(item.nombreComercial)}\n${_format(item.paymentDate)} · ${item.active ? 'Activo' : 'Inactivo'}\n${_notices(item)}'),
+                                      'Cliente: ${_valueOrFallback(item.cliente)}\nNombre comercial: ${_valueOrFallback(item.nombreComercial)}\n${_format(item.paymentDate)} · ${item.active ? 'Activo' : 'Inactivo'}\nSe notifica únicamente ese mismo día'),
                                   isThreeLine: false,
                                   trailing: item.active
                                       ? IconButton(
@@ -189,10 +257,6 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
 
   static String _format(DateTime date) =>
       '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
-  static String _notices(PaymentReminder item) => [
-        if (item.notifyThreeDays) '3 días antes',
-        if (item.notifyOneDay) '1 día antes'
-      ].join(' y ');
   static String _valueOrFallback(String value) =>
       value.trim().isEmpty ? 'Sin registrar' : value.trim();
 }
@@ -211,11 +275,8 @@ class _ReminderEditor extends StatefulWidget {
 
 class _ReminderEditorState extends State<_ReminderEditor> {
   final _termsRepository = CustomerTermsRepository();
-  late DateTime _date = widget.reminder?.paymentDate ??
-      DateTime.now().add(const Duration(days: 3));
+  late DateTime _date = widget.reminder?.paymentDate ?? DateTime.now();
   late bool _active = widget.reminder?.active ?? true;
-  late bool _three = widget.reminder?.notifyThreeDays ?? true;
-  late bool _one = widget.reminder?.notifyOneDay ?? true;
   bool _saving = false;
 
   Future<void> _configureInvoiceTerm() async {
@@ -346,19 +407,14 @@ class _ReminderEditorState extends State<_ReminderEditor> {
   }
 
   Future<void> _save() async {
-    if (!_three && !_one) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Activa al menos un aviso.')));
-      return;
-    }
     setState(() => _saving = true);
     try {
       await widget.repository.save(
           facturaId: widget.invoice.secuencial,
           paymentDate: _date,
           active: _active,
-          notifyThreeDays: _three,
-          notifyOneDay: _one);
+          notifyThreeDays: true,
+          notifyOneDay: true);
       if (!mounted) return;
       await requestNotificationPermissionWithExplanation(context);
       if (mounted) Navigator.pop(context, true);
@@ -417,16 +473,12 @@ class _ReminderEditorState extends State<_ReminderEditor> {
             title: const Text('Recordatorio activo'),
             value: _active,
             onChanged: (value) => setState(() => _active = value)),
-        CheckboxListTile(
+        const ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Avisar 3 días antes'),
-            value: _three,
-            onChanged: (value) => setState(() => _three = value ?? false)),
-        CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Avisar 1 día antes'),
-            value: _one,
-            onChanged: (value) => setState(() => _one = value ?? false)),
+            leading: Icon(Icons.notifications_active_outlined),
+            title: Text('Notificación el mismo día'),
+            subtitle: Text(
+                'Hora de envío: ${NotificationSchedule.localTime} · Zona horaria: ${NotificationSchedule.timeZoneLabel}')),
         const SizedBox(height: 12),
         FilledButton.icon(
             onPressed: _saving ? null : _save,
