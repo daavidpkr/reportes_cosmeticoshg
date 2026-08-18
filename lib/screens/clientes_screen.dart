@@ -2,14 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/billing_customer.dart';
+import '../models/bulk_schedule_review.dart';
+import '../services/bulk_schedule_review_repository.dart';
 import '../services/customer_terms_repository.dart';
 import '../services/customer_history_repository.dart';
+import '../services/payment_calendar_refresh.dart';
 import 'customer_history_screen.dart';
 
 class ClientesScreen extends StatefulWidget {
-  const ClientesScreen({this.repository, this.historyRepository, super.key});
+  const ClientesScreen(
+      {this.repository,
+      this.historyRepository,
+      this.bulkReviewRepository,
+      super.key});
   final CustomerTermsDataSource? repository;
   final CustomerHistoryDataSource? historyRepository;
+  final BulkScheduleReviewDataSource? bulkReviewRepository;
   @override
   State<ClientesScreen> createState() => _ClientesScreenState();
 }
@@ -17,11 +25,15 @@ class ClientesScreen extends StatefulWidget {
 class _ClientesScreenState extends State<ClientesScreen> {
   late final CustomerTermsDataSource _repository =
       widget.repository ?? CustomerTermsRepository();
+  late final BulkScheduleReviewDataSource _bulkReviewRepository =
+      widget.bulkReviewRepository ?? BulkScheduleReviewRepository();
   late Future<List<BillingCustomer>> _customers = _repository.listCustomers();
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
   Object? _selectedTerm;
   static const pendingTerm = 'pending';
+  bool _bulkBusy = false;
+  BulkScheduleReview? _lastBulkReview;
   Future<void> _reload() async {
     final next = _repository.listCustomers();
     setState(() {
@@ -150,6 +162,53 @@ class _ClientesScreenState extends State<ClientesScreen> {
           onSchedule: _schedule,
           onDelete: _delete));
 
+  Future<void> _reviewSchedules() async {
+    if (_bulkBusy) return;
+    setState(() => _bulkBusy = true);
+    try {
+      final preview = await _bulkReviewRepository.preview();
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _BulkScheduleDialog(
+              review: preview,
+              preview: true,
+              onOpenCustomer: _openBulkCustomer));
+      if (confirmed != true || !mounted) return;
+      final result = await _bulkReviewRepository.apply(preview);
+      if (!mounted) return;
+      await _bulkReviewRepository.preview();
+      if (!mounted) return;
+      _lastBulkReview = BulkScheduleReview(
+          toleranceDays: result.toleranceDays,
+          counts: result.counts,
+          items: result.reviewItems);
+      paymentCalendarRefresh.refresh();
+      await _reload();
+      if (!mounted) return;
+      await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => _BulkScheduleDialog(
+              review: _lastBulkReview!,
+              preview: false,
+              onOpenCustomer: _openBulkCustomer));
+    } catch (_) {
+      _message(
+          'No se pudo revisar las programaciones. Int\u00e9ntalo nuevamente.');
+    } finally {
+      if (mounted) setState(() => _bulkBusy = false);
+    }
+  }
+
+  Future<void> _openBulkCustomer(BulkScheduleItem item) =>
+      _openHistory(BillingCustomer(
+          id: item.customerId,
+          name: item.customer,
+          commercialName: item.commercialName,
+          paymentTermDays: item.termDays));
+
   @override
   Widget build(BuildContext context) => RefreshIndicator(
       onRefresh: _reload,
@@ -202,6 +261,30 @@ class _ClientesScreenState extends State<ClientesScreen> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16),
                     child: Column(children: [
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Tooltip(
+                          message:
+                              'Revisar y actualizar las fechas de cobro seg\u00fan los plazos actuales',
+                          child: Semantics(
+                            button: true,
+                            label:
+                                'Revisar programaciones de todas las facturas pendientes',
+                            child: FilledButton.tonalIcon(
+                              key: const ValueKey('review-bulk-schedules'),
+                              onPressed: _bulkBusy ? null : _reviewSchedules,
+                              icon: _bulkBusy
+                                  ? const SizedBox.square(
+                                      dimension: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
+                                  : const Icon(Icons.calendar_month_outlined),
+                              label: const Text('Revisar programaciones'),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       LayoutBuilder(builder: (context, box) {
                         final search = TextField(
                           key: const ValueKey('customer-search'),
@@ -282,6 +365,133 @@ class _ClientesScreenState extends State<ClientesScreen> {
               });
         },
       ));
+}
+
+class _BulkScheduleDialog extends StatefulWidget {
+  const _BulkScheduleDialog(
+      {required this.review,
+      required this.preview,
+      required this.onOpenCustomer});
+  final BulkScheduleReview review;
+  final bool preview;
+  final Future<void> Function(BulkScheduleItem) onOpenCustomer;
+
+  @override
+  State<_BulkScheduleDialog> createState() => _BulkScheduleDialogState();
+}
+
+class _BulkScheduleDialogState extends State<_BulkScheduleDialog> {
+  String query = '', reason = 'all';
+  String date(DateTime? value) => value == null
+      ? 'Sin programar'
+      : '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
+  String reasonText(String value, int tolerance) => switch (value) {
+        'outside_tolerance' =>
+          'La fecha difiere del plazo actual en m\u00e1s de $tolerance d\u00edas.',
+        'manual_date' => 'La fecha fue definida manualmente.',
+        'payment_term_missing' => 'El cliente no tiene un plazo configurado.',
+        'changed_since_preview' =>
+          'La informaci\u00f3n cambi\u00f3 despu\u00e9s de la revisi\u00f3n.',
+        _ => 'No se pudo determinar el origen de la programaci\u00f3n.',
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final review = widget.review;
+    final reasons = review.reviewItems.map((item) => item.reason).toSet();
+    final visible = review.reviewItems.where((item) {
+      final text = '${item.customer} ${item.commercialName} ${item.reference}'
+          .toLowerCase();
+      return text.contains(query.trim().toLowerCase()) &&
+          (reason == 'all' || item.reason == reason);
+    }).toList()
+      ..sort((a, b) => (b.differenceDays?.abs() ?? 0)
+          .compareTo(a.differenceDays?.abs() ?? 0));
+    return AlertDialog(
+      title: Text(widget.preview
+          ? 'Revisi\u00f3n de programaciones'
+          : 'Actualizaci\u00f3n completada'),
+      content: SizedBox(
+        width: 760,
+        child: SingleChildScrollView(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Facturas revisadas: ${review.count('total_reviewed')}'),
+            Text('Ya correctas: ${review.count('already_correct')}'),
+            Text('Listas para actualizar: ${review.count('safe_to_update')}'),
+            Text('Sin recordatorio: ${review.count('missing_reminders')}'),
+            Text('Actualizadas: ${review.count('updated')}'),
+            Text('Recordatorios creados: ${review.count('created')}'),
+            Text(
+                'Requieren revisi\u00f3n manual: ${review.count('manual_review')}'),
+            Text(
+                'Cambiaron durante el proceso: ${review.count('changed_since_preview')}'),
+            Text(
+                'Sin plazo configurado: ${review.count('missing_payment_term')}'),
+            Text('Errores: ${review.count('errors')}'),
+            const SizedBox(height: 12),
+            Text(
+                'Se actualizar\u00e1n \u00fanicamente las programaciones seguras. Las fechas manuales y las diferencias mayores a ${review.toleranceDays} d\u00edas no ser\u00e1n modificadas.'),
+            if (review.reviewItems.isNotEmpty) ...[
+              const Divider(height: 28),
+              const Text('Facturas para revisi\u00f3n manual',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                  key: const ValueKey('bulk-review-search'),
+                  decoration: const InputDecoration(
+                      prefixIcon: Icon(Icons.search),
+                      hintText: 'Buscar cliente o factura'),
+                  onChanged: (value) => setState(() => query = value)),
+              DropdownButton<String>(
+                  isExpanded: true,
+                  value: reason,
+                  items: [
+                    const DropdownMenuItem(
+                        value: 'all', child: Text('Todos los motivos')),
+                    ...reasons.map((value) => DropdownMenuItem(
+                        value: value,
+                        child: Text(reasonText(value, review.toleranceDays))))
+                  ],
+                  onChanged: (value) =>
+                      setState(() => reason = value ?? 'all')),
+              for (final item in visible)
+                Card(
+                    child: ExpansionTile(
+                  title: Text('Factura ${item.reference}'),
+                  subtitle: Text('${item.customer}\n${item.commercialName}'),
+                  children: [
+                    ListTile(
+                      title: Text(
+                          'Fecha de factura: ${date(item.invoiceDate)}\nPlazo actual: ${item.termDays == null ? 'Pendiente' : '${item.termDays} d\u00edas'}\nFecha programada: ${date(item.currentDate)}\nFecha calculada: ${date(item.expectedDate)}\nDiferencia: ${item.differenceDays ?? 0} d\u00edas\nFuente: ${item.dateSource ?? 'Sin fuente'}'),
+                      subtitle:
+                          Text(reasonText(item.reason, review.toleranceDays)),
+                      trailing: TextButton(
+                          onPressed: () => widget.onOpenCustomer(item),
+                          child: const Text('Abrir historial')),
+                    )
+                  ],
+                ))
+            ]
+          ]),
+        ),
+      ),
+      actions: widget.preview
+          ? [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancelar')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Actualizar programaciones seguras'))
+            ]
+          : [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cerrar'))
+            ],
+    );
+  }
 }
 
 class _CustomersEmptyState extends StatelessWidget {

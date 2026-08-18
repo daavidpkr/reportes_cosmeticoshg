@@ -1,8 +1,10 @@
 import 'package:cosmeticos_hg_reportes/models/billing_customer.dart';
+import 'package:cosmeticos_hg_reportes/models/bulk_schedule_review.dart';
 import 'package:cosmeticos_hg_reportes/models/customer_history.dart';
 import 'package:cosmeticos_hg_reportes/screens/clientes_screen.dart';
 import 'package:cosmeticos_hg_reportes/screens/customer_history_screen.dart';
 import 'package:cosmeticos_hg_reportes/services/customer_terms_repository.dart';
+import 'package:cosmeticos_hg_reportes/services/bulk_schedule_review_repository.dart';
 import 'package:cosmeticos_hg_reportes/services/customer_history_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -56,6 +58,74 @@ class FakeCustomerTerms implements CustomerTermsDataSource {
         createdCount: 2,
         skippedExistingCount: 1,
         skippedCount: 0);
+  }
+}
+
+class FakeBulkReview implements BulkScheduleReviewDataSource {
+  int previews = 0, applies = 0;
+  BulkScheduleReview get value =>
+      BulkScheduleReview(toleranceDays: 7, counts: const {
+        'total_reviewed': 4,
+        'already_correct': 1,
+        'safe_to_update': 1,
+        'missing_reminders': 0,
+        'manual_review': 2,
+        'missing_payment_term': 0,
+        'updated': 1,
+        'created': 0,
+        'changed_since_preview': 0,
+        'errors': 0,
+      }, items: [
+        BulkScheduleItem(
+            customerId: '1',
+            customer: 'Cliente configurado',
+            commercialName: 'Comercial Uno',
+            reference: '000000601',
+            invoiceDate: DateTime(2026, 8, 1),
+            termDays: 30,
+            currentDate: DateTime(2026, 9, 2),
+            expectedDate: DateTime(2026, 8, 31),
+            differenceDays: 2,
+            dateSource: 'customer_term',
+            classification: 'safe_to_update',
+            reason: 'within_tolerance'),
+        BulkScheduleItem(
+            customerId: '1',
+            customer: 'Cliente configurado',
+            commercialName: 'Comercial Uno',
+            reference: '000000664',
+            invoiceDate: DateTime(2026, 7, 27),
+            termDays: 30,
+            currentDate: DateTime(2026, 9, 10),
+            expectedDate: DateTime(2026, 8, 26),
+            differenceDays: 15,
+            dateSource: 'customer_term',
+            classification: 'manual_review',
+            reason: 'outside_tolerance'),
+        BulkScheduleItem(
+            customerId: '1',
+            customer: 'Cliente configurado',
+            commercialName: 'Comercial Uno',
+            reference: '000000665',
+            invoiceDate: DateTime(2026, 7, 1),
+            termDays: 45,
+            currentDate: DateTime(2026, 8, 20),
+            expectedDate: DateTime(2026, 8, 17),
+            differenceDays: 3,
+            dateSource: 'manual',
+            classification: 'manual_review',
+            reason: 'manual_date'),
+      ]);
+  @override
+  Future<BulkScheduleReview> preview() async {
+    previews++;
+    return value;
+  }
+
+  @override
+  Future<BulkScheduleReview> apply(BulkScheduleReview preview) async {
+    applies++;
+    return value;
   }
 }
 
@@ -223,6 +293,34 @@ class RosaHistory extends FakeHistory {
 }
 
 void main() {
+  testWidgets('revisa y confirma solo programaciones masivas seguras',
+      (tester) async {
+    final bulk = FakeBulkReview();
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: FakeCustomerTerms(),
+                historyRepository: FakeHistory(),
+                bulkReviewRepository: bulk))));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('review-bulk-schedules')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('review-bulk-schedules')));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Revisión de programaciones'), findsOneWidget);
+    expect(find.text('Listas para actualizar: 1'), findsOneWidget);
+    expect(find.text('Requieren revisión manual: 2'), findsOneWidget);
+    expect(find.text('Factura 000000664'), findsOneWidget);
+    expect(find.text('Factura 000000665'), findsOneWidget);
+    await tester.tap(
+        find.widgetWithText(FilledButton, 'Actualizar programaciones seguras'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(bulk.applies, 1);
+    expect(bulk.previews, 2); // preview plus authoritative second read
+    expect(find.text('Actualización completada'), findsOneWidget);
+    expect(find.text('Actualizadas: 1'), findsOneWidget);
+    expect(find.text('Factura 000000664'), findsOneWidget);
+  });
+
   testWidgets('reprograma solo la referencia completa 601 con plazo 45',
       (tester) async {
     final history = RosaHistory();
