@@ -11,6 +11,7 @@ import {
   type OperationalSummary,
   parseOAuthResponse,
   type RuntimeConfig,
+  selectSyntheticDevices,
   type ServiceAccount,
   validateRuntimeConfig,
 } from "./core.ts";
@@ -374,7 +375,7 @@ async function handleOrganizationNotificationTest(
   if (operation === "prepare") {
     const [devicesResult, membersResult] = await Promise.all([
       db.from("fcm_devices")
-        .select("id,user_id,organization_id,token,platform,last_seen_at")
+        .select("id,user_id,organization_id,token,platform,active,last_seen_at")
         .eq("organization_id", organizationId).eq("platform", "android")
         .eq("active", true).not("token", "is", null)
         .order("last_seen_at", { ascending: false }),
@@ -389,21 +390,14 @@ async function handleOrganizationNotificationTest(
         x.user_id
       ),
     );
-    const seenDevices = new Set<string>();
-    const seenTokens = new Set<string>();
-    const eligible: Device[] = [];
-    let duplicates = 0;
-    for (const device of (devicesResult.data ?? []) as Device[]) {
-      const token = device.token?.trim();
-      if (!activeUsers.has(device.user_id) || !token) continue;
-      if (seenDevices.has(device.id) || seenTokens.has(token)) {
-        duplicates++;
-        continue;
-      }
-      seenDevices.add(device.id);
-      seenTokens.add(token);
-      eligible.push({ ...device, token });
-    }
+    const { eligible, duplicates } = selectSyntheticDevices(
+      (devicesResult.data ?? []) as (Device & {
+        platform: string;
+        active: boolean;
+      })[],
+      organizationId,
+      activeUsers,
+    );
     const execution = await db.from("notification_test_executions").insert({
       organization_id: organizationId,
       requested_by: user.id,
@@ -470,9 +464,20 @@ async function handleOrganizationNotificationTest(
   const recipients = await db.from("notification_test_recipients")
     .select("device_id,token_fingerprint").eq("execution_id", executionId)
     .eq("status", "prepared");
+  if (recipients.error) {
+    await db.from("notification_test_executions").update({ status: "failed" })
+      .eq("id", executionId);
+    return Response.json({ status: "recipient_query_failed" }, {
+      status: 500,
+    });
+  }
+  const preparedRecipients = (recipients.data ?? []) as {
+    device_id: string;
+    token_fingerprint: string;
+  }[];
   let sent = 0, invalid = 0, failures = 0, skipped = 0;
   let accessToken: Promise<string> | null = null;
-  await mapLimit(recipients.data ?? [], 6, async (recipient) => {
+  await mapLimit(preparedRecipients, 6, async (recipient) => {
     const device = await db.from("fcm_devices")
       .select("id,user_id,organization_id,token,platform,active")
       .eq("id", recipient.device_id).eq("organization_id", organizationId)

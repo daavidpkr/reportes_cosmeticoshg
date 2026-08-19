@@ -110,6 +110,42 @@ export type FcmErrorDecision = {
   deactivateDevice: boolean;
 };
 
+export type SyntheticDevice = {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  token: string;
+  platform?: string;
+  active?: boolean;
+};
+
+export function selectSyntheticDevices<T extends SyntheticDevice>(
+  devices: T[],
+  organizationId: string,
+  activeUserIds: Set<string>,
+): { eligible: T[]; duplicates: number } {
+  const seenDevices = new Set<string>();
+  const seenTokens = new Set<string>();
+  const eligible: T[] = [];
+  let duplicates = 0;
+  for (const device of devices) {
+    const token = device.token?.trim();
+    if (
+      device.organization_id !== organizationId ||
+      device.platform !== "android" || device.active !== true ||
+      !activeUserIds.has(device.user_id) || !token
+    ) continue;
+    if (seenDevices.has(device.id) || seenTokens.has(token)) {
+      duplicates++;
+      continue;
+    }
+    seenDevices.add(device.id);
+    seenTokens.add(token);
+    eligible.push({ ...device, token });
+  }
+  return { eligible, duplicates };
+}
+
 export type OperationalSummary = {
   processed: number;
   sent: number;

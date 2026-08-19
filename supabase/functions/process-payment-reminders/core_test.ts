@@ -15,6 +15,7 @@ import {
   parseOAuthResponse,
   processingRecoveryCutoff,
   requireDeviceQuery,
+  selectSyntheticDevices,
   validateRuntimeConfig,
 } from "./core.ts";
 import { handler } from "./index.ts";
@@ -110,6 +111,77 @@ Deno.test("enterprise devices include only active members of the organization", 
     filterEnterpriseDevices(devices, "org1", new Set(["u1"])).map((d) => d.id),
     ["a"],
   );
+});
+
+Deno.test("prueba sintética excluye otra organización e inactivos", () => {
+  const devices = [
+    {
+      id: "a",
+      user_id: "u1",
+      organization_id: "org1",
+      token: "t1",
+      platform: "android",
+      active: true,
+    },
+    {
+      id: "b",
+      user_id: "u1",
+      organization_id: "org2",
+      token: "t2",
+      platform: "android",
+      active: true,
+    },
+    {
+      id: "c",
+      user_id: "u1",
+      organization_id: "org1",
+      token: "t3",
+      platform: "android",
+      active: false,
+    },
+    {
+      id: "d",
+      user_id: "u2",
+      organization_id: "org1",
+      token: "t4",
+      platform: "android",
+      active: true,
+    },
+  ];
+  const result = selectSyntheticDevices(devices, "org1", new Set(["u1"]));
+  assertEquals(result.eligible.map((x) => x.id), ["a"]);
+});
+
+Deno.test("prueba sintética selecciona varios Android válidos una sola vez", () => {
+  const devices = [
+    {
+      id: "a",
+      user_id: "u1",
+      organization_id: "org1",
+      token: "t1",
+      platform: "android",
+      active: true,
+    },
+    {
+      id: "b",
+      user_id: "u2",
+      organization_id: "org1",
+      token: "t2",
+      platform: "android",
+      active: true,
+    },
+    {
+      id: "c",
+      user_id: "u2",
+      organization_id: "org1",
+      token: "t2",
+      platform: "android",
+      active: true,
+    },
+  ];
+  const result = selectSyntheticDevices(devices, "org1", new Set(["u1", "u2"]));
+  assertEquals(result.eligible.map((x) => x.id), ["a", "b"]);
+  assertEquals(result.duplicates, 1);
 });
 
 Deno.test("final delivery only accepts the current processing schedule", () => {

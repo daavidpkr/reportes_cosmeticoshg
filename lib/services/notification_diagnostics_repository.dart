@@ -48,12 +48,35 @@ class OrganizationNotificationTestResult {
   final bool businessDataModified;
 }
 
-class NotificationDiagnosticsRepository {
+abstract interface class NotificationDiagnosticsDataSource {
+  Future<List<NotificationDeviceSummary>> listOwnDevices();
+  Future<String> sendTest(String deviceId);
+  Future<bool> isOrganizationAdmin();
+  Future<OrganizationNotificationTestPreparation> prepareOrganizationTest();
+  Future<OrganizationNotificationTestResult> sendOrganizationTest(
+      String executionId);
+}
+
+class NotificationDiagnosticsRepository
+    implements NotificationDiagnosticsDataSource {
   NotificationDiagnosticsRepository({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
+  @override
+  Future<bool> isOrganizationAdmin() async {
+    if (_client.auth.currentSession == null) return false;
+    final row = await _client
+        .from('organization_members')
+        .select('role')
+        .eq('user_id', _client.auth.currentUser!.id)
+        .eq('active', true)
+        .maybeSingle();
+    return row?['role'] == 'admin';
+  }
+
+  @override
   Future<List<NotificationDeviceSummary>> listOwnDevices() async {
     final rows = await _client.rpc('list_my_notification_devices') as List;
     return rows
@@ -67,6 +90,7 @@ class NotificationDiagnosticsRepository {
         .toList();
   }
 
+  @override
   Future<String> sendTest(String deviceId) async {
     final response = await _client.functions.invoke(
       'process-payment-reminders/notification-test',
@@ -77,6 +101,7 @@ class NotificationDiagnosticsRepository {
     return 'failed';
   }
 
+  @override
   Future<OrganizationNotificationTestPreparation>
       prepareOrganizationTest() async {
     final response = await _client.functions.invoke(
@@ -91,6 +116,7 @@ class NotificationDiagnosticsRepository {
     );
   }
 
+  @override
   Future<OrganizationNotificationTestResult> sendOrganizationTest(
       String executionId) async {
     final response = await _client.functions.invoke(

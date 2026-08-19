@@ -1,6 +1,7 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:math';
 
 import '../models/factura.dart';
@@ -17,11 +18,13 @@ class PaymentRemindersScreen extends StatefulWidget {
   const PaymentRemindersScreen({
     this.initialFacturaId,
     this.repository,
+    this.notificationDiagnostics,
     this.notificationStatusLoader,
     super.key,
   });
   final String? initialFacturaId;
   final PaymentRemindersDataSource? repository;
+  final NotificationDiagnosticsDataSource? notificationDiagnostics;
   final Future<AuthorizationStatus> Function()? notificationStatusLoader;
 
   @override
@@ -35,6 +38,10 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
   AuthorizationStatus? _permission;
   bool _handledInitial = false;
   bool _organizationTestBusy = false;
+  late final NotificationDiagnosticsDataSource _notificationDiagnostics =
+      widget.notificationDiagnostics ?? NotificationDiagnosticsRepository();
+  late final Future<bool> _isOrganizationAdmin =
+      _notificationDiagnostics.isOrganizationAdmin();
 
   @override
   void initState() {
@@ -84,8 +91,7 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
   }
 
   Future<void> _showDiagnostics() async {
-    final repository = NotificationDiagnosticsRepository();
-    final devices = await repository.listOwnDevices();
+    final devices = await _notificationDiagnostics.listOwnDevices();
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -116,8 +122,8 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
                               'Última actividad: ${device.lastSeenAt.toLocal()}'),
                           trailing: FilledButton(
                             onPressed: () async {
-                              final status =
-                                  await repository.sendTest(device.id);
+                              final status = await _notificationDiagnostics
+                                  .sendTest(device.id);
                               if (!dialogContext.mounted || !mounted) return;
                               Navigator.pop(dialogContext);
                               ScaffoldMessenger.of(context).showSnackBar(
@@ -144,9 +150,9 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
   Future<void> _runOrganizationTest() async {
     if (_organizationTestBusy) return;
     setState(() => _organizationTestBusy = true);
-    final repository = NotificationDiagnosticsRepository();
     try {
-      final preparation = await repository.prepareOrganizationTest();
+      final preparation =
+          await _notificationDiagnostics.prepareOrganizationTest();
       if (!mounted) return;
       final confirmed = await showDialog<bool>(
             context: context,
@@ -179,8 +185,8 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
           ) ??
           false;
       if (!confirmed || !mounted) return;
-      final result =
-          await repository.sendOrganizationTest(preparation.executionId);
+      final result = await _notificationDiagnostics
+          .sendOrganizationTest(preparation.executionId);
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -211,11 +217,21 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
           ],
         ),
       );
+    } on FunctionException catch (error) {
+      if (mounted) {
+        final message = switch (error.status) {
+          401 => 'La sesión expiró. Vuelve a iniciar sesión.',
+          403 => 'Tu usuario no tiene el rol administrador activo.',
+          _ => 'No fue posible preparar la prueba (${error.status}).',
+        };
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(message),
+        ));
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text(
-              'No fue posible preparar la prueba. Se requiere una sesión administrativa autorizada.'),
+          content: Text('No fue posible preparar la prueba.'),
         ));
       }
     } finally {
@@ -276,16 +292,23 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
                       icon: const Icon(Icons.monitor_heart_outlined),
                       label: const Text('Diagnóstico'),
                     ),
-                    TextButton.icon(
-                      onPressed:
-                          _organizationTestBusy ? null : _runOrganizationTest,
-                      icon: _organizationTestBusy
-                          ? const SizedBox.square(
-                              dimension: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
+                    FutureBuilder<bool>(
+                      future: _isOrganizationAdmin,
+                      builder: (context, snapshot) => snapshot.data == true
+                          ? TextButton.icon(
+                              onPressed: _organizationTestBusy
+                                  ? null
+                                  : _runOrganizationTest,
+                              icon: _organizationTestBusy
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.send_to_mobile_outlined),
+                              label: const Text('Prueba organizacional'),
                             )
-                          : const Icon(Icons.send_to_mobile_outlined),
-                      label: const Text('Prueba organizacional'),
+                          : const SizedBox.shrink(),
                     ),
                   ],
                 ),
