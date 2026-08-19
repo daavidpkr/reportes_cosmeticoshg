@@ -501,14 +501,17 @@ class _Kpis extends StatelessWidget {
         for (final item in items)
           SizedBox(
               width: width,
-              height: 100,
+              height: wide ? 100 : 116,
               child: Card(
                   child: Padding(
                       padding: const EdgeInsets.all(8),
                       child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(item.$1, textAlign: TextAlign.center),
+                            Text(item.$1,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center),
                             const SizedBox(height: 4),
                             FittedBox(
                                 child: Text(

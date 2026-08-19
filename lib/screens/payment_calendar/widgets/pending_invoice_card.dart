@@ -16,11 +16,13 @@ class PendingInvoiceCard extends StatelessWidget {
   const PendingInvoiceCard(
       {required this.entry,
       required this.onEdit,
+      required this.onHistory,
       this.onPayment,
       this.onPaid,
       super.key});
   final PaymentCalendarEntry entry;
   final VoidCallback onEdit;
+  final VoidCallback? onHistory;
   final VoidCallback? onPayment, onPaid;
 
   @override
@@ -48,24 +50,31 @@ class PendingInvoiceCard extends StatelessWidget {
             _line('Comentario',
                 entry.comment.isEmpty ? 'Sin comentario' : entry.comment),
             const SizedBox(height: 10),
-            Wrap(
-                alignment: WrapAlignment.end,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                      onPressed: onPayment,
-                      icon: const Icon(Icons.payments_outlined),
-                      label: const Text('Registrar abono')),
-                  OutlinedButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.event_repeat_outlined),
-                      label: const Text('Reprogramar')),
-                  FilledButton.icon(
-                      onPressed: onPaid,
-                      icon: const Icon(Icons.task_alt),
-                      label: const Text('Marcar como pagada')),
-                ]),
+            SingleChildScrollView(
+              key: const ValueKey('invoice-actions-scroll'),
+              scrollDirection: Axis.horizontal,
+              child: Row(children: [
+                OutlinedButton.icon(
+                    onPressed: onPayment,
+                    icon: const Icon(Icons.payments_outlined),
+                    label: const Text('Registrar abono')),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.event_repeat_outlined),
+                    label: const Text('Reprogramar')),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                    onPressed: onPaid,
+                    icon: const Icon(Icons.task_alt),
+                    label: const Text('Marcar como pagada')),
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                    onPressed: onHistory,
+                    icon: const Icon(Icons.history),
+                    label: const Text('Ver historial')),
+              ]),
+            ),
           ]),
         ),
       );

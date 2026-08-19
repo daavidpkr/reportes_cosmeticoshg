@@ -1925,6 +1925,16 @@ extension _ReporteScreenView on _ReporteScreenState {
                 switch (value) {
                   case 'clients':
                     _mostrarClientes();
+                  case 'collections':
+                    setState(() {
+                      _vistaCalendario = false;
+                      _vistaCargaFacturas = false;
+                      _vistaCobrosMensuales = true;
+                      _vistaEstadisticas = false;
+                      _vistaVendedores = false;
+                      _vistaClientes = false;
+                      _vistaGeneral = false;
+                    });
                   case 'sellers':
                     _gestionarVendedores();
                   case 'statistics':
@@ -1968,11 +1978,11 @@ extension _ReporteScreenView on _ReporteScreenState {
                     ])),
                 const PopupMenuDivider(),
                 CheckedPopupMenuItem(
-                    value: 'clients',
-                    checked: _vistaClientes,
+                    value: 'collections',
+                    checked: _vistaCobrosMensuales,
                     child: const ListTile(
-                        leading: Icon(Icons.groups_outlined),
-                        title: Text('Clientes'))),
+                        leading: Icon(Icons.payments_outlined),
+                        title: Text('Cobros mensuales'))),
                 CheckedPopupMenuItem(
                     value: 'sellers',
                     checked: _vistaVendedores,
@@ -2041,8 +2051,8 @@ extension _ReporteScreenView on _ReporteScreenState {
               _vistaCargaFacturas = false;
               _seccionMovil = indice;
               _vistaCalendario = indice == 3;
-              _vistaCobrosMensuales = indice == 2;
-              _vistaClientes = false;
+              _vistaCobrosMensuales = false;
+              _vistaClientes = indice == 2;
               _vistaVendedores = false;
               _vistaEstadisticas = false;
               _vistaGeneral = indice == 1;
@@ -2058,8 +2068,8 @@ extension _ReporteScreenView on _ReporteScreenState {
               label: 'General',
             ),
             NavigationDestination(
-              icon: Icon(Icons.payments_outlined),
-              label: 'Cobros',
+              icon: Icon(Icons.groups_outlined),
+              label: 'Clientes',
             ),
             NavigationDestination(
               icon: Icon(Icons.calendar_month_outlined),

@@ -1,11 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
+import '../../models/billing_customer.dart';
 import '../../models/payment_calendar_entry.dart';
 import '../../models/payment_calendar_rules.dart';
+import '../../services/customer_terms_repository.dart';
+import '../../services/customer_history_repository.dart';
 import '../../services/payment_calendar_repository.dart';
 import '../../services/payment_calendar_refresh.dart';
+import '../customer_history_screen.dart';
 import 'dialogs/day_invoices_dialog.dart';
 import 'dialogs/reschedule_reminder_dialog.dart';
 import 'payment_calendar_controller.dart';
@@ -29,8 +34,15 @@ const _monthNames = [
 
 class PaymentCalendarScreen extends StatefulWidget {
   const PaymentCalendarScreen(
-      {this.repository, this.initialMonth, this.initialDate, super.key});
+      {this.repository,
+      this.historyRepository,
+      this.customerTermsRepository,
+      this.initialMonth,
+      this.initialDate,
+      super.key});
   final PaymentCalendarDataSource? repository;
+  final CustomerHistoryDataSource? historyRepository;
+  final CustomerTermsDataSource? customerTermsRepository;
   final DateTime? initialMonth;
   final DateTime? initialDate;
   @override
@@ -43,6 +55,8 @@ class _PaymentCalendarScreenState extends State<PaymentCalendarScreen> {
         appBar: AppBar(title: const Text('Calendario de cobros')),
         body: PaymentCalendarView(
           repository: widget.repository,
+          historyRepository: widget.historyRepository,
+          customerTermsRepository: widget.customerTermsRepository,
           initialMonth: widget.initialMonth,
           initialDate: widget.initialDate,
         ),
@@ -55,11 +69,15 @@ class PaymentCalendarView extends StatefulWidget {
       this.initialMonth,
       this.initialDate,
       this.onPaymentPersisted,
+      this.historyRepository,
+      this.customerTermsRepository,
       super.key});
   final PaymentCalendarDataSource? repository;
   final DateTime? initialMonth;
   final DateTime? initialDate;
   final Future<void> Function()? onPaymentPersisted;
+  final CustomerHistoryDataSource? historyRepository;
+  final CustomerTermsDataSource? customerTermsRepository;
   @override
   State<PaymentCalendarView> createState() => _PaymentCalendarViewState();
 }
@@ -69,6 +87,8 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
   static const double _maxScale = 2;
   final TransformationController _transformation = TransformationController();
   bool _transforming = false;
+  late final CustomerTermsDataSource _customerTerms =
+      widget.customerTermsRepository ?? CustomerTermsRepository();
   late final PaymentCalendarController controller = PaymentCalendarController(
       repository: widget.repository ?? PaymentCalendarRepository(),
       initialMonth: widget.initialMonth,
@@ -151,6 +171,7 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
       grouped: controller.grouped,
       selected: controller.selectedDay,
       onSelect: _transforming ? (_) {} : _select,
+      showEntryText: kIsWeb || defaultTargetPlatform != TargetPlatform.android,
     );
     if (!mobile) return grid;
     return InteractiveViewer(
@@ -175,7 +196,137 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
     controller.select(day);
     final entries =
         controller.grouped[dateOnly(day)] ?? const <PaymentCalendarEntry>[];
-    await showDayInvoicesDialog(context, day, entries, _edit, _payment, _paid);
+    await showDayInvoicesDialog(context, day, entries, _edit, _payment, _paid,
+        (entry) => _history(entry, day));
+  }
+
+  Future<void> _history(PaymentCalendarEntry entry, DateTime day) async {
+    BillingCustomer? customer;
+    try {
+      final source = controller.repository;
+      if (source is CalendarCustomerDataSource) {
+        customer = await (source as CalendarCustomerDataSource)
+            .resolveCustomer(entry.facturaId);
+      }
+    } catch (_) {
+      customer = null;
+    }
+    if (!mounted) return;
+    if (customer == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo identificar al cliente de esta factura.')));
+      return;
+    }
+    await showDialog<void>(
+        context: context,
+        builder: (_) => CustomerHistoryScreen(
+            customer: customer!,
+            repository: widget.historyRepository,
+            onEditTerm: _editCustomerTerm,
+            onSchedule: _scheduleCustomer,
+            onDelete: _deleteCustomer));
+    if (!mounted) return;
+    await controller.load(refresh: true);
+    try {
+      await widget.onPaymentPersisted?.call();
+    } catch (_) {}
+    if (!mounted) return;
+    Navigator.of(context).pop();
+    final refreshed =
+        controller.grouped[dateOnly(day)] ?? const <PaymentCalendarEntry>[];
+    await showDayInvoicesDialog(context, day, refreshed, _edit, _payment, _paid,
+        (item) => _history(item, day));
+  }
+
+  Future<int?> _editCustomerTerm(BillingCustomer customer) async {
+    final input =
+        TextEditingController(text: customer.paymentTermDays?.toString() ?? '');
+    final days = await showDialog<int>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+              title: const Text('Plazo habitual de pago'),
+              content: TextField(
+                  controller: input,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Días')),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Cancelar')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(
+                        dialogContext, int.tryParse(input.text.trim())),
+                    child: const Text('Guardar'))
+              ],
+            ));
+    input.dispose();
+    if (days == null || days < 0) return null;
+    final impacted = await _customerTerms.previewImpact(customer.id, days);
+    if (!mounted) return null;
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+              title: const Text('Confirmar plazo'),
+              content: Text(impacted == 0
+                  ? 'Se guardará el plazo habitual del cliente.'
+                  : 'Se actualizarán $impacted facturas existentes con el nuevo plazo.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Cancelar')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    child: const Text('Confirmar'))
+              ],
+            ));
+    if (confirmed != true) return null;
+    await _customerTerms.savePaymentTerm(customer.id, days,
+        applyExisting: true);
+    paymentCalendarRefresh.refresh();
+    return days;
+  }
+
+  Future<void> _scheduleCustomer(BillingCustomer customer) async {
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+              title: const Text('Programar facturas pendientes'),
+              content: Text(
+                  'Se programarán las facturas elegibles de ${customer.name} sin modificar recordatorios existentes.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Cancelar')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    child: const Text('Programar'))
+              ],
+            ));
+    if (confirmed != true) return;
+    await _customerTerms.schedulePending(customer);
+    paymentCalendarRefresh.refresh();
+  }
+
+  Future<bool> _deleteCustomer(BillingCustomer customer) async {
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+              title: const Text('Eliminar cliente'),
+              content: const Text(
+                  'Se quitará al cliente del apartado Clientes. Sus facturas, abonos y recordatorios se conservarán.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(dialogContext, false),
+                    child: const Text('Cancelar')),
+                FilledButton(
+                    onPressed: () => Navigator.pop(dialogContext, true),
+                    child: const Text('Eliminar cliente'))
+              ],
+            ));
+    if (confirmed != true) return false;
+    await _customerTerms.deleteCustomer(customer);
+    paymentCalendarRefresh.refresh();
+    return true;
   }
 
   Future<void> _edit(PaymentCalendarEntry entry) async {
@@ -192,8 +343,8 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
           const <PaymentCalendarEntry>[];
       if (edit.date.year == controller.visibleMonth.year &&
           edit.date.month == controller.visibleMonth.month) {
-        await showDayInvoicesDialog(
-            context, edit.date, dayEntries, _edit, _payment, _paid);
+        await showDayInvoicesDialog(context, edit.date, dayEntries, _edit,
+            _payment, _paid, (entry) => _history(entry, edit.date));
       }
     }
   }

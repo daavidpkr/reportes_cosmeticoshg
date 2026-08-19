@@ -26,6 +26,18 @@ export 'reporte/report_responsive_layout.dart';
 
 part 'reporte/reporte_screen_view.dart';
 
+const mobileReportNavigationLabels = <String>[
+  'Ventas',
+  'General',
+  'Clientes',
+  'Calendario'
+];
+const mobileReportMenuSectionLabels = <String>[
+  'Cobros mensuales',
+  'Vendedores',
+  'Estadísticas'
+];
+
 class ReporteScreen extends StatefulWidget {
   const ReporteScreen({
     this.onCerrarSesion,

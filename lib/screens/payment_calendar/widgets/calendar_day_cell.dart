@@ -11,6 +11,7 @@ class CalendarDayCell extends StatelessWidget {
     required this.today,
     required this.selected,
     required this.compact,
+    this.showEntryText = true,
     required this.onTap,
     super.key,
   });
@@ -20,6 +21,7 @@ class CalendarDayCell extends StatelessWidget {
   final bool today;
   final bool selected;
   final bool compact;
+  final bool showEntryText;
   final VoidCallback onTap;
 
   @override
@@ -81,7 +83,7 @@ class CalendarDayCell extends StatelessWidget {
                   ),
               ]),
             ),
-            if (entries.isNotEmpty)
+            if (entries.isNotEmpty && showEntryText)
               Expanded(
                 child: ClipRect(
                   child: Column(

@@ -10,11 +10,13 @@ class CalendarGrid extends StatelessWidget {
       required this.grouped,
       required this.selected,
       required this.onSelect,
+      this.showEntryText = true,
       super.key});
   final DateTime month;
   final Map<DateTime, List<PaymentCalendarEntry>> grouped;
   final DateTime? selected;
   final ValueChanged<DateTime> onSelect;
+  final bool showEntryText;
 
   bool _same(DateTime? a, DateTime b) =>
       a != null && a.year == b.year && a.month == b.month && a.day == b.day;
@@ -71,6 +73,7 @@ class CalendarGrid extends StatelessWidget {
                         today: _same(DateTime.now(), day),
                         selected: _same(selected, day),
                         compact: compact,
+                        showEntryText: showEntryText,
                         onTap: () => onSelect(day));
                   })),
         ]);

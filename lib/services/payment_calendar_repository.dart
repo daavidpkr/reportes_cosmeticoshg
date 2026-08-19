@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/payment_calendar_entry.dart';
+import '../models/billing_customer.dart';
 import 'request_id.dart';
 
 abstract interface class PaymentCalendarDataSource {
@@ -22,11 +23,32 @@ abstract interface class CalendarPaymentDataSource {
   });
 }
 
+abstract interface class CalendarCustomerDataSource {
+  Future<BillingCustomer?> resolveCustomer(String facturaId);
+}
+
 class PaymentCalendarRepository
-    implements PaymentCalendarDataSource, CalendarPaymentDataSource {
+    implements
+        PaymentCalendarDataSource,
+        CalendarPaymentDataSource,
+        CalendarCustomerDataSource {
   PaymentCalendarRepository({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
   final SupabaseClient _client;
+
+  @override
+  Future<BillingCustomer?> resolveCustomer(String facturaId) async {
+    final row = await _client
+        .from('invoice_payment_terms')
+        .select(
+            'customer_id,billing_customers(id,name,commercial_name,payment_term_days)')
+        .eq('factura_id', facturaId)
+        .maybeSingle();
+    final customer = row?['billing_customers'];
+    return customer is Map
+        ? BillingCustomer.fromJson(Map<String, dynamic>.from(customer))
+        : null;
+  }
 
   String _date(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';

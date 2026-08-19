@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cosmeticos_hg_reportes/models/payment_calendar_entry.dart';
+import 'package:cosmeticos_hg_reportes/models/billing_customer.dart';
+import 'package:cosmeticos_hg_reportes/models/customer_history.dart';
 import 'package:cosmeticos_hg_reportes/models/payment_calendar_rules.dart';
 import 'package:cosmeticos_hg_reportes/screens/payment_calendar/payment_calendar_controller.dart';
 import 'package:cosmeticos_hg_reportes/screens/payment_calendar/payment_calendar_screen.dart';
 import 'package:cosmeticos_hg_reportes/screens/payment_calendar/widgets/pending_invoice_card.dart';
 import 'package:cosmeticos_hg_reportes/services/payment_calendar_repository.dart';
+import 'package:cosmeticos_hg_reportes/services/customer_history_repository.dart';
 
 PaymentCalendarEntry entry(String id, DateTime date,
         {double balance = 10, String comment = ''}) =>
@@ -21,12 +24,23 @@ PaymentCalendarEntry entry(String id, DateTime date,
         comment: comment);
 
 class FakeCalendarRepository
-    implements PaymentCalendarDataSource, CalendarPaymentDataSource {
+    implements
+        PaymentCalendarDataSource,
+        CalendarPaymentDataSource,
+        CalendarCustomerDataSource {
   FakeCalendarRepository(this.values);
   List<PaymentCalendarEntry> values;
   bool fail = false;
   int reads = 0;
   int payments = 0;
+  String? resolvedInvoice;
+  BillingCustomer? resolvedCustomer;
+
+  @override
+  Future<BillingCustomer?> resolveCustomer(String facturaId) async {
+    resolvedInvoice = facturaId;
+    return resolvedCustomer;
+  }
 
   @override
   Future<List<PaymentCalendarEntry>> listMonth(DateTime month) async {
@@ -88,6 +102,41 @@ class FakeCalendarRepository
     ];
     return remaining;
   }
+}
+
+class FakeCalendarHistory implements CustomerHistoryDataSource {
+  String? customerId;
+
+  @override
+  Future<CustomerHistoryPage> load(
+      {required String customerId,
+      required int offset,
+      String status = 'all',
+      String search = '',
+      String sort = 'recent'}) async {
+    this.customerId = customerId;
+    return const CustomerHistoryPage(
+        summary: CustomerHistorySummary(
+            totalSales: 100,
+            totalPaid: 40,
+            balance: 60,
+            totalInvoices: 1,
+            paidInvoices: 0,
+            pendingInvoices: 1,
+            overdueInvoices: 0,
+            cancelledInvoices: 0),
+        invoices: [],
+        filteredCount: 0);
+  }
+
+  @override
+  Future<InvoiceTermRecalculation> previewRecalculation(String reference) =>
+      throw UnimplementedError();
+
+  @override
+  Future<InvoiceTermRecalculation> reprogramInvoice(
+          InvoiceTermRecalculation preview) =>
+      throw UnimplementedError();
 }
 
 void main() {
@@ -225,6 +274,86 @@ void main() {
       expect(find.text('Facturas pendientes'), findsOneWidget);
       expect(find.text('REF. 684'), findsOneWidget);
       expect(find.textContaining('Llamar'), findsOneWidget);
+      expect(find.text('Ver historial'), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('invoice-actions-scroll')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('Android muestra solamente día y contador en cada celda',
+        (tester) async {
+      await pump(tester, const Size(390, 844), [
+        entry('684', DateTime(2026, 8, 17)),
+        entry('685', DateTime(2026, 8, 17)),
+        entry('686', DateTime(2026, 8, 17)),
+        entry('687', DateTime(2026, 8, 17)),
+      ]);
+      expect(find.text('4'), findsWidgets);
+      expect(find.textContaining('Cliente 684'), findsNothing);
+      expect(find.textContaining('684 ·'), findsNothing);
+      expect(find.text('+3'), findsNothing);
+      await tester
+          .tap(find.bySemanticsLabel(RegExp('17, 4 facturas pendientes')));
+      await tester.pumpAndSettle();
+      expect(find.text('REF. 684'), findsOneWidget);
+      expect(find.byType(PendingInvoiceCard), findsWidgets);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('historial no resoluble informa sin cerrar el día',
+        (tester) async {
+      final repository =
+          FakeCalendarRepository([entry('684', DateTime(2026, 8, 17))]);
+      await tester.binding.setSurfaceSize(const Size(320, 700));
+      await tester.pumpWidget(MaterialApp(
+          home: PaymentCalendarScreen(
+              repository: repository, initialMonth: DateTime(2026, 8))));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.bySemanticsLabel(RegExp('17, 1 facturas pendientes')));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byKey(const ValueKey('invoice-actions-scroll')),
+          const Offset(-900, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ver historial'));
+      await tester.pumpAndSettle();
+      expect(repository.resolvedInvoice, '684');
+      expect(find.text('Facturas pendientes'), findsOneWidget);
+      expect(find.textContaining('No se pudo identificar'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Ver historial usa el customer_id canónico y vuelve al día',
+        (tester) async {
+      final repository =
+          FakeCalendarRepository([entry('684', DateTime(2026, 8, 17))])
+            ..resolvedCustomer = const BillingCustomer(
+                id: 'customer-684',
+                name: 'Cliente 684',
+                commercialName: 'Comercial 684',
+                paymentTermDays: 30);
+      final history = FakeCalendarHistory();
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(MaterialApp(
+          home: PaymentCalendarScreen(
+              repository: repository,
+              historyRepository: history,
+              initialMonth: DateTime(2026, 8))));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.bySemanticsLabel(RegExp('17, 1 facturas pendientes')));
+      await tester.pumpAndSettle();
+      await tester.drag(find.byKey(const ValueKey('invoice-actions-scroll')),
+          const Offset(-900, 0));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ver historial'));
+      await tester.pumpAndSettle();
+      expect(repository.resolvedInvoice, '684');
+      expect(history.customerId, 'customer-684');
+      expect(find.text('Historial del cliente'), findsOneWidget);
+      await tester.tap(find.byTooltip('Cerrar historial'));
+      await tester.pumpAndSettle();
+      expect(find.text('Facturas pendientes'), findsOneWidget);
+      expect(find.text('Agosto 2026'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
     testWidgets('móvil usa días abreviados y zoom con límites y ajuste',
@@ -236,7 +365,7 @@ void main() {
       for (final label in ['L', 'M', 'X', 'J', 'V', 'S', 'D']) {
         expect(find.text(label), findsOneWidget);
       }
-      expect(find.text('+1'), findsOneWidget);
+      expect(find.text('+1'), findsNothing);
       final viewer = tester.widget<InteractiveViewer>(
           find.byKey(const ValueKey('payment-calendar-zoom')));
       final transformation = viewer.transformationController!;
