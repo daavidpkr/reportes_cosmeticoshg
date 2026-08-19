@@ -39,33 +39,29 @@ class FakeReminders implements PaymentRemindersDataSource {
 }
 
 class FakeDiagnostics implements NotificationDiagnosticsDataSource {
-  FakeDiagnostics({this.admin = false});
-  final bool admin;
+  int previews = 0;
+  int sends = 0;
 
   @override
-  Future<bool> isOrganizationAdmin() async => admin;
+  Future<NotificationTestPreview> previewAllMyDevices() async {
+    previews++;
+    return const NotificationTestPreview(
+        eligibleDevices: 2,
+        inactiveDevices: 1,
+        duplicatesOmitted: 1,
+        executionId: '00000000-0000-0000-0000-000000000001');
+  }
+
   @override
-  Future<List<NotificationDeviceSummary>> listOwnDevices() async => [];
-  @override
-  Future<String> sendTest(String deviceId) async => 'sent';
-  @override
-  Future<OrganizationNotificationTestPreparation>
-      prepareOrganizationTest() async =>
-          const OrganizationNotificationTestPreparation(
-              organizationName: 'Cosméticos HG',
-              eligibleDevices: 2,
-              executionId: '00000000-0000-0000-0000-000000000001');
-  @override
-  Future<OrganizationNotificationTestResult> sendOrganizationTest(
-          String executionId) async =>
-      const OrganizationNotificationTestResult(
-          eligibleDevices: 2,
-          successfulSends: 2,
-          invalidTokens: 0,
-          failures: 0,
-          duplicatesOmitted: 0,
-          organizationVerified: true,
-          businessDataModified: false);
+  Future<NotificationTestResult> sendToAllMyDevices(String executionId) async {
+    sends++;
+    return const NotificationTestResult(
+        eligibleDevices: 2,
+        successfulSends: 2,
+        invalidTokens: 0,
+        failures: 0,
+        duplicatesOmitted: 1);
+  }
 }
 
 void main() {
@@ -87,42 +83,50 @@ void main() {
     });
   }
 
-  testWidgets('la prueba organizacional solo aparece para administradores',
+  testWidgets('la vista previa requiere confirmación y cancelar no envía',
       (tester) async {
-    Future<void> pump(bool admin) async {
-      await tester.pumpWidget(MaterialApp(
-          home: PaymentRemindersScreen(
-              key: ValueKey(admin),
-              repository: FakeReminders(),
-              notificationDiagnostics: FakeDiagnostics(admin: admin),
-              notificationStatusLoader: () async =>
-                  AuthorizationStatus.authorized)));
-      await tester.pumpAndSettle();
-    }
-
-    await pump(false);
-    expect(find.text('Prueba organizacional'), findsNothing);
-    await pump(true);
-    expect(find.text('Prueba organizacional'), findsOneWidget);
-  });
-
-  testWidgets('la vista previa requiere confirmación antes de enviar',
-      (tester) async {
+    final diagnostics = FakeDiagnostics();
     await tester.pumpWidget(MaterialApp(
         home: PaymentRemindersScreen(
             repository: FakeReminders(),
-            notificationDiagnostics: FakeDiagnostics(admin: true),
+            notificationDiagnostics: diagnostics,
             notificationStatusLoader: () async =>
                 AuthorizationStatus.authorized)));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Prueba organizacional'));
+    await tester
+        .tap(find.text('Probar notificaciones en todos mis dispositivos'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.textContaining('Cosméticos HG'), findsOneWidget);
-    expect(find.text('Dispositivos elegibles: 2'), findsOneWidget);
+    expect(find.text('Dispositivos Android elegibles: 2'), findsOneWidget);
+    expect(find.text('Dispositivos inactivos: 1'), findsOneWidget);
+    expect(find.text('Tokens duplicados omitidos: 1'), findsOneWidget);
     expect(find.text('Confirmar y enviar'), findsOneWidget);
     await tester.tap(find.text('Cancelar'));
     await tester.pumpAndSettle();
+    expect(diagnostics.previews, 1);
+    expect(diagnostics.sends, 0);
     expect(find.text('Resultado de la prueba'), findsNothing);
+  });
+
+  testWidgets('confirmar realiza un solo envío', (tester) async {
+    final diagnostics = FakeDiagnostics();
+    await tester.pumpWidget(MaterialApp(
+        home: PaymentRemindersScreen(
+      repository: FakeReminders(),
+      notificationDiagnostics: diagnostics,
+      notificationStatusLoader: () async => AuthorizationStatus.authorized,
+    )));
+    await tester.pumpAndSettle();
+    await tester
+        .tap(find.text('Probar notificaciones en todos mis dispositivos'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.text('Confirmar y enviar'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(diagnostics.sends, 1);
+    expect(find.text('Resultado de la prueba'), findsOneWidget);
+    await tester.tap(find.text('Cerrar'));
+    await tester.pumpAndSettle();
   });
 }

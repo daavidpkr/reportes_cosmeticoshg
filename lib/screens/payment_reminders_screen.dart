@@ -37,11 +37,9 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
   late Future<List<PaymentReminder>> _reminders;
   AuthorizationStatus? _permission;
   bool _handledInitial = false;
-  bool _organizationTestBusy = false;
+  bool _notificationTestBusy = false;
   late final NotificationDiagnosticsDataSource _notificationDiagnostics =
       widget.notificationDiagnostics ?? NotificationDiagnosticsRepository();
-  late final Future<bool> _isOrganizationAdmin =
-      _notificationDiagnostics.isOrganizationAdmin();
 
   @override
   void initState() {
@@ -90,83 +88,29 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
     if (selected != null && mounted) await _edit(selected);
   }
 
-  Future<void> _showDiagnostics() async {
-    final devices = await _notificationDiagnostics.listOwnDevices();
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Diagnóstico de notificaciones'),
-        content: SizedBox(
-          width: 420,
-          child: devices.isEmpty
-              ? const Text(
-                  'No hay un dispositivo Android activo. Inicia sesión en Android y acepta el permiso de notificaciones.')
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                        'Hora de envío: ${NotificationSchedule.localTime}'),
-                    const Text(
-                        'Zona horaria: ${NotificationSchedule.timeZoneLabel}'),
-                    const Text(
-                        'Frecuencia: ${NotificationSchedule.frequencyLabel}'),
-                    const SizedBox(height: 12),
-                    ...devices.map((device) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.android),
-                          title: Text(
-                              '${device.platform.toUpperCase()} · ••••${device.fingerprint}'),
-                          subtitle: Text(
-                              'Última actividad: ${device.lastSeenAt.toLocal()}'),
-                          trailing: FilledButton(
-                            onPressed: () async {
-                              final status = await _notificationDiagnostics
-                                  .sendTest(device.id);
-                              if (!dialogContext.mounted || !mounted) return;
-                              Navigator.pop(dialogContext);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text(status == 'sent'
-                                          ? 'Prueba aceptada por el proveedor.'
-                                          : 'Resultado de la prueba: $status')));
-                            },
-                            child: const Text('Probar'),
-                          ),
-                        )),
-                  ],
-                ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cerrar')),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _runOrganizationTest() async {
-    if (_organizationTestBusy) return;
-    setState(() => _organizationTestBusy = true);
+  Future<void> _runNotificationTest() async {
+    if (_notificationTestBusy) return;
+    setState(() => _notificationTestBusy = true);
     try {
-      final preparation =
-          await _notificationDiagnostics.prepareOrganizationTest();
+      final preview = await _notificationDiagnostics.previewAllMyDevices();
       if (!mounted) return;
       final confirmed = await showDialog<bool>(
             context: context,
             barrierDismissible: false,
             builder: (dialogContext) => AlertDialog(
-              title: const Text('Confirmar prueba organizacional'),
+              title: const Text('Vista previa'),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Organización: ${preparation.organizationName}'),
-                  const SizedBox(height: 8),
                   Text(
-                      'Dispositivos elegibles: ${preparation.eligibleDevices}'),
+                      'Dispositivos Android elegibles: ${preview.eligibleDevices}'),
+                  Text('Dispositivos inactivos: ${preview.inactiveDevices}'),
+                  Text(
+                      'Tokens duplicados omitidos: ${preview.duplicatesOmitted}'),
+                  const SizedBox(height: 12),
+                  Text(
+                      'Se enviará una notificación de prueba a ${preview.eligibleDevices} dispositivos. ¿Deseas continuar?'),
                 ],
               ),
               actions: [
@@ -175,7 +119,7 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
                   child: const Text('Cancelar'),
                 ),
                 FilledButton(
-                  onPressed: preparation.eligibleDevices == 0
+                  onPressed: preview.eligibleDevices == 0
                       ? null
                       : () => Navigator.pop(dialogContext, true),
                   child: const Text('Confirmar y enviar'),
@@ -186,7 +130,7 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
           false;
       if (!confirmed || !mounted) return;
       final result = await _notificationDiagnostics
-          .sendOrganizationTest(preparation.executionId);
+          .sendToAllMyDevices(preview.executionId);
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -201,12 +145,6 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
               Text('Tokens inválidos: ${result.invalidTokens}'),
               Text('Fallos: ${result.failures}'),
               Text('Duplicados omitidos: ${result.duplicatesOmitted}'),
-              Text(result.organizationVerified
-                  ? 'Todos pertenecían a la organización correcta.'
-                  : 'No se pudo verificar la organización.'),
-              Text(result.businessDataModified
-                  ? 'Se detectaron cambios empresariales.'
-                  : 'No se modificaron facturas ni datos empresariales.'),
             ],
           ),
           actions: [
@@ -221,7 +159,6 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
       if (mounted) {
         final message = switch (error.status) {
           401 => 'La sesión expiró. Vuelve a iniciar sesión.',
-          403 => 'Tu usuario no tiene el rol administrador activo.',
           _ => 'No fue posible preparar la prueba (${error.status}).',
         };
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -235,7 +172,7 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
         ));
       }
     } finally {
-      if (mounted) setState(() => _organizationTestBusy = false);
+      if (mounted) setState(() => _notificationTestBusy = false);
     }
   }
 
@@ -288,27 +225,16 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
                   alignment: WrapAlignment.end,
                   children: [
                     TextButton.icon(
-                      onPressed: _showDiagnostics,
-                      icon: const Icon(Icons.monitor_heart_outlined),
-                      label: const Text('Diagnóstico'),
-                    ),
-                    FutureBuilder<bool>(
-                      future: _isOrganizationAdmin,
-                      builder: (context, snapshot) => snapshot.data == true
-                          ? TextButton.icon(
-                              onPressed: _organizationTestBusy
-                                  ? null
-                                  : _runOrganizationTest,
-                              icon: _organizationTestBusy
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    )
-                                  : const Icon(Icons.send_to_mobile_outlined),
-                              label: const Text('Prueba organizacional'),
+                      onPressed:
+                          _notificationTestBusy ? null : _runNotificationTest,
+                      icon: _notificationTestBusy
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const SizedBox.shrink(),
+                          : const Icon(Icons.send_to_mobile_outlined),
+                      label: const Text(
+                          'Probar notificaciones en todos mis dispositivos'),
                     ),
                   ],
                 ),

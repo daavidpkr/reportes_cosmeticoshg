@@ -11,7 +11,7 @@ import {
   type OperationalSummary,
   parseOAuthResponse,
   type RuntimeConfig,
-  selectSyntheticDevices,
+  selectUserSyntheticDevices,
   type ServiceAccount,
   validateRuntimeConfig,
 } from "./core.ts";
@@ -40,8 +40,6 @@ type SyntheticSummary = {
   invalid_tokens: number;
   failures: number;
   duplicates_omitted: number;
-  organization_verified: boolean;
-  business_data_modified: false;
   local_date: string;
 };
 
@@ -340,7 +338,7 @@ async function authenticatedUser(request: Request, db: SupabaseClient) {
   return result.error ? null : result.data.user;
 }
 
-async function handleOrganizationNotificationTest(
+async function handleUserNotificationTest(
   request: Request,
   db: SupabaseClient,
   config: RuntimeConfig,
@@ -351,58 +349,33 @@ async function handleOrganizationNotificationTest(
     | { operation?: unknown; execution_id?: unknown }
     | null;
   const operation = body?.operation;
-  if (operation !== "prepare" && operation !== "send") {
+  if (operation !== "preview" && operation !== "send") {
     return Response.json({ status: "invalid_operation" }, { status: 400 });
   }
 
-  const membership = await db.from("organization_members")
-    .select("organization_id,role,organizations!inner(name,active)")
-    .eq("user_id", user.id).eq("active", true).eq("role", "admin")
-    .eq("organizations.active", true).maybeSingle();
-  if (membership.error || !membership.data) {
-    return new Response("Forbidden", { status: 403 });
-  }
-  const organizationId = membership.data.organization_id as string;
-  const organization = membership.data.organizations as unknown as
-    | { name: string; active: boolean }
-    | { name: string; active: boolean }[];
-  const organizationName = Array.isArray(organization)
-    ? organization[0]?.name
-    : organization?.name;
-  if (!organizationName) return new Response("Forbidden", { status: 403 });
   const localDate = guayaquilDate();
 
-  if (operation === "prepare") {
-    const [devicesResult, membersResult] = await Promise.all([
-      db.from("fcm_devices")
-        .select("id,user_id,organization_id,token,platform,active,last_seen_at")
-        .eq("organization_id", organizationId).eq("platform", "android")
-        .eq("active", true).not("token", "is", null)
-        .order("last_seen_at", { ascending: false }),
-      db.from("organization_members").select("user_id")
-        .eq("organization_id", organizationId).eq("active", true),
-    ]);
-    if (devicesResult.error || membersResult.error) {
+  if (operation === "preview") {
+    const devicesResult = await db.from("fcm_devices")
+      .select("id,user_id,organization_id,token,platform,active,last_seen_at")
+      .eq("user_id", user.id).eq("platform", "android")
+      .order("last_seen_at", { ascending: false });
+    if (devicesResult.error) {
       return Response.json({ status: "preparation_failed" }, { status: 500 });
     }
-    const activeUsers = new Set(
-      ((membersResult.data ?? []) as { user_id: string }[]).map((x) =>
-        x.user_id
-      ),
-    );
-    const { eligible, duplicates } = selectSyntheticDevices(
-      (devicesResult.data ?? []) as (Device & {
-        platform: string;
-        active: boolean;
-      })[],
-      organizationId,
-      activeUsers,
+    const allDevices = (devicesResult.data ?? []) as (Device & {
+      platform: string; active: boolean;
+    })[];
+    const { eligible, inactive, duplicates } = selectUserSyntheticDevices(
+      allDevices,
+      user.id,
     );
     const execution = await db.from("notification_test_executions").insert({
-      organization_id: organizationId,
       requested_by: user.id,
+      operation: "user_android_test",
       local_date: localDate,
       eligible_count: eligible.length,
+      inactive_count: inactive,
       duplicate_count: duplicates,
     }).select("id").single();
     if (execution.error || !execution.data) {
@@ -432,8 +405,9 @@ async function handleOrganizationNotificationTest(
       }
     }
     return Response.json({
-      organization_name: organizationName,
       eligible_devices: eligible.length,
+      inactive_devices: inactive,
+      duplicates_omitted: duplicates,
       execution_id: execution.data.id,
     }, { headers: { "x-notification-test-execution": execution.data.id } });
   }
@@ -445,8 +419,8 @@ async function handleOrganizationNotificationTest(
     return Response.json({ status: "invalid_request" }, { status: 400 });
   }
   const execution = await db.from("notification_test_executions").select("*")
-    .eq("id", executionId).eq("organization_id", organizationId)
-    .eq("requested_by", user.id).eq("operation", "organization_android_test")
+    .eq("id", executionId).eq("requested_by", user.id)
+    .eq("operation", "user_android_test")
     .eq("status", "prepared").maybeSingle();
   if (
     execution.error || !execution.data ||
@@ -480,16 +454,8 @@ async function handleOrganizationNotificationTest(
   await mapLimit(preparedRecipients, 6, async (recipient) => {
     const device = await db.from("fcm_devices")
       .select("id,user_id,organization_id,token,platform,active")
-      .eq("id", recipient.device_id).eq("organization_id", organizationId)
+      .eq("id", recipient.device_id).eq("user_id", user.id)
       .eq("platform", "android").eq("active", true).maybeSingle();
-    const member = device.data
-      ? await db.from("organization_members").select("user_id")
-        .eq("organization_id", organizationId).eq(
-          "user_id",
-          device.data.user_id,
-        )
-        .eq("active", true).maybeSingle()
-      : null;
     const token = device.data?.token?.trim() ?? "";
     const fingerprint = token
       ? await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token))
@@ -500,7 +466,7 @@ async function handleOrganizationNotificationTest(
         )
       : "";
     if (
-      !device.data || !member?.data ||
+      !device.data ||
       fingerprint !== recipient.token_fingerprint
     ) {
       skipped++;
@@ -567,8 +533,6 @@ async function handleOrganizationNotificationTest(
     invalid_tokens: invalid,
     failures,
     duplicates_omitted: execution.data.duplicate_count + skipped,
-    organization_verified: true,
-    business_data_modified: false,
     local_date: localDate,
   };
   await db.from("notification_test_executions").update({
@@ -601,9 +565,9 @@ export async function handler(request: Request): Promise<Response> {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   if (
-    new URL(request.url).pathname.endsWith("/organization-notification-test")
+    new URL(request.url).pathname.endsWith("/user-notification-test")
   ) {
-    return handleOrganizationNotificationTest(request, db, config);
+    return handleUserNotificationTest(request, db, config);
   }
   if (new URL(request.url).pathname.endsWith("/notification-test")) {
     return handleNotificationTest(request, db, config);

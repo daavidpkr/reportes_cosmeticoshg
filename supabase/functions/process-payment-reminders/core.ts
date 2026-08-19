@@ -146,6 +146,34 @@ export function selectSyntheticDevices<T extends SyntheticDevice>(
   return { eligible, duplicates };
 }
 
+export function selectUserSyntheticDevices<T extends SyntheticDevice>(
+  devices: T[],
+  userId: string,
+): { eligible: T[]; inactive: number; duplicates: number } {
+  const seenDevices = new Set<string>();
+  const seenTokens = new Set<string>();
+  const eligible: T[] = [];
+  let inactive = 0;
+  let duplicates = 0;
+  for (const device of devices) {
+    if (device.user_id !== userId || device.platform !== "android") continue;
+    if (device.active !== true) {
+      inactive++;
+      continue;
+    }
+    const token = device.token?.trim();
+    if (!token) continue;
+    if (seenDevices.has(device.id) || seenTokens.has(token)) {
+      duplicates++;
+      continue;
+    }
+    seenDevices.add(device.id);
+    seenTokens.add(token);
+    eligible.push(device);
+  }
+  return { eligible, inactive, duplicates };
+}
+
 export type OperationalSummary = {
   processed: number;
   sent: number;

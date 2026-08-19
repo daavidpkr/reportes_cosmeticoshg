@@ -16,6 +16,7 @@ import {
   processingRecoveryCutoff,
   requireDeviceQuery,
   selectSyntheticDevices,
+  selectUserSyntheticDevices,
   validateRuntimeConfig,
 } from "./core.ts";
 import { handler } from "./index.ts";
@@ -230,6 +231,18 @@ Deno.test("rechaza métodos distintos de POST", async () => {
   );
   assertEquals(response.status, 405);
   assertEquals(response.headers.get("allow"), "POST");
+});
+
+Deno.test("la prueba sintética solo selecciona dispositivos del JWT", () => {
+  const result = selectUserSyntheticDevices([
+    { id: "one", user_id: "me", organization_id: "a", token: "token-1", platform: "android", active: true },
+    { id: "two", user_id: "me", organization_id: "b", token: "token-2", platform: "android", active: false },
+    { id: "three", user_id: "other", organization_id: "a", token: "token-3", platform: "android", active: true },
+    { id: "four", user_id: "me", organization_id: "a", token: "token-1", platform: "android", active: true },
+  ], "me");
+  assertEquals(result.eligible.map((device) => device.id), ["one"]);
+  assertEquals(result.inactive, 1);
+  assertEquals(result.duplicates, 1);
 });
 
 Deno.test("America/Guayaquil cambia de fecha a las 05:00 UTC", () => {
