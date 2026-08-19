@@ -34,6 +34,7 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
   late Future<List<PaymentReminder>> _reminders;
   AuthorizationStatus? _permission;
   bool _handledInitial = false;
+  bool _organizationTestBusy = false;
 
   @override
   void initState() {
@@ -140,6 +141,88 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
     );
   }
 
+  Future<void> _runOrganizationTest() async {
+    if (_organizationTestBusy) return;
+    setState(() => _organizationTestBusy = true);
+    final repository = NotificationDiagnosticsRepository();
+    try {
+      final preparation = await repository.prepareOrganizationTest();
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+            context: context,
+            barrierDismissible: false,
+            builder: (dialogContext) => AlertDialog(
+              title: const Text('Confirmar prueba organizacional'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Organización: ${preparation.organizationName}'),
+                  const SizedBox(height: 8),
+                  Text(
+                      'Dispositivos elegibles: ${preparation.eligibleDevices}'),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: preparation.eligibleDevices == 0
+                      ? null
+                      : () => Navigator.pop(dialogContext, true),
+                  child: const Text('Confirmar y enviar'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!confirmed || !mounted) return;
+      final result =
+          await repository.sendOrganizationTest(preparation.executionId);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Resultado de la prueba'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Dispositivos elegibles: ${result.eligibleDevices}'),
+              Text('Envíos exitosos: ${result.successfulSends}'),
+              Text('Tokens inválidos: ${result.invalidTokens}'),
+              Text('Fallos: ${result.failures}'),
+              Text('Duplicados omitidos: ${result.duplicatesOmitted}'),
+              Text(result.organizationVerified
+                  ? 'Todos pertenecían a la organización correcta.'
+                  : 'No se pudo verificar la organización.'),
+              Text(result.businessDataModified
+                  ? 'Se detectaron cambios empresariales.'
+                  : 'No se modificaron facturas ni datos empresariales.'),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text(
+              'No fue posible preparar la prueba. Se requiere una sesión administrativa autorizada.'),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _organizationTestBusy = false);
+    }
+  }
+
   Future<void> _edit(Factura invoice, [PaymentReminder? existing]) async {
     existing ??= await _repository.findForInvoice(invoice.secuencial);
     if (!mounted) return;
@@ -185,10 +268,26 @@ class _PaymentRemindersScreenState extends State<PaymentRemindersScreen> {
               )),
               Align(
                 alignment: Alignment.centerRight,
-                child: TextButton.icon(
-                  onPressed: _showDiagnostics,
-                  icon: const Icon(Icons.monitor_heart_outlined),
-                  label: const Text('Diagnóstico y prueba'),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  children: [
+                    TextButton.icon(
+                      onPressed: _showDiagnostics,
+                      icon: const Icon(Icons.monitor_heart_outlined),
+                      label: const Text('Diagnóstico'),
+                    ),
+                    TextButton.icon(
+                      onPressed:
+                          _organizationTestBusy ? null : _runOrganizationTest,
+                      icon: _organizationTestBusy
+                          ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send_to_mobile_outlined),
+                      label: const Text('Prueba organizacional'),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),

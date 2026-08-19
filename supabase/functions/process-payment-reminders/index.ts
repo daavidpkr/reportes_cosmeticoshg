@@ -29,6 +29,19 @@ type Device = {
   user_id: string;
   organization_id: string;
   token: string;
+  platform?: string;
+  last_seen_at?: string;
+};
+
+type SyntheticSummary = {
+  eligible_devices: number;
+  successful_sends: number;
+  invalid_tokens: number;
+  failures: number;
+  duplicates_omitted: number;
+  organization_verified: boolean;
+  business_data_modified: false;
+  local_date: string;
 };
 
 async function fetchAccessToken(account: ServiceAccount): Promise<string> {
@@ -319,6 +332,251 @@ async function handleNotificationTest(
   }
 }
 
+async function authenticatedUser(request: Request, db: SupabaseClient) {
+  const authorization = request.headers.get("authorization") ?? "";
+  if (!authorization.startsWith("Bearer ")) return null;
+  const result = await db.auth.getUser(authorization.slice(7));
+  return result.error ? null : result.data.user;
+}
+
+async function handleOrganizationNotificationTest(
+  request: Request,
+  db: SupabaseClient,
+  config: RuntimeConfig,
+): Promise<Response> {
+  const user = await authenticatedUser(request, db);
+  if (!user) return new Response("Unauthorized", { status: 401 });
+  const body = await request.json().catch(() => null) as
+    | { operation?: unknown; execution_id?: unknown }
+    | null;
+  const operation = body?.operation;
+  if (operation !== "prepare" && operation !== "send") {
+    return Response.json({ status: "invalid_operation" }, { status: 400 });
+  }
+
+  const membership = await db.from("organization_members")
+    .select("organization_id,role,organizations!inner(name,active)")
+    .eq("user_id", user.id).eq("active", true).eq("role", "admin")
+    .eq("organizations.active", true).maybeSingle();
+  if (membership.error || !membership.data) {
+    return new Response("Forbidden", { status: 403 });
+  }
+  const organizationId = membership.data.organization_id as string;
+  const organization = membership.data.organizations as unknown as
+    | { name: string; active: boolean }
+    | { name: string; active: boolean }[];
+  const organizationName = Array.isArray(organization)
+    ? organization[0]?.name
+    : organization?.name;
+  if (!organizationName) return new Response("Forbidden", { status: 403 });
+  const localDate = guayaquilDate();
+
+  if (operation === "prepare") {
+    const [devicesResult, membersResult] = await Promise.all([
+      db.from("fcm_devices")
+        .select("id,user_id,organization_id,token,platform,last_seen_at")
+        .eq("organization_id", organizationId).eq("platform", "android")
+        .eq("active", true).not("token", "is", null)
+        .order("last_seen_at", { ascending: false }),
+      db.from("organization_members").select("user_id")
+        .eq("organization_id", organizationId).eq("active", true),
+    ]);
+    if (devicesResult.error || membersResult.error) {
+      return Response.json({ status: "preparation_failed" }, { status: 500 });
+    }
+    const activeUsers = new Set(
+      ((membersResult.data ?? []) as { user_id: string }[]).map((x) =>
+        x.user_id
+      ),
+    );
+    const seenDevices = new Set<string>();
+    const seenTokens = new Set<string>();
+    const eligible: Device[] = [];
+    let duplicates = 0;
+    for (const device of (devicesResult.data ?? []) as Device[]) {
+      const token = device.token?.trim();
+      if (!activeUsers.has(device.user_id) || !token) continue;
+      if (seenDevices.has(device.id) || seenTokens.has(token)) {
+        duplicates++;
+        continue;
+      }
+      seenDevices.add(device.id);
+      seenTokens.add(token);
+      eligible.push({ ...device, token });
+    }
+    const execution = await db.from("notification_test_executions").insert({
+      organization_id: organizationId,
+      requested_by: user.id,
+      local_date: localDate,
+      eligible_count: eligible.length,
+      duplicate_count: duplicates,
+    }).select("id").single();
+    if (execution.error || !execution.data) {
+      return Response.json({ status: "preparation_failed" }, { status: 500 });
+    }
+    if (eligible.length > 0) {
+      const recipients = await db.from("notification_test_recipients").insert(
+        await Promise.all(eligible.map(async (device) => ({
+          execution_id: execution.data.id,
+          device_id: device.id,
+          token_fingerprint: await crypto.subtle.digest(
+            "SHA-256",
+            new TextEncoder().encode(device.token),
+          ).then((hash) =>
+            Array.from(new Uint8Array(hash)).map((b) =>
+              b.toString(16).padStart(2, "0")
+            ).join("")
+          ),
+        }))),
+      );
+      if (recipients.error) {
+        await db.from("notification_test_executions").update({
+          status: "failed",
+        })
+          .eq("id", execution.data.id);
+        return Response.json({ status: "preparation_failed" }, { status: 500 });
+      }
+    }
+    return Response.json({
+      organization_name: organizationName,
+      eligible_devices: eligible.length,
+      execution_id: execution.data.id,
+    }, { headers: { "x-notification-test-execution": execution.data.id } });
+  }
+
+  const executionId = typeof body?.execution_id === "string"
+    ? body.execution_id
+    : "";
+  if (!/^[0-9a-f-]{36}$/i.test(executionId)) {
+    return Response.json({ status: "invalid_request" }, { status: 400 });
+  }
+  const execution = await db.from("notification_test_executions").select("*")
+    .eq("id", executionId).eq("organization_id", organizationId)
+    .eq("requested_by", user.id).eq("operation", "organization_android_test")
+    .eq("status", "prepared").maybeSingle();
+  if (
+    execution.error || !execution.data ||
+    execution.data.local_date !== localDate
+  ) {
+    return Response.json({ status: "execution_unavailable" }, { status: 409 });
+  }
+  const claimed = await db.from("notification_test_executions").update({
+    status: "sending",
+    started_at: new Date().toISOString(),
+  }).eq("id", executionId).eq("status", "prepared").select("id").maybeSingle();
+  if (claimed.error || !claimed.data) {
+    return Response.json({ status: "execution_unavailable" }, { status: 409 });
+  }
+  const recipients = await db.from("notification_test_recipients")
+    .select("device_id,token_fingerprint").eq("execution_id", executionId)
+    .eq("status", "prepared");
+  let sent = 0, invalid = 0, failures = 0, skipped = 0;
+  let accessToken: Promise<string> | null = null;
+  await mapLimit(recipients.data ?? [], 6, async (recipient) => {
+    const device = await db.from("fcm_devices")
+      .select("id,user_id,organization_id,token,platform,active")
+      .eq("id", recipient.device_id).eq("organization_id", organizationId)
+      .eq("platform", "android").eq("active", true).maybeSingle();
+    const member = device.data
+      ? await db.from("organization_members").select("user_id")
+        .eq("organization_id", organizationId).eq(
+          "user_id",
+          device.data.user_id,
+        )
+        .eq("active", true).maybeSingle()
+      : null;
+    const token = device.data?.token?.trim() ?? "";
+    const fingerprint = token
+      ? await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token))
+        .then((hash) =>
+          Array.from(new Uint8Array(hash)).map((b) =>
+            b.toString(16).padStart(2, "0")
+          ).join("")
+        )
+      : "";
+    if (
+      !device.data || !member?.data ||
+      fingerprint !== recipient.token_fingerprint
+    ) {
+      skipped++;
+      await db.from("notification_test_recipients").update({
+        status: "skipped",
+        failure_code: "NO_LONGER_ELIGIBLE",
+      }).eq("execution_id", executionId).eq("device_id", recipient.device_id);
+      return;
+    }
+    try {
+      const response = await fetch(
+        `https://fcm.googleapis.com/v1/projects/${config.firebaseProjectId}/messages:send`,
+        {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${await (accessToken ??= fetchAccessToken(
+              config.serviceAccount,
+            ))}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(
+            buildNotificationTestPayload({ deviceToken: token, localDate }),
+          ),
+        },
+      );
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const decision = classifyFcmError(response.status, result);
+        if (decision.deactivateDevice) {
+          invalid++;
+          await db.from("fcm_devices").update({ active: false }).eq(
+            "id",
+            device.data.id,
+          );
+        } else failures++;
+        await db.from("notification_test_recipients").update({
+          status: decision.deactivateDevice ? "invalid_token" : "failed",
+          failure_code: decision.code.slice(0, 120),
+          attempted_at: new Date().toISOString(),
+        }).eq("execution_id", executionId).eq("device_id", recipient.device_id);
+        return;
+      }
+      sent++;
+      await db.from("notification_test_recipients").update({
+        status: "sent",
+        attempted_at: new Date().toISOString(),
+        sent_at: new Date().toISOString(),
+        provider_message_id: typeof result?.name === "string"
+          ? result.name
+          : null,
+      }).eq("execution_id", executionId).eq("device_id", recipient.device_id);
+    } catch {
+      failures++;
+      await db.from("notification_test_recipients").update({
+        status: "failed",
+        failure_code: "NETWORK_ERROR",
+        attempted_at: new Date().toISOString(),
+      }).eq("execution_id", executionId).eq("device_id", recipient.device_id);
+    }
+  }, () => failures++);
+  const summary: SyntheticSummary = {
+    eligible_devices: execution.data.eligible_count,
+    successful_sends: sent,
+    invalid_tokens: invalid,
+    failures,
+    duplicates_omitted: execution.data.duplicate_count + skipped,
+    organization_verified: true,
+    business_data_modified: false,
+    local_date: localDate,
+  };
+  await db.from("notification_test_executions").update({
+    status: "completed",
+    sent_count: sent,
+    invalid_token_count: invalid,
+    failure_count: failures,
+    duplicate_count: summary.duplicates_omitted,
+    completed_at: new Date().toISOString(),
+  }).eq("id", executionId);
+  return Response.json(summary);
+}
+
 export async function handler(request: Request): Promise<Response> {
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", {
@@ -337,6 +595,11 @@ export async function handler(request: Request): Promise<Response> {
   const db = createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+  if (
+    new URL(request.url).pathname.endsWith("/organization-notification-test")
+  ) {
+    return handleOrganizationNotificationTest(request, db, config);
+  }
   if (new URL(request.url).pathname.endsWith("/notification-test")) {
     return handleNotificationTest(request, db, config);
   }
