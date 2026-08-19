@@ -227,6 +227,63 @@ void main() {
       expect(find.textContaining('Llamar'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+    testWidgets('móvil usa días abreviados y zoom con límites y ajuste',
+        (tester) async {
+      await pump(tester, const Size(320, 700), [
+        entry('1', DateTime(2026, 8, 17)),
+        entry('2', DateTime(2026, 8, 17)),
+      ]);
+      for (final label in ['L', 'M', 'X', 'J', 'V', 'S', 'D']) {
+        expect(find.text(label), findsOneWidget);
+      }
+      expect(find.text('+1'), findsOneWidget);
+      final viewer = tester.widget<InteractiveViewer>(
+          find.byKey(const ValueKey('payment-calendar-zoom')));
+      final transformation = viewer.transformationController!;
+      expect(transformation.value.getMaxScaleOnAxis(), 1);
+
+      for (var i = 0; i < 6; i++) {
+        await tester.tap(find.byKey(const ValueKey('calendar-zoom-in')));
+        await tester.pump();
+      }
+      expect(transformation.value.getMaxScaleOnAxis(), 2);
+      expect(
+          tester
+              .widget<IconButton>(
+                  find.byKey(const ValueKey('calendar-zoom-in')))
+              .onPressed,
+          isNull);
+
+      await tester.tap(find.byKey(const ValueKey('calendar-zoom-fit')));
+      await tester.pump();
+      expect(transformation.value.getMaxScaleOnAxis(), 1);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('pellizcar amplía sin abrir accidentalmente el día',
+        (tester) async {
+      await pump(
+          tester, const Size(390, 844), [entry('1', DateTime(2026, 8, 17))]);
+      final center =
+          tester.getCenter(find.byKey(const ValueKey('payment-calendar-zoom')));
+      final first =
+          await tester.startGesture(center - const Offset(20, 0), pointer: 1);
+      final second =
+          await tester.startGesture(center + const Offset(20, 0), pointer: 2);
+      await first.moveTo(center - const Offset(70, 0));
+      await second.moveTo(center + const Offset(70, 0));
+      await tester.pump();
+      await first.up();
+      await second.up();
+      await tester.pump(const Duration(milliseconds: 150));
+
+      final viewer = tester.widget<InteractiveViewer>(
+          find.byKey(const ValueKey('payment-calendar-zoom')));
+      expect(viewer.transformationController!.value.getMaxScaleOnAxis(),
+          greaterThan(1));
+      expect(find.text('Facturas pendientes'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
     testWidgets(
         'regresión 608 confirma persistencia y refresca consumidores antes del éxito',
         (tester) async {

@@ -81,22 +81,35 @@ class CalendarDayCell extends StatelessWidget {
                   ),
               ]),
             ),
-            if (!compact && entries.isNotEmpty) ...[
-              const SizedBox(height: 5),
-              Text(
-                  '${entries.length} ${entries.length == 1 ? 'factura' : 'facturas'}',
-                  style: Theme.of(context).textTheme.labelSmall),
-              for (final entry in entries.take(2))
-                Text(
-                    '${visibleInvoiceReference(entry.facturaId)} · ${entry.cliente}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall),
-              if (entries.length > 2)
-                Text('+${entries.length - 2}',
-                    style: TextStyle(
-                        color: colors.primary, fontWeight: FontWeight.bold)),
-            ],
+            if (entries.isNotEmpty)
+              Expanded(
+                child: ClipRect(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(height: compact ? 2 : 5),
+                      if (!compact)
+                        Text(
+                            '${entries.length} ${entries.length == 1 ? 'factura' : 'facturas'}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.labelSmall),
+                      for (final entry in entries.take(compact ? 1 : 2))
+                        Text(
+                            '${visibleInvoiceReference(entry.facturaId)} · ${entry.cliente}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall),
+                      if (entries.length > (compact ? 1 : 2))
+                        Text('+${entries.length - (compact ? 1 : 2)}',
+                            maxLines: 1,
+                            style: TextStyle(
+                                color: colors.primary,
+                                fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ),
           ]),
         ),
       ),

@@ -8,7 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/login_screen.dart';
 import 'screens/reporte_screen.dart';
-import 'screens/payment_calendar/payment_calendar_screen.dart';
 import 'services/fcm_device_repository.dart';
 import 'services/firebase_messaging_service.dart';
 import 'services/notification_open_request.dart';
@@ -37,6 +36,8 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
   late final FcmDeviceCoordinator _deviceCoordinator;
   late bool _sesionIniciada;
   ThemeMode _themeMode = ThemeMode.light;
+  NotificationOpenRequest? _calendarRequest;
+  int _calendarRequestId = 0;
 
   @override
   void initState() {
@@ -79,18 +80,11 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
 
   Future<void> _openNotification(NotificationOpenRequest request) async {
     if (_auth.currentSession == null) return;
-    for (var attempt = 0;
-        attempt < 20 && _navigatorKey.currentState == null;
-        attempt++) {
-      await Future<void>.delayed(const Duration(milliseconds: 100));
-    }
-    final navigator = _navigatorKey.currentState;
-    if (navigator == null || _auth.currentSession == null) return;
-    await navigator.push<void>(MaterialPageRoute(
-        builder: (_) => PaymentCalendarScreen(
-              initialMonth: request.localDate,
-              initialDate: request.localDate,
-            )));
+    if (!mounted) return;
+    setState(() {
+      _calendarRequest = request;
+      _calendarRequestId++;
+    });
   }
 
   Future<void> _cargarTema() async {
@@ -381,6 +375,8 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
       ),
       home: _sesionIniciada
           ? ReporteScreen(
+              initialCalendarDate: _calendarRequest?.localDate,
+              calendarRequestId: _calendarRequestId,
               onCerrarSesion: _cerrarSesion,
               onCambiarTema: _cambiarTema,
               modoOscuro: _themeMode == ThemeMode.dark,

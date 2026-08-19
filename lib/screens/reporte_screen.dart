@@ -31,12 +31,16 @@ class ReporteScreen extends StatefulWidget {
     this.onCerrarSesion,
     this.onCambiarTema,
     this.modoOscuro = false,
+    this.initialCalendarDate,
+    this.calendarRequestId = 0,
     super.key,
   });
 
   final VoidCallback? onCerrarSesion;
   final VoidCallback? onCambiarTema;
   final bool modoOscuro;
+  final DateTime? initialCalendarDate;
+  final int calendarRequestId;
 
   @override
   State<ReporteScreen> createState() => _ReporteScreenState();
@@ -64,6 +68,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   bool _vistaCalendario = false;
   bool _vistaCargaFacturas = false;
   int _seccionMovil = 0;
+  int _handledCalendarRequestId = 0;
   final _busquedaController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
   Timer? _busquedaFacturaTimer;
@@ -84,6 +89,31 @@ class _ReporteScreenState extends State<ReporteScreen> {
     _crearFilas();
     _cargarVendedores();
     _cargarReportes();
+    _applyCalendarRequest();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReporteScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.calendarRequestId != widget.calendarRequestId) {
+      setState(_applyCalendarRequest);
+    }
+  }
+
+  void _applyCalendarRequest() {
+    if (widget.initialCalendarDate == null ||
+        widget.calendarRequestId == _handledCalendarRequestId) {
+      return;
+    }
+    _handledCalendarRequestId = widget.calendarRequestId;
+    _vistaCalendario = true;
+    _vistaCargaFacturas = false;
+    _vistaGeneral = false;
+    _vistaCobrosMensuales = false;
+    _vistaEstadisticas = false;
+    _vistaVendedores = false;
+    _vistaClientes = false;
+    _seccionMovil = 3;
   }
 
   @override
@@ -1676,6 +1706,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
           Expanded(
             child: _vistaCalendario
                 ? PaymentCalendarView(
+                    key: ValueKey(widget.calendarRequestId),
+                    initialMonth: widget.initialCalendarDate,
+                    initialDate: widget.initialCalendarDate,
                     onPaymentPersisted: _actualizarConsumidoresDeAbonos)
                 : _vistaCargaFacturas
                     ? CargaFacturasView(

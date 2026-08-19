@@ -22,14 +22,14 @@ class CalendarGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) =>
       LayoutBuilder(builder: (context, constraints) {
-        final compact = constraints.maxWidth < 900;
+        final compact = constraints.maxWidth < 600;
         final days = mondayFirstCalendarDays(month);
         final rows = days.length ~/ 7;
         const rowSpacing = 4.0;
-        final rowHeight = compact ? 62.0 : 112.0;
+        final rowHeight = compact ? 72.0 : 112.0;
         final height = rows * rowHeight + (rows - 1) * rowSpacing;
         final labels = compact
-            ? const ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
+            ? const ['L', 'M', 'X', 'J', 'V', 'S', 'D']
             : const [
                 'Lunes',
                 'Martes',

@@ -65,6 +65,10 @@ class PaymentCalendarView extends StatefulWidget {
 }
 
 class _PaymentCalendarViewState extends State<PaymentCalendarView> {
+  static const double _minScale = .75;
+  static const double _maxScale = 2;
+  final TransformationController _transformation = TransformationController();
+  bool _transforming = false;
   late final PaymentCalendarController controller = PaymentCalendarController(
       repository: widget.repository ?? PaymentCalendarRepository(),
       initialMonth: widget.initialMonth,
@@ -88,7 +92,83 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
     paymentCalendarRefresh.removeListener(_externalRefresh);
     controller.removeListener(_changed);
     controller.dispose();
+    _transformation.dispose();
     super.dispose();
+  }
+
+  double get _scale => _transformation.value.getMaxScaleOnAxis();
+
+  void _setScale(double value) {
+    final next = value.clamp(_minScale, _maxScale).toDouble();
+    _transformation.value = Matrix4.diagonal3Values(next, next, 1);
+    setState(() {});
+  }
+
+  void _fitGrid() {
+    _transformation.value = Matrix4.identity();
+    setState(() {});
+  }
+
+  void _moveMonth(int offset) {
+    _fitGrid();
+    controller.moveMonth(offset);
+  }
+
+  Widget _zoomControls() => Semantics(
+        label: 'Controles de zoom del calendario',
+        child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+          IconButton.outlined(
+            key: const ValueKey('calendar-zoom-out'),
+            tooltip: 'Reducir zoom',
+            onPressed:
+                _scale <= _minScale ? null : () => _setScale(_scale - .25),
+            icon: const Icon(Icons.remove),
+          ),
+          SizedBox(
+            width: 48,
+            child:
+                Text('${(_scale * 100).round()}%', textAlign: TextAlign.center),
+          ),
+          IconButton.outlined(
+            key: const ValueKey('calendar-zoom-in'),
+            tooltip: 'Aumentar zoom',
+            onPressed:
+                _scale >= _maxScale ? null : () => _setScale(_scale + .25),
+            icon: const Icon(Icons.add),
+          ),
+          const SizedBox(width: 4),
+          TextButton(
+            key: const ValueKey('calendar-zoom-fit'),
+            onPressed: _fitGrid,
+            child: const Text('Ajustar'),
+          ),
+        ]),
+      );
+
+  Widget _calendarGrid(bool mobile) {
+    final grid = CalendarGrid(
+      month: controller.visibleMonth,
+      grouped: controller.grouped,
+      selected: controller.selectedDay,
+      onSelect: _transforming ? (_) {} : _select,
+    );
+    if (!mobile) return grid;
+    return InteractiveViewer(
+      key: const ValueKey('payment-calendar-zoom'),
+      transformationController: _transformation,
+      minScale: _minScale,
+      maxScale: _maxScale,
+      panEnabled: _scale > 1,
+      boundaryMargin: const EdgeInsets.all(80),
+      onInteractionStart: (_) => setState(() => _transforming = true),
+      onInteractionUpdate: (_) => setState(() {}),
+      onInteractionEnd: (_) {
+        Future<void>.delayed(const Duration(milliseconds: 120), () {
+          if (mounted) setState(() => _transforming = false);
+        });
+      },
+      child: grid,
+    );
   }
 
   Future<void> _select(DateTime day) async {
@@ -250,63 +330,66 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
   Widget build(BuildContext context) => SafeArea(
       child: Padding(
           padding: const EdgeInsets.all(12),
-          child: Column(children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Calendario de cobros',
-                      style: Theme.of(context).textTheme.headlineSmall),
-                  const Text(
-                      'Consulta y reprogramación de facturas pendientes'),
-                ],
+          child: LayoutBuilder(builder: (context, constraints) {
+            final mobile = constraints.maxWidth < 700;
+            return Column(children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Calendario de cobros',
+                        style: Theme.of(context).textTheme.headlineSmall),
+                    const Text(
+                        'Consulta y reprogramación de facturas pendientes'),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            CalendarHeader(
-                monthLabel:
-                    '${_monthNames[controller.visibleMonth.month - 1]} ${controller.visibleMonth.year}',
-                onPrevious: () => controller.moveMonth(-1),
-                onNext: () => controller.moveMonth(1),
-                onToday: controller.today,
-                onRefresh: () => controller.load(refresh: true)),
-            const SizedBox(height: 8),
-            Expanded(
-                child: controller.loading
-                    ? const Center(
-                        child:
-                            Column(mainAxisSize: MainAxisSize.min, children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 12),
-                        Text('Cargando facturas pendientes…')
-                      ]))
-                    : controller.error != null
-                        ? Center(
-                            child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                Text(controller.error!,
-                                    textAlign: TextAlign.center),
-                                const SizedBox(height: 12),
-                                FilledButton.icon(
-                                    onPressed: () =>
-                                        controller.load(refresh: true),
-                                    icon: const Icon(Icons.refresh),
-                                    label: const Text('Reintentar'))
-                              ]))
-                        : SingleChildScrollView(
-                            child: Column(children: [
-                            CalendarGrid(
-                                month: controller.visibleMonth,
-                                grouped: controller.grouped,
-                                selected: controller.selectedDay,
-                                onSelect: _select),
-                            if (controller.entries.isEmpty)
-                              const Padding(
-                                  padding: EdgeInsets.all(20),
-                                  child: Text(
-                                      'No hay facturas pendientes programadas para este mes.'))
-                          ]))),
-          ])));
+              const SizedBox(height: 12),
+              CalendarHeader(
+                  monthLabel:
+                      '${_monthNames[controller.visibleMonth.month - 1]} ${controller.visibleMonth.year}',
+                  onPrevious: () => _moveMonth(-1),
+                  onNext: () => _moveMonth(1),
+                  onToday: () {
+                    _fitGrid();
+                    controller.today();
+                  },
+                  onRefresh: () => controller.load(refresh: true)),
+              if (mobile) _zoomControls(),
+              const SizedBox(height: 8),
+              Expanded(
+                  child: controller.loading
+                      ? const Center(
+                          child:
+                              Column(mainAxisSize: MainAxisSize.min, children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 12),
+                          Text('Cargando facturas pendientes…')
+                        ]))
+                      : controller.error != null
+                          ? Center(
+                              child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                  Text(controller.error!,
+                                      textAlign: TextAlign.center),
+                                  const SizedBox(height: 12),
+                                  FilledButton.icon(
+                                      onPressed: () =>
+                                          controller.load(refresh: true),
+                                      icon: const Icon(Icons.refresh),
+                                      label: const Text('Reintentar'))
+                                ]))
+                          : SingleChildScrollView(
+                              child: Column(children: [
+                              _calendarGrid(mobile),
+                              if (controller.entries.isEmpty)
+                                const Padding(
+                                    padding: EdgeInsets.all(20),
+                                    child: Text(
+                                        'No hay facturas pendientes programadas para este mes.'))
+                            ]))),
+            ]);
+          })));
 }

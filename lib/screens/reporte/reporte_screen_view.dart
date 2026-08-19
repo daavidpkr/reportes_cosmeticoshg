@@ -1866,7 +1866,18 @@ extension _ReporteScreenView on _ReporteScreenState {
         ],
       );
 
-  Widget _vistaMovil() => Scaffold(
+  Widget _vistaMovil() => PopScope(
+      canPop: _seccionMovil == 0 &&
+          !_vistaCalendario &&
+          !_vistaCargaFacturas &&
+          !_vistaCobrosMensuales &&
+          !_vistaEstadisticas &&
+          !_vistaVendedores &&
+          !_vistaClientes,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _mostrarReporteVentas();
+      },
+      child: Scaffold(
         appBar: AppBar(
           foregroundColor: Colors.white,
           flexibleSpace: const DecoratedBox(
@@ -1916,6 +1927,16 @@ extension _ReporteScreenView on _ReporteScreenState {
                     _mostrarClientes();
                   case 'sellers':
                     _gestionarVendedores();
+                  case 'statistics':
+                    setState(() {
+                      _vistaCalendario = false;
+                      _vistaCargaFacturas = false;
+                      _vistaEstadisticas = true;
+                      _vistaCobrosMensuales = false;
+                      _vistaVendedores = false;
+                      _vistaClientes = false;
+                      _vistaGeneral = false;
+                    });
                   case 'notifications':
                     await Navigator.of(context).push(MaterialPageRoute<void>(
                         builder: (_) => const PaymentRemindersScreen()));
@@ -1958,6 +1979,12 @@ extension _ReporteScreenView on _ReporteScreenState {
                     child: const ListTile(
                         leading: Icon(Icons.people_outline),
                         title: Text('Vendedores'))),
+                CheckedPopupMenuItem(
+                    value: 'statistics',
+                    checked: _vistaEstadisticas,
+                    child: const ListTile(
+                        leading: Icon(Icons.insights_outlined),
+                        title: Text('Estadísticas'))),
                 const PopupMenuDivider(),
                 const PopupMenuItem(
                     value: 'notifications',
@@ -2013,11 +2040,11 @@ extension _ReporteScreenView on _ReporteScreenState {
               _vistaCalendario = false;
               _vistaCargaFacturas = false;
               _seccionMovil = indice;
-              _vistaCalendario = indice == 2;
-              _vistaCobrosMensuales = false;
+              _vistaCalendario = indice == 3;
+              _vistaCobrosMensuales = indice == 2;
               _vistaClientes = false;
               _vistaVendedores = false;
-              _vistaEstadisticas = indice == 3;
+              _vistaEstadisticas = false;
               _vistaGeneral = indice == 1;
             });
           },
@@ -2031,17 +2058,20 @@ extension _ReporteScreenView on _ReporteScreenState {
               label: 'General',
             ),
             NavigationDestination(
-              icon: Icon(Icons.calendar_month_outlined),
+              icon: Icon(Icons.payments_outlined),
               label: 'Cobros',
             ),
             NavigationDestination(
-              icon: Icon(Icons.insights_outlined),
-              label: 'Estadísticas',
+              icon: Icon(Icons.calendar_month_outlined),
+              label: 'Calendario',
             ),
           ],
         ),
         body: _vistaCalendario
             ? PaymentCalendarView(
+                key: ValueKey(widget.calendarRequestId),
+                initialMonth: widget.initialCalendarDate,
+                initialDate: widget.initialCalendarDate,
                 onPaymentPersisted: _actualizarConsumidoresDeAbonos)
             : _vistaCargaFacturas
                 ? CargaFacturasView(
@@ -2158,5 +2188,5 @@ extension _ReporteScreenView on _ReporteScreenState {
                                       ],
                                     ),
                                   ),
-      );
+      ));
 }
