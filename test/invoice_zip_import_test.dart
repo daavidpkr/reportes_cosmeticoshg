@@ -5,6 +5,9 @@ import 'package:archive/archive.dart';
 import 'package:cosmeticos_hg_reportes/services/facturas_store.dart';
 import 'package:cosmeticos_hg_reportes/services/invoice_batch_importer.dart';
 import 'package:cosmeticos_hg_reportes/services/invoice_file_preparer.dart';
+import 'package:cosmeticos_hg_reportes/screens/carga_facturas_screen.dart';
+import 'package:cosmeticos_hg_reportes/services/vendedores_store.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _preparer = InvoiceFilePreparer();
@@ -240,5 +243,87 @@ void main() {
       await _import(validBatch, store, persisted: () => persists++);
       expect(persists, 1);
     });
+
+    test('fallo transaccional restaura la memoria sin lote parcial', () async {
+      final batch = await _preparer.prepare([
+        _file('valido.xml', utf8.encode(_xml('004'))),
+      ]);
+      await expectLater(
+        _import(batch, store, persisted: () => throw Exception('rollback')),
+        throwsException,
+      );
+      expect(store.buscar('004'), isNull);
+    });
+
+    test('revisión no escribe y separa duplicados, existentes e inválidos',
+        () async {
+      final batch = await _preparer.prepare([
+        _file('uno.xml', utf8.encode(_xml('010'))),
+        _file('repetido.xml', utf8.encode(_xml('010'))),
+        _file('existente.xml', utf8.encode(_xml('011'))),
+        _file('invalido.xml', utf8.encode('<otro/>')),
+      ]);
+      final review = const InvoiceBatchImporter()
+          .review(batch, store: store, existingReferences: {'011'});
+      expect(review.invoices.map((e) => e.factura.secuencial), ['010']);
+      expect(
+          review.issues.map((e) => e.kind),
+          containsAll([
+            InvoiceReviewIssueKind.duplicateSelection,
+            InvoiceReviewIssueKind.alreadyExists,
+            InvoiceReviewIssueKind.invalid,
+          ]));
+      expect(store.cantidad, 0);
+    });
+  });
+
+  testWidgets('revisión exige vendedor, permite masivo y cambio individual',
+      (tester) async {
+    final store = FacturasStore.instance
+      ..limpiar()
+      ..mesPermitido = 8
+      ..anioPermitido = 2026;
+    final batch = await _preparer.prepare([
+      _file('uno.xml', utf8.encode(_xml('021'))),
+      _file('dos.xml', utf8.encode(_xml('022'))),
+    ]);
+    final review = const InvoiceBatchImporter().review(batch, store: store);
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: InvoiceReviewDialog(
+      review: review,
+      vendedores: const [
+        Vendedor(codigo: '01', nombre: 'Ana'),
+        Vendedor(codigo: '02', nombre: 'Luz'),
+      ],
+    ))));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<FilledButton>(
+                find.byKey(const ValueKey('confirm-invoice-import')))
+            .onPressed,
+        isNull);
+    await tester.tap(find.byKey(const ValueKey('assign-all-seller')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('01 - Ana').last);
+    await tester.pumpAndSettle();
+    expect(review.invoices.every((e) => e.vendedor == '01 - Ana'), isTrue);
+    expect(
+        tester
+            .widget<FilledButton>(
+                find.byKey(const ValueKey('confirm-invoice-import')))
+            .onPressed,
+        isNotNull);
+    tester
+        .widget<DropdownButtonFormField<String>>(
+            find.byKey(const ValueKey('seller-022')))
+        .onChanged!('02 - Luz');
+    await tester.pumpAndSettle();
+    expect(review.invoices.first.vendedor, '01 - Ana');
+    expect(review.invoices.last.vendedor, '02 - Luz');
+    expect(store.cantidad, 0);
   });
 }

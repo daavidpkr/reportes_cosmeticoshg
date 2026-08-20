@@ -28,11 +28,13 @@ class PreparedInvoiceXml {
     required this.name,
     required this.bytes,
     required this.fromZip,
+    required this.sourceName,
   });
 
   final String name;
   final Uint8List bytes;
   final bool fromZip;
+  final String sourceName;
 }
 
 enum InvoiceFileIssueKind {
@@ -101,6 +103,7 @@ class InvoiceFilePreparer {
             name: file.name,
             bytes: file.bytes,
             fromZip: false,
+            sourceName: file.name,
           ));
         }
         continue;
@@ -191,6 +194,7 @@ class InvoiceFilePreparer {
             name: _displayName(entry.name),
             bytes: bytes,
             fromZip: true,
+            sourceName: file.name,
           ));
         } catch (error) {
           final encrypted = _looksEncrypted(error);

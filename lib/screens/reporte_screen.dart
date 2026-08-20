@@ -1728,7 +1728,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
                         mes: _reportes.activo.mes,
                         anio: _reportes.activo.anio,
                         onVolver: _mostrarReporteVentas,
-                        onFacturasGuardadas: _guardarProgreso,
+                        onFacturasGuardadas: _actualizarDesdeSupabase,
+                        vendedores: _vendedores.vendedores,
                       )
                     : _vistaClientes
                         ? const ClientesScreen()

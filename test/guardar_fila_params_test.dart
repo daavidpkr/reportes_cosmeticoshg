@@ -32,6 +32,26 @@ void main() {
     });
   });
 
+  test('monthly assigned import sends the exact selected seller', () {
+    final params = construirParametrosImportarFacturas(
+      facturasAsignadas: [
+        const FacturaAsignada(
+          factura: Factura(
+              cliente: 'C',
+              nombreComercial: 'N',
+              fecha: '19/08/2026',
+              secuencial: '700',
+              total: 10),
+          vendedor: '02 - Luz',
+        ),
+      ],
+      anio: 2026,
+      mes: 8,
+      requestId: '00000000-0000-0000-0000-000000000008',
+    );
+    expect((params['p_invoices'] as List).single['vendedor'], '02 - Luz');
+  });
+
   test('delete payment uses canonical row and exact aligned tuple', () {
     final payment =
         Abono(valor: 40, numeroRecibo: 6080, comentario: 'Transferencia');

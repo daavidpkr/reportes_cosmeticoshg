@@ -59,7 +59,8 @@ Map<String, dynamic> construirParametrosEliminarAbono({
     };
 
 Map<String, dynamic> construirParametrosImportarFacturas({
-  required Iterable<Factura> facturas,
+  Iterable<Factura>? facturas,
+  Iterable<FacturaAsignada>? facturasAsignadas,
   required int anio,
   required int mes,
   required String requestId,
@@ -68,18 +69,23 @@ Map<String, dynamic> construirParametrosImportarFacturas({
       'p_request_id': requestId,
       'p_year': anio,
       'p_month': mes,
-      'p_invoices': facturas
-          .map((factura) => {
-                'ref_fact': factura.secuencial.trim(),
-                'nro_fact': factura.secuencial.trim(),
-                'cliente': factura.cliente.trim(),
-                'nombre_comercial': factura.nombreComercial.trim(),
-                'fecha': parseInvoiceDate(factura.fecha)
-                    ?.toIso8601String()
-                    .substring(0, 10),
-                'venta': factura.total,
-              })
-          .toList(),
+      'p_invoices': facturasAsignadas != null
+          ? facturasAsignadas
+              .map((item) =>
+                  _facturaJson(item.factura, vendedor: item.vendedor.trim()))
+              .toList()
+          : facturas!.map(_facturaJson).toList(),
+    };
+
+Map<String, dynamic> _facturaJson(Factura factura, {String? vendedor}) => {
+      'ref_fact': factura.secuencial.trim(),
+      'nro_fact': factura.secuencial.trim(),
+      'cliente': factura.cliente.trim(),
+      'nombre_comercial': factura.nombreComercial.trim(),
+      'fecha':
+          parseInvoiceDate(factura.fecha)?.toIso8601String().substring(0, 10),
+      'venta': factura.total,
+      if (vendedor != null) 'vendedor': vendedor,
     };
 
 class CobroMensual {
@@ -368,6 +374,37 @@ class SupabaseReportesService {
           mes: mes,
           requestId: newRequestId(),
         ));
+    return (result as num).toInt();
+  }
+
+  Future<Set<String>> referenciasExistentesDelReporte(
+      Iterable<String> referencias, int anio, int mes) async {
+    final values =
+        referencias.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (values.isEmpty) return {};
+    final rows = await _client
+        .from('facturas_maestras')
+        .select('ref_fact')
+        .inFilter('ref_fact', values);
+    return List<Map<String, dynamic>>.from(rows)
+        .map((row) => row['ref_fact']?.toString().trim() ?? '')
+        .toSet();
+  }
+
+  Future<int> importarFacturasMensualesAsignadas(
+      Iterable<FacturaAsignada> facturas, int anio, int mes) async {
+    final lote = facturas.toList(growable: false);
+    if (lote.any((item) =>
+        item.vendedor.trim().isEmpty ||
+        parseInvoiceDate(item.factura.fecha) == null)) {
+      throw const FormatException('Factura o vendedor inválido.');
+    }
+    final result = await _client.rpc('enterprise_import_monthly_invoices',
+        params: construirParametrosImportarFacturas(
+            facturasAsignadas: lote,
+            anio: anio,
+            mes: mes,
+            requestId: newRequestId()));
     return (result as num).toInt();
   }
 

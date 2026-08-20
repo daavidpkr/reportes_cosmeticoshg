@@ -43,7 +43,7 @@ Future<void> showDayInvoicesDialog(
             insetPadding: const EdgeInsets.all(16),
             child: ConstrainedBox(
                 constraints:
-                    const BoxConstraints(maxWidth: 680, maxHeight: 760),
+                    const BoxConstraints(maxWidth: 900, maxHeight: 760),
                 child: Padding(
                     padding: const EdgeInsets.all(20),
                     child: Column(

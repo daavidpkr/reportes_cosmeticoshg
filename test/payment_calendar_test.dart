@@ -274,9 +274,9 @@ void main() {
       expect(find.text('Facturas pendientes'), findsOneWidget);
       expect(find.text('REF. 684'), findsOneWidget);
       expect(find.textContaining('Llamar'), findsOneWidget);
-      expect(find.text('Ver historial'), findsOneWidget);
+      expect(find.text('Historial'), findsOneWidget);
       expect(
-          find.byKey(const ValueKey('invoice-actions-scroll')), findsOneWidget);
+          find.byKey(const ValueKey('invoice-actions-grid')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
     testWidgets('Android muestra solamente día y contador en cada celda',
@@ -311,10 +311,10 @@ void main() {
       await tester
           .tap(find.bySemanticsLabel(RegExp('17, 1 facturas pendientes')));
       await tester.pumpAndSettle();
-      await tester.drag(find.byKey(const ValueKey('invoice-actions-scroll')),
-          const Offset(-900, 0));
+      await tester.drag(
+          find.byType(PendingInvoiceCard).first, const Offset(0, -260));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Ver historial'));
+      await tester.tap(find.text('Historial'));
       await tester.pumpAndSettle();
       expect(repository.resolvedInvoice, '684');
       expect(find.text('Facturas pendientes'), findsOneWidget);
@@ -342,10 +342,10 @@ void main() {
       await tester
           .tap(find.bySemanticsLabel(RegExp('17, 1 facturas pendientes')));
       await tester.pumpAndSettle();
-      await tester.drag(find.byKey(const ValueKey('invoice-actions-scroll')),
-          const Offset(-900, 0));
+      await tester.drag(
+          find.byType(PendingInvoiceCard).first, const Offset(0, -260));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Ver historial'));
+      await tester.tap(find.text('Historial'));
       await tester.pumpAndSettle();
       expect(repository.resolvedInvoice, '684');
       expect(history.customerId, 'customer-684');
@@ -431,7 +431,7 @@ void main() {
           .tap(find.bySemanticsLabel(RegExp('6, 1 facturas pendientes')));
       await tester.pumpAndSettle();
       expect(find.text('REF. 608'), findsOneWidget);
-      await tester.tap(find.text('Registrar abono'));
+      await tester.tap(find.text('Abono'));
       await tester.pumpAndSettle();
       await tester.enterText(
           find.widgetWithText(TextField, 'Valor del abono'), '40');

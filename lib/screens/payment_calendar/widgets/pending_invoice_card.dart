@@ -50,31 +50,40 @@ class PendingInvoiceCard extends StatelessWidget {
             _line('Comentario',
                 entry.comment.isEmpty ? 'Sin comentario' : entry.comment),
             const SizedBox(height: 10),
-            SingleChildScrollView(
-              key: const ValueKey('invoice-actions-scroll'),
-              scrollDirection: Axis.horizontal,
-              child: Row(children: [
-                OutlinedButton.icon(
-                    onPressed: onPayment,
-                    icon: const Icon(Icons.payments_outlined),
-                    label: const Text('Registrar abono')),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.event_repeat_outlined),
-                    label: const Text('Reprogramar')),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                    onPressed: onPaid,
-                    icon: const Icon(Icons.task_alt),
-                    label: const Text('Marcar como pagada')),
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                    onPressed: onHistory,
-                    icon: const Icon(Icons.history),
-                    label: const Text('Ver historial')),
-              ]),
-            ),
+            LayoutBuilder(builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 600;
+              final buttons = <Widget>[
+                _action('Registrar abono', 'Abono', Icons.payments_outlined,
+                    onPayment),
+                _action('Reprogramar factura', 'Reprogramar',
+                    Icons.event_repeat_outlined, onEdit),
+                _action('Marcar como pagada', 'Marcar pagada', Icons.task_alt,
+                    onPaid,
+                    filled: true),
+                _action('Ver historial del cliente', 'Historial', Icons.history,
+                    onHistory),
+              ];
+              if (wide) {
+                return Row(
+                    key: const ValueKey('invoice-actions-row'),
+                    children: [
+                      for (var i = 0; i < buttons.length; i++) ...[
+                        Expanded(child: buttons[i]),
+                        if (i < buttons.length - 1) const SizedBox(width: 6),
+                      ]
+                    ]);
+              }
+              return GridView.count(
+                key: const ValueKey('invoice-actions-grid'),
+                crossAxisCount: 2,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: 2.75,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                children: buttons,
+              );
+            }),
           ]),
         ),
       );
@@ -87,4 +96,22 @@ class PendingInvoiceCard extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.w600)),
         TextSpan(text: value.trim().isEmpty ? 'Sin registrar' : value)
       ])));
+
+  Widget _action(
+      String tooltip, String label, IconData icon, VoidCallback? callback,
+      {bool filled = false}) {
+    final child = filled
+        ? FilledButton.icon(
+            onPressed: callback,
+            icon: Icon(icon, size: 18),
+            label: Text(label, maxLines: 1))
+        : OutlinedButton.icon(
+            onPressed: callback,
+            icon: Icon(icon, size: 18),
+            label: Text(label, maxLines: 1));
+    return Semantics(
+        label: tooltip,
+        button: true,
+        child: Tooltip(message: tooltip, child: child));
+  }
 }

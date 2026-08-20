@@ -32,9 +32,17 @@ class FacturasStore {
   }
 
   ResultadoFactura agregarDesdeTexto(String texto) {
+    final resultado = analizarTexto(texto);
+    if (resultado.resultado == ResultadoFactura.agregada) {
+      _registrar(resultado.factura!);
+    }
+    return resultado.resultado;
+  }
+
+  ({ResultadoFactura resultado, Factura? factura}) analizarTexto(String texto) {
     final secuencial = referenciaDesdeTexto(texto);
     if (secuencial == null || secuencial.isEmpty) {
-      return ResultadoFactura.invalida;
+      return (resultado: ResultadoFactura.invalida, factura: null);
     }
 
     final fecha = _extraer(texto, 'fechaEmision') ?? '';
@@ -42,7 +50,9 @@ class FacturasStore {
       r'^(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})',
     ).firstMatch(fecha);
     if (mesPermitido != null || anioPermitido != null) {
-      if (partes == null) return ResultadoFactura.invalida;
+      if (partes == null) {
+        return (resultado: ResultadoFactura.invalida, factura: null);
+      }
       final primero = int.tryParse(partes.group(1)!);
       final segundo = int.tryParse(partes.group(2)!);
       final tercero = int.tryParse(partes.group(3)!);
@@ -50,7 +60,7 @@ class FacturasStore {
       final mes = segundo;
       if ((mesPermitido != null && mes != mesPermitido) ||
           (anioPermitido != null && anio != anioPermitido)) {
-        return ResultadoFactura.mesIncorrecto;
+        return (resultado: ResultadoFactura.mesIncorrecto, factura: null);
       }
     }
 
@@ -61,9 +71,10 @@ class FacturasStore {
       secuencial: secuencial,
       total: _parsearMonto(_extraer(texto, 'importeTotal')),
     );
-    _registrar(factura);
-    return ResultadoFactura.agregada;
+    return (resultado: ResultadoFactura.agregada, factura: factura);
   }
+
+  void registrar(Factura factura) => _registrar(factura);
 
   String? referenciaDesdeTexto(String texto) => _extraer(texto, 'secuencial');
 

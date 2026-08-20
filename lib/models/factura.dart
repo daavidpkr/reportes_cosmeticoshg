@@ -29,3 +29,10 @@ class Factura {
         total: (json['total'] as num?)?.toDouble() ?? 0,
       );
 }
+
+class FacturaAsignada {
+  const FacturaAsignada({required this.factura, required this.vendedor});
+
+  final Factura factura;
+  final String vendedor;
+}
