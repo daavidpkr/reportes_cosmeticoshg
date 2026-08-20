@@ -32,7 +32,7 @@ class FacturasStore {
   }
 
   ResultadoFactura agregarDesdeTexto(String texto) {
-    final secuencial = _extraer(texto, 'secuencial');
+    final secuencial = referenciaDesdeTexto(texto);
     if (secuencial == null || secuencial.isEmpty) {
       return ResultadoFactura.invalida;
     }
@@ -64,6 +64,8 @@ class FacturasStore {
     _registrar(factura);
     return ResultadoFactura.agregada;
   }
+
+  String? referenciaDesdeTexto(String texto) => _extraer(texto, 'secuencial');
 
   void _registrar(Factura factura) {
     final secuencial = factura.secuencial;

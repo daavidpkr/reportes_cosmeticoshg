@@ -71,7 +71,7 @@ void main() {
     expect(find.byType(AppBar), findsOneWidget);
     expect(find.text('Carga de facturas'), findsOneWidget);
     expect(find.text('Facturas de 08/2026'), findsOneWidget);
-    expect(find.text('Seleccionar facturas'), findsOneWidget);
+    expect(find.text('Seleccionar facturas XML o ZIP'), findsOneWidget);
     expect(tester.takeException(), isNull);
 
     await tester.tap(find.text('Volver al reporte de ventas'));
