@@ -275,6 +275,37 @@ void main() {
           ]));
       expect(store.cantidad, 0);
     });
+
+    test('ordena numéricamente XML directos y conserva ceros', () async {
+      final batch = await _preparer.prepare([
+        _file('13.xml', utf8.encode(_xml('000000013'))),
+        _file('1.xml', utf8.encode(_xml('1'))),
+        _file('11.xml', utf8.encode(_xml('000000011'))),
+        _file('10.xml', utf8.encode(_xml('10'))),
+        _file('2.xml', utf8.encode(_xml('2'))),
+        _file('12.xml', utf8.encode(_xml('000000012'))),
+      ]);
+      final review = const InvoiceBatchImporter().review(batch, store: store);
+      expect(review.invoices.map((e) => e.factura.secuencial),
+          ['1', '2', '10', '000000011', '000000012', '000000013']);
+    });
+
+    test('ordena ZIP interno y deja referencias no numéricas al final',
+        () async {
+      final batch = await _preparer.prepare([
+        _file(
+            'desordenado.zip',
+            _zip({
+              '12.xml': utf8.encode(_xml('12')),
+              'especial.xml': utf8.encode(_xml('A-1')),
+              '13.xml': utf8.encode(_xml('13')),
+              '11.xml': utf8.encode(_xml('11')),
+            })),
+      ]);
+      final review = const InvoiceBatchImporter().review(batch, store: store);
+      expect(review.invoices.map((e) => e.factura.secuencial),
+          ['11', '12', '13', 'A-1']);
+    });
   });
 
   testWidgets('revisión exige vendedor, permite masivo y cambio individual',

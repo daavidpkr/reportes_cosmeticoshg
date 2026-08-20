@@ -51,7 +51,8 @@ class PendingInvoiceCard extends StatelessWidget {
                 entry.comment.isEmpty ? 'Sin comentario' : entry.comment),
             const SizedBox(height: 10),
             LayoutBuilder(builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 600;
+              // Four icon buttons need roughly 145 logical pixels each.
+              final wide = constraints.maxWidth >= 580;
               final buttons = <Widget>[
                 _action('Registrar abono', 'Abono', Icons.payments_outlined,
                     onPayment),
@@ -78,7 +79,7 @@ class PendingInvoiceCard extends StatelessWidget {
                 crossAxisCount: 2,
                 mainAxisSpacing: 8,
                 crossAxisSpacing: 8,
-                childAspectRatio: 2.75,
+                childAspectRatio: 3.2,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 children: buttons,

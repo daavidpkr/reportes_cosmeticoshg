@@ -464,6 +464,7 @@ class _CargaFacturasViewState extends State<CargaFacturasView> {
     var zips = 0;
     var encontradosEnZip = 0;
     var zipsConError = 0;
+    var importacionConfirmada = false;
     try {
       final seleccionados = <SelectedInvoiceFile>[];
       for (final leer in archivos) {
@@ -533,6 +534,7 @@ class _CargaFacturasViewState extends State<CargaFacturasView> {
           _store.registrar(item.factura);
         }
         await widget.onFacturasGuardadas?.call();
+        importacionConfirmada = true;
       }
     } catch (error) {
       if (mounted) {
@@ -545,6 +547,7 @@ class _CargaFacturasViewState extends State<CargaFacturasView> {
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
+    if (!importacionConfirmada) return;
     if (!mounted) return;
     final detalle = <String>[
       '$directos XML directo(s)',

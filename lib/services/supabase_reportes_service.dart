@@ -4,6 +4,7 @@ import '../models/factura.dart';
 import '../models/fila_venta.dart';
 import '../models/billing_customer.dart';
 import 'request_id.dart';
+import 'invoice_batch_importer.dart';
 
 Map<String, dynamic> construirParametrosGuardarFila({
   required FilaVenta fila,
@@ -64,18 +65,42 @@ Map<String, dynamic> construirParametrosImportarFacturas({
   required int anio,
   required int mes,
   required String requestId,
-}) =>
-    {
-      'p_request_id': requestId,
-      'p_year': anio,
-      'p_month': mes,
-      'p_invoices': facturasAsignadas != null
-          ? facturasAsignadas
-              .map((item) =>
-                  _facturaJson(item.factura, vendedor: item.vendedor.trim()))
-              .toList()
-          : facturas!.map(_facturaJson).toList(),
-    };
+}) {
+  final assigned = facturasAsignadas?.toList()
+    ?..sort((a, b) =>
+        compareInvoiceReferences(a.factura.secuencial, b.factura.secuencial));
+  final plain = facturas?.toList()
+    ?..sort((a, b) => compareInvoiceReferences(a.secuencial, b.secuencial));
+  return {
+    'p_request_id': requestId,
+    'p_year': anio,
+    'p_month': mes,
+    'p_invoices': assigned != null
+        ? assigned
+            .map((item) =>
+                _facturaJson(item.factura, vendedor: item.vendedor.trim()))
+            .toList()
+        : plain!.map(_facturaJson).toList(),
+  };
+}
+
+void verificarVendedoresPersistidos({
+  required Iterable<FacturaAsignada> esperadas,
+  required Iterable<Map<String, dynamic>> persistidas,
+}) {
+  final actual = <String, String>{
+    for (final row in persistidas)
+      row['ref_fact']?.toString().trim() ?? '':
+          row['vendedor']?.toString().trim() ?? '',
+  };
+  for (final item in esperadas) {
+    final reference = item.factura.secuencial.trim();
+    if (actual[reference] != item.vendedor.trim()) {
+      throw StateError(
+          'Supabase no confirmó el vendedor de la factura $reference.');
+    }
+  }
+}
 
 Map<String, dynamic> _facturaJson(Factura factura, {String? vendedor}) => {
       'ref_fact': factura.secuencial.trim(),
@@ -405,6 +430,19 @@ class SupabaseReportesService {
             anio: anio,
             mes: mes,
             requestId: newRequestId()));
+    final reportName =
+        CobroMensual(anio: anio, mes: mes, valorPorCobrar: 0).nombre;
+    final references =
+        lote.map((item) => item.factura.secuencial.trim()).toList();
+    final persisted = await _client
+        .from('reportes_ventas')
+        .select('ref_fact,vendedor,nro_fila')
+        .eq('mes_reporte', reportName)
+        .inFilter('ref_fact', references)
+        .order('nro_fila', ascending: true);
+    verificarVendedoresPersistidos(
+        esperadas: lote,
+        persistidas: List<Map<String, dynamic>>.from(persisted));
     return (result as num).toInt();
   }
 

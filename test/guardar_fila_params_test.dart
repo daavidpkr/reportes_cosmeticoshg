@@ -52,6 +52,52 @@ void main() {
     expect((params['p_invoices'] as List).single['vendedor'], '02 - Luz');
   });
 
+  test('assigned batch is serialized in numeric order with each seller', () {
+    Factura invoice(String reference) => Factura(
+        cliente: 'C',
+        nombreComercial: 'N',
+        fecha: '19/08/2026',
+        secuencial: reference,
+        total: 10);
+    final params = construirParametrosImportarFacturas(
+      facturasAsignadas: [
+        FacturaAsignada(factura: invoice('13'), vendedor: '03 - Sol'),
+        FacturaAsignada(factura: invoice('11'), vendedor: '01 - Ana'),
+        FacturaAsignada(factura: invoice('12'), vendedor: '08 - Esteban'),
+      ],
+      anio: 2026,
+      mes: 8,
+      requestId: '00000000-0000-0000-0000-000000000009',
+    );
+    final invoices = params['p_invoices'] as List;
+    expect(invoices.map((e) => e['ref_fact']), ['11', '12', '13']);
+    expect(invoices.map((e) => e['vendedor']),
+        ['01 - Ana', '08 - Esteban', '03 - Sol']);
+  });
+
+  test('second read must exactly match every selected seller', () {
+    const expected = [
+      FacturaAsignada(
+          factura: Factura(
+              cliente: 'C',
+              nombreComercial: 'N',
+              fecha: '19/08/2026',
+              secuencial: '11',
+              total: 10),
+          vendedor: '01 - Ana'),
+    ];
+    verificarVendedoresPersistidos(esperadas: expected, persistidas: const [
+      {'ref_fact': '11', 'vendedor': '01 - Ana'}
+    ]);
+    expect(
+        () => verificarVendedoresPersistidos(
+                esperadas: expected,
+                persistidas: const [
+                  {'ref_fact': '11', 'vendedor': ''}
+                ]),
+        throwsStateError);
+  });
+
   test('delete payment uses canonical row and exact aligned tuple', () {
     final payment =
         Abono(valor: 40, numeroRecibo: 6080, comentario: 'Transferencia');

@@ -257,6 +257,41 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    testWidgets('acciones usan fila ancha y cuadrícula 2x2 estrecha sin scroll',
+        (tester) async {
+      Widget card(double width) => MaterialApp(
+          home: Scaffold(
+              body: SizedBox(
+                  width: width,
+                  child: PendingInvoiceCard(
+                    entry: entry('11', DateTime(2026, 8, 19)),
+                    onEdit: () {},
+                    onHistory: () {},
+                    onPayment: () {},
+                    onPaid: () {},
+                  ))));
+      await tester.binding.setSurfaceSize(const Size(700, 700));
+      await tester.pumpWidget(card(620));
+      expect(find.byKey(const ValueKey('invoice-actions-row')), findsOneWidget);
+      expect(find.byType(SingleChildScrollView), findsNothing);
+      expect(tester.takeException(), isNull);
+
+      await tester.pumpWidget(card(360));
+      await tester.pump();
+      expect(
+          find.byKey(const ValueKey('invoice-actions-grid')), findsOneWidget);
+      expect(find.byType(SingleChildScrollView), findsNothing);
+      for (final label in [
+        'Abono',
+        'Reprogramar',
+        'Marcar pagada',
+        'Historial'
+      ]) {
+        expect(find.text(label), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('escritorio muestra mes, hoy y cantidad sin desbordar',
         (tester) async {
       await pump(

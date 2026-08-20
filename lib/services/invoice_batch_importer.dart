@@ -93,6 +93,8 @@ class InvoiceBatchImporter {
             'No se pudo leer el XML.'));
       }
     }
+    invoices.sort((a, b) =>
+        compareInvoiceReferences(a.factura.secuencial, b.factura.secuencial));
     return InvoiceBatchReview(
         invoices: invoices, issues: issues, fileIssues: batch.issues);
   }
@@ -146,4 +148,21 @@ class InvoiceBatchImporter {
       wrongMonth: wrongMonth,
     );
   }
+}
+
+/// Numeric invoice order without losing the original, zero-padded reference.
+/// Non-numeric references remain importable and are placed deterministically
+/// after numeric references.
+int compareInvoiceReferences(String left, String right) {
+  final leftValue = BigInt.tryParse(left.trim());
+  final rightValue = BigInt.tryParse(right.trim());
+  if (leftValue != null && rightValue != null) {
+    final numeric = leftValue.compareTo(rightValue);
+    if (numeric != 0) return numeric;
+  } else if (leftValue != null) {
+    return -1;
+  } else if (rightValue != null) {
+    return 1;
+  }
+  return left.trim().compareTo(right.trim());
 }
