@@ -10,6 +10,8 @@ import {
   mapLimit,
   type OperationalSummary,
   parseOAuthResponse,
+  parseNotificationSlot,
+  type NotificationSlot,
   type RuntimeConfig,
   selectUserSyntheticDevices,
   type ServiceAccount,
@@ -98,6 +100,7 @@ async function sendToDevice(
   accessToken: () => Promise<string>,
   device: Device,
   date: string,
+  notificationSlot: NotificationSlot,
   invoices: EligibleInvoice[],
   summary: OperationalSummary,
 ) {
@@ -109,6 +112,7 @@ async function sendToDevice(
       p_device_id: device.id,
       p_notification_date: date,
       p_invoice_count: invoices.length,
+      p_notification_slot: notificationSlot,
     },
   );
   if (claimError) {
@@ -180,6 +184,7 @@ async function processToday(
   config: RuntimeConfig,
   accessToken: () => Promise<string>,
   summary: OperationalSummary,
+  notificationSlot: NotificationSlot,
 ) {
   const { data, error } = await db.rpc(
     "list_same_day_payment_notification_invoices",
@@ -224,7 +229,16 @@ async function processToday(
       devices,
       6,
       (device) =>
-        sendToDevice(db, config, accessToken, device, date, invoices, summary),
+        sendToDevice(
+          db,
+          config,
+          accessToken,
+          device,
+          date,
+          notificationSlot,
+          invoices,
+          summary,
+        ),
       () => summary.administrativeErrors++,
     );
   }
@@ -585,6 +599,16 @@ export async function handler(request: Request): Promise<Response> {
   }
   if (!authorized) return new Response("Unauthorized", { status: 401 });
 
+  const body = await request.json().catch(() => null) as
+    | { notification_slot?: unknown }
+    | null;
+  const notificationSlot = parseNotificationSlot(body?.notification_slot);
+  if (!notificationSlot) {
+    return Response.json({ status: "invalid_notification_slot" }, {
+      status: 400,
+    });
+  }
+
   const summary = emptySummary();
   let token: Promise<string> | null = null;
   try {
@@ -593,6 +617,7 @@ export async function handler(request: Request): Promise<Response> {
       config,
       () => token ??= fetchAccessToken(config.serviceAccount),
       summary,
+      notificationSlot,
     );
     return Response.json(summary);
   } catch {
