@@ -48,7 +48,6 @@ create unique index if not exists payment_notification_deliveries_daily_slot_key
     notification_slot
   );
 
-drop function if exists public.claim_same_day_payment_delivery(uuid,uuid,uuid,date,integer);
 create function public.claim_same_day_payment_delivery(
   p_organization_id uuid,p_user_id uuid,p_device_id uuid,
   p_notification_date date,p_invoice_count integer,p_notification_slot text
@@ -74,6 +73,23 @@ $$;
 revoke all on function public.claim_same_day_payment_delivery(uuid,uuid,uuid,date,integer,text)
   from public,anon,authenticated;
 grant execute on function public.claim_same_day_payment_delivery(uuid,uuid,uuid,date,integer,text)
+  to service_role;
+
+-- Keep version 33 of the Edge Function operational while the new version is
+-- deployed. Its five-argument claim maps to the historical/05:00 slot.
+create or replace function public.claim_same_day_payment_delivery(
+  p_organization_id uuid,p_user_id uuid,p_device_id uuid,
+  p_notification_date date,p_invoice_count integer
+) returns uuid
+language sql security definer set search_path='' as $$
+  select public.claim_same_day_payment_delivery(
+    p_organization_id,p_user_id,p_device_id,p_notification_date,
+    p_invoice_count,'05:00'
+  );
+$$;
+revoke all on function public.claim_same_day_payment_delivery(uuid,uuid,uuid,date,integer)
+  from public,anon,authenticated;
+grant execute on function public.claim_same_day_payment_delivery(uuid,uuid,uuid,date,integer)
   to service_role;
 
 do $$
@@ -125,11 +141,13 @@ returns table(job_name text,schedule text,active boolean,equivalent_jobs bigint)
 language sql stable security definer set search_path='' as $$
   select j.jobname,j.schedule,j.active,
     (select count(*) from cron.job x where x.active
-      and x.jobname in ('process-same-day-payment-reminders-0500',
-                        'process-same-day-payment-reminders-1200'))
+      and (x.jobname in ('process-same-day-payment-reminders-0500',
+                         'process-same-day-payment-reminders-1200')
+           or x.command ilike '%process-payment-reminders%'))
   from cron.job j
   where j.jobname in ('process-same-day-payment-reminders-0500',
                       'process-same-day-payment-reminders-1200')
+    and j.active
   order by j.jobname;
 $$;
 revoke all on function public.payment_notification_cron_status()

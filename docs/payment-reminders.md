@@ -3,8 +3,8 @@
 ## Configuración canónica
 
 - Zona empresarial: `America/Guayaquil`.
-- Hora visible: `05:00` Ecuador.
-- Cron UTC: `0 10 * * *`.
+- Horas visibles: `05:00` y `12:00` Ecuador.
+- Cron UTC: `0 10 * * *` y `0 17 * * *`, respectivamente.
 - Arquitectura: Supabase Cron → `process-payment-reminders` → FCM → Android.
 - Flutter no programa entregas: solicita permiso, registra el token, recibe FCM y abre el calendario.
 
@@ -17,21 +17,26 @@ Facturas anteriores, futuras, pagadas, anuladas, huérfanas o pertenecientes a u
 organización inactiva quedan excluidas.
 
 La entrega se consolida por organización y dispositivo. Una restricción única
-impide más de una entrega empresarial por usuario, dispositivo, fecha local y
-tipo, aunque el Cron sea reintentado o ejecutado concurrentemente.
+impide más de una entrega empresarial por usuario, dispositivo, fecha local,
+tipo y turno, aunque un Cron sea reintentado o ejecutado concurrentemente. Los
+turnos `05:00` y `12:00` son independientes y permiten como máximo dos entregas
+diarias por dispositivo.
 
 ## Programación segura
 
-La migración crea exactamente el trabajo `process-same-day-payment-reminders` y
+La migración crea exactamente los trabajos
+`process-same-day-payment-reminders-0500` y
+`process-same-day-payment-reminders-1200`, y
 elimina únicamente trabajos cuyo nombre o comando invoca inequívocamente la misma
 Edge Function. La credencial de invocación se genera dentro de Vault y nunca se
 incorpora al repositorio ni a la salida del CLI.
 
-## Comportamiento después de las 05:00
+## Comportamiento entre turnos
 
 Una factura programada o reprogramada para el mismo día después de las 05:00
-permanece visible en el calendario, pero no genera una entrega inmediata. Se
-mantiene una sola ejecución diaria; actualizar la aplicación no envía avisos.
+permanece visible en el calendario y puede incluirse en la ejecución consolidada
+de las 12:00. Después de las 12:00 no se genera una entrega inmediata;
+actualizar la aplicación no envía avisos.
 
 ## Plataforma
 

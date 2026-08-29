@@ -8,10 +8,10 @@ import {
   emptySummary,
   guayaquilDate,
   mapLimit,
-  type OperationalSummary,
-  parseOAuthResponse,
-  parseNotificationSlot,
   type NotificationSlot,
+  type OperationalSummary,
+  parseNotificationSlot,
+  parseOAuthResponse,
   type RuntimeConfig,
   selectUserSyntheticDevices,
   type ServiceAccount,
@@ -378,7 +378,8 @@ async function handleUserNotificationTest(
       return Response.json({ status: "preparation_failed" }, { status: 500 });
     }
     const allDevices = (devicesResult.data ?? []) as (Device & {
-      platform: string; active: boolean;
+      platform: string;
+      active: boolean;
     })[];
     const { eligible, inactive, duplicates } = selectUserSyntheticDevices(
       allDevices,

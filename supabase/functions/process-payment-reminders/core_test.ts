@@ -12,8 +12,8 @@ import {
   mapLimit,
   MAX_ATTEMPTS,
   nextRetryAt,
-  parseOAuthResponse,
   parseNotificationSlot,
+  parseOAuthResponse,
   processingRecoveryCutoff,
   requireDeviceQuery,
   selectSyntheticDevices,
@@ -108,6 +108,8 @@ Deno.test("solo admite los dos turnos diarios configurados", () => {
   assertEquals(parseNotificationSlot("12:00"), "12:00");
   assertEquals(parseNotificationSlot("00:00"), null);
   assertEquals(parseNotificationSlot("5:00"), null);
+  assertEquals(parseNotificationSlot("13:00"), null);
+  assertEquals(parseNotificationSlot(""), null);
   assertEquals(parseNotificationSlot(null), null);
 });
 
@@ -244,10 +246,38 @@ Deno.test("rechaza métodos distintos de POST", async () => {
 
 Deno.test("la prueba sintética solo selecciona dispositivos del JWT", () => {
   const result = selectUserSyntheticDevices([
-    { id: "one", user_id: "me", organization_id: "a", token: "token-1", platform: "android", active: true },
-    { id: "two", user_id: "me", organization_id: "b", token: "token-2", platform: "android", active: false },
-    { id: "three", user_id: "other", organization_id: "a", token: "token-3", platform: "android", active: true },
-    { id: "four", user_id: "me", organization_id: "a", token: "token-1", platform: "android", active: true },
+    {
+      id: "one",
+      user_id: "me",
+      organization_id: "a",
+      token: "token-1",
+      platform: "android",
+      active: true,
+    },
+    {
+      id: "two",
+      user_id: "me",
+      organization_id: "b",
+      token: "token-2",
+      platform: "android",
+      active: false,
+    },
+    {
+      id: "three",
+      user_id: "other",
+      organization_id: "a",
+      token: "token-3",
+      platform: "android",
+      active: true,
+    },
+    {
+      id: "four",
+      user_id: "me",
+      organization_id: "a",
+      token: "token-1",
+      platform: "android",
+      active: true,
+    },
   ], "me");
   assertEquals(result.eligible.map((device) => device.id), ["one"]);
   assertEquals(result.inactive, 1);

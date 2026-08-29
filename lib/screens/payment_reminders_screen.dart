@@ -526,7 +526,7 @@ class _ReminderEditorState extends State<_ReminderEditor> {
             leading: Icon(Icons.notifications_active_outlined),
             title: Text('Notificación el mismo día'),
             subtitle: Text(
-                'Hora de envío: ${NotificationSchedule.localTime} · Zona horaria: ${NotificationSchedule.timeZoneLabel}')),
+                'Horas de envío: ${NotificationSchedule.localTimesLabel} · Zona horaria: ${NotificationSchedule.timeZoneLabel}')),
         const SizedBox(height: 12),
         FilledButton.icon(
             onPressed: _saving ? null : _save,
