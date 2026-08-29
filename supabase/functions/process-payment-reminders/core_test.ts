@@ -13,6 +13,7 @@ import {
   MAX_ATTEMPTS,
   nextRetryAt,
   parseOAuthResponse,
+  parseNotificationSlot,
   processingRecoveryCutoff,
   requireDeviceQuery,
   selectSyntheticDevices,
@@ -80,7 +81,7 @@ Deno.test("payload diario consolidado abre el calendario de hoy", () => {
   });
 });
 
-Deno.test("payload sintético informa las 05:00 y abre la fecha enviada", () => {
+Deno.test("payload sintético informa los dos horarios y abre la fecha enviada", () => {
   const payload = buildNotificationTestPayload({
     deviceToken: "token-autorizado",
     localDate: "2026-08-21",
@@ -88,7 +89,7 @@ Deno.test("payload sintético informa las 05:00 y abre la fecha enviada", () => 
   assertEquals(payload.message.notification, {
     title: "Prueba de notificaciones",
     body:
-      "Las notificaciones de cobros se enviarán diariamente a las 05:00, hora de Ecuador.",
+      "Las notificaciones de cobros se enviarán diariamente a las 05:00 y 12:00, hora de Ecuador.",
   });
   assertEquals(payload.message.data, {
     type: "notification_test",
@@ -100,6 +101,14 @@ Deno.test("payload sintético informa las 05:00 y abre la fecha enviada", () => 
     icon: "ic_notification_cosmeticos_hg",
     color: "#7A1F4D",
   });
+});
+
+Deno.test("solo admite los dos turnos diarios configurados", () => {
+  assertEquals(parseNotificationSlot("05:00"), "05:00");
+  assertEquals(parseNotificationSlot("12:00"), "12:00");
+  assertEquals(parseNotificationSlot("00:00"), null);
+  assertEquals(parseNotificationSlot("5:00"), null);
+  assertEquals(parseNotificationSlot(null), null);
 });
 
 Deno.test("enterprise devices include only active members of the organization", () => {
@@ -276,6 +285,13 @@ Deno.test("Cron 10:00 UTC equivale a 05:00 Ecuador", () => {
   assertEquals(
     guayaquilDateTime(new Date("2026-08-21T05:00:00Z")),
     "2026-08-21, 00:00",
+  );
+});
+
+Deno.test("Cron 17:00 UTC equivale a 12:00 Ecuador", () => {
+  assertEquals(
+    guayaquilDateTime(new Date("2026-08-21T17:00:00Z")),
+    "2026-08-21, 12:00",
   );
 });
 
