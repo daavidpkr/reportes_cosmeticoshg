@@ -1,12 +1,19 @@
 export const TIME_ZONE = "America/Guayaquil";
-export const NOTIFICATION_LOCAL_TIME = "05:00";
-export const NOTIFICATION_CRON_UTC = "0 10 * * *";
+export const NOTIFICATION_LOCAL_TIMES = ["05:00", "12:00"] as const;
+export type NotificationSlot = typeof NOTIFICATION_LOCAL_TIMES[number];
 export const ANDROID_NOTIFICATION_ICON = "ic_notification_cosmeticos_hg";
 export const ANDROID_NOTIFICATION_COLOR = "#7A1F4D";
 export const MAX_ATTEMPTS = 5;
 export const PAGE_SIZE = 200;
 export const DEVICE_CONCURRENCY = 6;
 export const PROCESSING_RECOVERY_MINUTES = 10;
+
+export function parseNotificationSlot(value: unknown): NotificationSlot | null {
+  return typeof value === "string" &&
+      (NOTIFICATION_LOCAL_TIMES as readonly string[]).includes(value)
+    ? value as NotificationSlot
+    : null;
+}
 
 export type EligibleInvoice = {
   reminderId: string;
@@ -71,7 +78,7 @@ export function buildNotificationTestPayload(input: {
       notification: {
         title: "Prueba de notificaciones",
         body:
-          "Las notificaciones de cobros se enviarán diariamente a las 05:00, hora de Ecuador.",
+          "Las notificaciones de cobros se enviarán diariamente a las 05:00 y 12:00, hora de Ecuador.",
       },
       data: {
         type: "notification_test",
