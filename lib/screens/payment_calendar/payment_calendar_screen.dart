@@ -223,6 +223,12 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
             customer: customer!,
             repository: widget.historyRepository,
             onEditTerm: _editCustomerTerm,
+            onEditHours: (customer, value) async {
+              final updated =
+                  await _customerTerms.saveBusinessHours(customer.id, value);
+              paymentCalendarRefresh.refresh();
+              return updated;
+            },
             onSchedule: _scheduleCustomer,
             onDelete: _deleteCustomer));
     if (!mounted) return;

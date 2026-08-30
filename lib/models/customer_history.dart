@@ -153,10 +153,12 @@ class CustomerHistoryPage {
   const CustomerHistoryPage(
       {required this.summary,
       required this.invoices,
-      required this.filteredCount});
+      required this.filteredCount,
+      this.customer});
   final CustomerHistorySummary summary;
   final List<CustomerHistoryInvoice> invoices;
   final int filteredCount;
+  final Map<String, dynamic>? customer;
   factory CustomerHistoryPage.fromJson(Map<String, dynamic> json) =>
       CustomerHistoryPage(
         summary: CustomerHistorySummary.fromJson(
@@ -166,6 +168,9 @@ class CustomerHistoryPage {
                 Map<String, dynamic>.from(item as Map)))
             .toList(),
         filteredCount: (json['filtered_count'] as num?)?.toInt() ?? 0,
+        customer: json['customer'] is Map
+            ? Map<String, dynamic>.from(json['customer'] as Map)
+            : null,
       );
 }
 

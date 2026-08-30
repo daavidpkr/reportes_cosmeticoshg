@@ -32,17 +32,22 @@ class CustomerHistoryRepository implements CustomerHistoryDataSource {
   }) async {
     const rpc = 'list_customer_invoice_history';
     try {
-      final result = await _client.rpc(rpc, params: {
-        'p_customer_id': customerId,
-        'p_offset': offset,
-        'p_limit': 25,
-        'p_status': status,
-        'p_search': search.trim(),
-        'p_sort': sort,
-      });
+      final results = await Future.wait([
+        _client.rpc(rpc, params: {
+          'p_customer_id': customerId,
+          'p_offset': offset,
+          'p_limit': 25,
+          'p_status': status,
+          'p_search': search.trim(),
+          'p_sort': sort,
+        }),
+        _client
+            .rpc('get_customer_profile', params: {'p_customer_id': customerId}),
+      ]);
       try {
-        return CustomerHistoryPage.fromJson(
-            Map<String, dynamic>.from(result as Map));
+        final payload = Map<String, dynamic>.from(results[0] as Map);
+        payload['customer'] = results[1];
+        return CustomerHistoryPage.fromJson(payload);
       } catch (error) {
         debugPrint(
             'CustomerHistoryError type=${error.runtimeType} rpc=$rpc stage=serialization');

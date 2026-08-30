@@ -50,6 +50,16 @@ class FakeCustomerTerms implements CustomerTermsDataSource {
   }
 
   @override
+  Future<BillingCustomer> saveBusinessHours(
+          String customerId, String? businessHours) async =>
+      BillingCustomer(
+          id: customerId,
+          name: 'Cliente configurado',
+          commercialName: 'Comercial Uno',
+          paymentTermDays: 45,
+          businessHours: businessHours);
+
+  @override
   Future<CustomerSchedulingResult> schedulePending(
       BillingCustomer customer) async {
     scheduled++;
@@ -303,7 +313,118 @@ class RosaHistory extends FakeHistory {
   }
 }
 
+class BusinessHoursHistory extends FakeHistory {
+  String? businessHours;
+  bool active = true;
+
+  @override
+  Future<CustomerHistoryPage> load(
+      {required String customerId,
+      required int offset,
+      String status = 'all',
+      String search = '',
+      String sort = 'recent'}) async {
+    final page = await super.load(
+        customerId: customerId,
+        offset: offset,
+        status: status,
+        search: search,
+        sort: sort);
+    return CustomerHistoryPage(
+        summary: page.summary,
+        invoices: page.invoices,
+        filteredCount: page.filteredCount,
+        customer: {
+          'id': customerId,
+          'name': 'Cliente horario',
+          'commercial_name': 'Local Norte',
+          'payment_term_days': 30,
+          'horario_atencion': businessHours,
+          'configuration_active': active,
+        });
+  }
+}
+
 void main() {
+  testWidgets('perfil edita, normaliza y vuelve a leer el horario',
+      (tester) async {
+    final history = BusinessHoursHistory();
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: CustomerHistoryScreen(
+                customer: const BillingCustomer(
+                    id: 'hours',
+                    name: 'Cliente horario',
+                    commercialName: 'Local Norte',
+                    paymentTermDays: 30),
+                repository: history,
+                onEditTerm: (_) async => null,
+                onEditHours: (customer, value) async {
+                  history.businessHours = value?.trim();
+                  return BillingCustomer(
+                      id: customer.id,
+                      name: customer.name,
+                      commercialName: customer.commercialName,
+                      paymentTermDays: customer.paymentTermDays,
+                      businessHours: history.businessHours);
+                },
+                onSchedule: (_) async {},
+                onDelete: (_) async => false))));
+    await tester.pumpAndSettle();
+    expect(find.text('Perfil del Cliente'), findsOneWidget);
+    expect(find.text('Horario de atención: Sin registrar'), findsOneWidget);
+    expect(find.text('Editar horario'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('Editar plazo')).dx,
+        lessThan(tester.getTopLeft(find.text('Editar horario')).dx));
+
+    await tester.tap(find.text('Editar horario'));
+    await tester.pumpAndSettle();
+    expect(find.text('Editar horario de atención'), findsOneWidget);
+    expect(find.text('Horario actual: Sin registrar'), findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Guardar'))
+            .onPressed,
+        isNull);
+    await tester.enterText(
+        find.byType(TextField).last, '  Lunes a sábado, 08:30 - 19:00  ');
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Guardar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Horario de atención: Lunes a sábado, 08:30 - 19:00'),
+        findsOneWidget);
+    expect(find.text('Plazo de pago: 30 días'), findsOneWidget);
+  });
+
+  testWidgets('cliente histórico conserva perfil y deshabilita edición',
+      (tester) async {
+    final history = BusinessHoursHistory()..active = false;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: CustomerHistoryScreen(
+                customer: const BillingCustomer(
+                    id: 'deleted',
+                    name: 'Cliente horario',
+                    commercialName: 'Local Norte',
+                    paymentTermDays: 30,
+                    configurationActive: false),
+                repository: history,
+                onEditTerm: (_) async => null,
+                onEditHours: (_, __) => throw StateError('must not save'),
+                onSchedule: (_) async {},
+                onDelete: (_) async => false))));
+    await tester.pumpAndSettle();
+    expect(find.text('El cliente ya no está disponible para edición.'),
+        findsOneWidget);
+    expect(
+        tester
+            .widget<FilledButton>(
+                find.widgetWithText(FilledButton, 'Editar horario'))
+            .onPressed,
+        isNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('revisa y confirma solo programaciones masivas seguras',
       (tester) async {
     final bulk = FakeBulkReview();
@@ -452,6 +573,12 @@ void main() {
                     paymentTermDays: 45),
                 repository: history,
                 onEditTerm: (_) async => null,
+                onEditHours: (customer, value) async => BillingCustomer(
+                    id: customer.id,
+                    name: customer.name,
+                    commercialName: customer.commercialName,
+                    paymentTermDays: customer.paymentTermDays,
+                    businessHours: value),
                 onSchedule: (_) async {},
                 onDelete: (_) async => false))));
     await tester.pumpAndSettle();
@@ -497,13 +624,13 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Cliente configurado'));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
-    expect(find.text('Historial del cliente'), findsOneWidget);
+    expect(find.text('Perfil del Cliente'), findsOneWidget);
     expect(find.text('Total histórico'), findsOneWidget);
     expect(find.byType(Dialog), findsOneWidget);
-    expect(find.byTooltip('Cerrar historial'), findsOneWidget);
-    await tester.tap(find.byTooltip('Cerrar historial'));
+    expect(find.byTooltip('Cerrar Perfil del Cliente'), findsOneWidget);
+    await tester.tap(find.byTooltip('Cerrar Perfil del Cliente'));
     await tester.pumpAndSettle();
-    expect(find.text('Historial del cliente'), findsNothing);
+    expect(find.text('Perfil del Cliente'), findsNothing);
     expect(find.text('Editar plazo'), findsNothing);
     expect(find.text('Programar pendientes'), findsNothing);
     expect(find.text('Eliminar cliente'), findsNothing);
@@ -736,7 +863,7 @@ void main() {
       await tester.tap(find.text('Cliente configurado'));
       await tester.pumpAndSettle();
       expect(find.byType(Dialog), findsOneWidget);
-      expect(find.byTooltip('Cerrar historial'), findsOneWidget);
+      expect(find.byTooltip('Cerrar Perfil del Cliente'), findsOneWidget);
       expect(find.text('Editar plazo'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });

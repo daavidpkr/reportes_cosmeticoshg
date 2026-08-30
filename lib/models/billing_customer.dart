@@ -6,11 +6,15 @@ class BillingCustomer {
     required this.name,
     required this.commercialName,
     required this.paymentTermDays,
+    this.businessHours,
+    this.configurationActive = true,
   });
   final String id;
   final String name;
   final String commercialName;
   final int? paymentTermDays;
+  final String? businessHours;
+  final bool configurationActive;
   bool get configured => paymentTermDays != null;
 
   factory BillingCustomer.fromJson(Map<String, dynamic> json) =>
@@ -19,7 +23,14 @@ class BillingCustomer {
         name: json['name']?.toString() ?? '',
         commercialName: json['commercial_name']?.toString() ?? '',
         paymentTermDays: (json['payment_term_days'] as num?)?.toInt(),
+        businessHours: _optionalText(json['horario_atencion']),
+        configurationActive: json['configuration_active'] != false,
       );
+}
+
+String? _optionalText(Object? value) {
+  final text = value?.toString().trim() ?? '';
+  return text.isEmpty ? null : text;
 }
 
 class InvoicePaymentPlan {

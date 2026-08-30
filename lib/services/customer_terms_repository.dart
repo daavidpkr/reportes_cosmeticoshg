@@ -13,6 +13,8 @@ abstract interface class CustomerTermsDataSource {
       {required bool confirmManualOverride});
   Future<void> deleteCustomer(BillingCustomer customer);
   Future<CustomerSchedulingResult> schedulePending(BillingCustomer customer);
+  Future<BillingCustomer> saveBusinessHours(
+      String customerId, String? businessHours);
 }
 
 class CustomerSchedulingResult {
@@ -46,11 +48,22 @@ class CustomerTermsRepository implements CustomerTermsDataSource {
   @override
   Future<List<BillingCustomer>> listCustomers() async => (await _client
           .from('billing_customers')
-          .select('id,name,commercial_name,payment_term_days')
+          .select(
+              'id,name,commercial_name,payment_term_days,horario_atencion,configuration_active')
           .eq('configuration_active', true)
           .order('name'))
       .map<BillingCustomer>((row) => BillingCustomer.fromJson(row))
       .toList();
+
+  @override
+  Future<BillingCustomer> saveBusinessHours(
+      String customerId, String? businessHours) async {
+    final value = await _client.rpc('update_customer_business_hours', params: {
+      'p_customer_id': customerId,
+      'p_business_hours': businessHours,
+    });
+    return BillingCustomer.fromJson(Map<String, dynamic>.from(value as Map));
+  }
 
   Map<String, dynamic> _identity(BillingCustomer customer) => {
         'p_name': customer.name,

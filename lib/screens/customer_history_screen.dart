@@ -11,6 +11,7 @@ class CustomerHistoryScreen extends StatefulWidget {
   const CustomerHistoryScreen(
       {required this.customer,
       required this.onEditTerm,
+      required this.onEditHours,
       required this.onSchedule,
       required this.onDelete,
       this.repository,
@@ -18,6 +19,7 @@ class CustomerHistoryScreen extends StatefulWidget {
   final BillingCustomer customer;
   final CustomerHistoryDataSource? repository;
   final Future<int?> Function(BillingCustomer) onEditTerm;
+  final Future<BillingCustomer> Function(BillingCustomer, String?) onEditHours;
   final Future<void> Function(BillingCustomer) onSchedule;
   final Future<bool> Function(BillingCustomer) onDelete;
   @override
@@ -72,6 +74,9 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
       );
       if (!mounted) return;
       setState(() {
+        if (page.customer != null) {
+          customer = BillingCustomer.fromJson(page.customer!);
+        }
         summary = page.summary;
         filteredCount = page.filteredCount;
         if (!more) invoices.clear();
@@ -97,7 +102,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
   }
 
   Future<void> _editTerm() async {
-    if (actionBusy) return;
+    if (actionBusy || !customer.configurationActive) return;
     setState(() => actionBusy = true);
     try {
       final days = await widget.onEditTerm(customer);
@@ -106,12 +111,34 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
             id: customer.id,
             name: customer.name,
             commercialName: customer.commercialName,
-            paymentTermDays: days));
+            paymentTermDays: days,
+            businessHours: customer.businessHours,
+            configurationActive: customer.configurationActive));
         await _load();
       }
     } finally {
       if (mounted) setState(() => actionBusy = false);
     }
+  }
+
+  Future<void> _editHours() async {
+    if (actionBusy || !customer.configurationActive) return;
+    final updated = await showDialog<BillingCustomer>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => _BusinessHoursDialog(
+            customer: customer,
+            onSave: (value) => widget.onEditHours(customer, value)));
+    if (updated == null || !mounted) return;
+    await _load();
+    if (!mounted) return;
+    if (customer.businessHours != updated.businessHours) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo verificar el horario guardado.')));
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Horario de atención guardado.')));
   }
 
   Future<void> _schedule() async {
@@ -292,10 +319,10 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                 padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
                 child: Row(children: [
                   Expanded(
-                      child: Text('Historial del cliente',
+                      child: Text('Perfil del Cliente',
                           style: Theme.of(context).textTheme.titleLarge)),
                   IconButton(
-                      tooltip: 'Cerrar historial',
+                      tooltip: 'Cerrar Perfil del Cliente',
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.close))
                 ]),
@@ -314,8 +341,14 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                         customer: customer,
                         busy: actionBusy,
                         onEdit: _editTerm,
+                        onEditHours: _editHours,
                         onSchedule: customer.configured ? _schedule : null,
                         onDelete: _delete),
+                    if (!customer.configurationActive) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                          'El cliente ya no está disponible para edición.'),
+                    ],
                     const SizedBox(height: 16),
                     if (loading && summary == null)
                       const Padding(
@@ -432,6 +465,9 @@ class _Header extends StatelessWidget {
                 ? 'Sin nombre comercial'
                 : customer.commercialName),
             const SizedBox(height: 8),
+            Text(
+                'Horario de atención: ${customer.businessHours ?? 'Sin registrar'}',
+                softWrap: true),
             Text(customer.paymentTermDays == null
                 ? 'Plazo pendiente'
                 : 'Plazo de pago: ${customer.paymentTermDays} días'),
@@ -443,33 +479,46 @@ class _CustomerActions extends StatelessWidget {
       {required this.customer,
       required this.busy,
       required this.onEdit,
+      required this.onEditHours,
       required this.onSchedule,
       required this.onDelete});
   final BillingCustomer customer;
   final bool busy;
   final VoidCallback onEdit, onDelete;
+  final VoidCallback onEditHours;
   final VoidCallback? onSchedule;
 
   @override
   Widget build(BuildContext context) =>
       Wrap(spacing: 8, runSpacing: 8, children: [
         FilledButton.tonalIcon(
-            onPressed: busy ? null : onEdit,
+            onPressed: busy || !customer.configurationActive ? null : onEdit,
             icon: const Icon(Icons.edit_outlined),
             label: const Text('Editar plazo')),
+        Tooltip(
+          message: customer.configurationActive
+              ? 'Editar horario de atención'
+              : 'El cliente ya no está disponible para edición',
+          child: FilledButton.tonalIcon(
+              onPressed:
+                  busy || !customer.configurationActive ? null : onEditHours,
+              icon: const Icon(Icons.schedule_outlined),
+              label: const Text('Editar horario')),
+        ),
         Tooltip(
           message: customer.configured
               ? 'Programar facturas pendientes'
               : 'Configura primero los días de pago',
           child: FilledButton.tonalIcon(
-              onPressed: busy ? null : onSchedule,
+              onPressed:
+                  busy || !customer.configurationActive ? null : onSchedule,
               icon: const Icon(Icons.event_repeat_outlined),
               label: const Text('Programar pendientes')),
         ),
         OutlinedButton.icon(
             style: OutlinedButton.styleFrom(
                 foregroundColor: Theme.of(context).colorScheme.error),
-            onPressed: busy ? null : onDelete,
+            onPressed: busy || !customer.configurationActive ? null : onDelete,
             icon: const Icon(Icons.delete_outline),
             label: const Text('Eliminar cliente')),
         if (busy)
@@ -479,6 +528,116 @@ class _CustomerActions extends StatelessWidget {
                   dimension: 20,
                   child: CircularProgressIndicator(strokeWidth: 2)))
       ]);
+}
+
+class _BusinessHoursDialog extends StatefulWidget {
+  const _BusinessHoursDialog({required this.customer, required this.onSave});
+  final BillingCustomer customer;
+  final Future<BillingCustomer> Function(String?) onSave;
+
+  @override
+  State<_BusinessHoursDialog> createState() => _BusinessHoursDialogState();
+}
+
+class _BusinessHoursDialogState extends State<_BusinessHoursDialog> {
+  late final TextEditingController controller =
+      TextEditingController(text: widget.customer.businessHours ?? '');
+  bool saving = false;
+  String? error;
+
+  String? get normalized {
+    final value = controller.text.trim();
+    return value.isEmpty ? null : value;
+  }
+
+  bool get changed => normalized != widget.customer.businessHours;
+
+  @override
+  void dispose() {
+    controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> save() async {
+    if (saving || !changed || controller.text.length > 120) return;
+    if (normalized == null && widget.customer.businessHours != null) {
+      final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+                title: const Text('Quitar horario'),
+                content: const Text(
+                    'El horario actual se eliminará. ¿Deseas continuar?'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      child: const Text('Cancelar')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(context, true),
+                      child: const Text('Quitar horario')),
+                ],
+              ));
+      if (confirmed != true || !mounted) return;
+    }
+    setState(() {
+      saving = true;
+      error = null;
+    });
+    try {
+      final result = await widget.onSave(normalized);
+      if (mounted) Navigator.pop(context, result);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          saving = false;
+          error = 'No se pudo guardar el horario. Inténtalo nuevamente.';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Editar horario de atención'),
+        content: SizedBox(
+          width: 480,
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(widget.customer.name,
+                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                    'Horario actual: ${widget.customer.businessHours ?? 'Sin registrar'}'),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  enabled: !saving,
+                  maxLength: 120,
+                  maxLines: 3,
+                  onChanged: (_) => setState(() => error = null),
+                  decoration: InputDecoration(
+                      labelText: 'Horario de atención',
+                      hintText: 'Lunes a viernes, 09:00 - 17:00',
+                      errorText: error),
+                  onSubmitted: (_) => save(),
+                ),
+              ]),
+        ),
+        actions: [
+          TextButton(
+              onPressed: saving ? null : () => Navigator.pop(context),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: saving || !changed || controller.text.length > 120
+                  ? null
+                  : save,
+              child: saving
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text('Guardar')),
+        ],
+      );
 }
 
 class _Kpis extends StatelessWidget {

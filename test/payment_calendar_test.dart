@@ -384,8 +384,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(repository.resolvedInvoice, '684');
       expect(history.customerId, 'customer-684');
-      expect(find.text('Historial del cliente'), findsOneWidget);
-      await tester.tap(find.byTooltip('Cerrar historial'));
+      expect(find.text('Perfil del Cliente'), findsOneWidget);
+      await tester.tap(find.byTooltip('Cerrar Perfil del Cliente'));
       await tester.pumpAndSettle();
       expect(find.text('Facturas pendientes'), findsOneWidget);
       expect(find.text('Agosto 2026'), findsOneWidget);

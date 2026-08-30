@@ -41,7 +41,7 @@ class PaymentCalendarRepository
     final row = await _client
         .from('invoice_payment_terms')
         .select(
-            'customer_id,billing_customers(id,name,commercial_name,payment_term_days)')
+            'customer_id,billing_customers(id,name,commercial_name,payment_term_days,horario_atencion,configuration_active)')
         .eq('factura_id', facturaId)
         .maybeSingle();
     final customer = row?['billing_customers'];

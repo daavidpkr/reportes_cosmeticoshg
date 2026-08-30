@@ -105,6 +105,10 @@ class _ClientesScreenState extends State<ClientesScreen> {
     return days;
   }
 
+  Future<BillingCustomer> _editHours(
+          BillingCustomer customer, String? businessHours) async =>
+      _repository.saveBusinessHours(customer.id, businessHours);
+
   Future<bool> _delete(BillingCustomer c) async {
     final ok = await showDialog<bool>(
         context: context,
@@ -159,6 +163,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
           customer: customer,
           repository: widget.historyRepository,
           onEditTerm: _edit,
+          onEditHours: _editHours,
           onSchedule: _schedule,
           onDelete: _delete));
 
