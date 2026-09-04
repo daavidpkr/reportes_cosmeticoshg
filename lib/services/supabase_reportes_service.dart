@@ -77,8 +77,9 @@ Map<String, dynamic> construirParametrosImportarFacturas({
     'p_month': mes,
     'p_invoices': assigned != null
         ? assigned
-            .map((item) =>
-                _facturaJson(item.factura, vendedor: item.vendedor.trim()))
+            .map((item) => _facturaJson(item.factura,
+                vendedor: item.vendedor.trim(),
+                paymentTermDays: item.paymentTermDays))
             .toList()
         : plain!.map(_facturaJson).toList(),
   };
@@ -102,7 +103,9 @@ void verificarVendedoresPersistidos({
   }
 }
 
-Map<String, dynamic> _facturaJson(Factura factura, {String? vendedor}) => {
+Map<String, dynamic> _facturaJson(Factura factura,
+        {String? vendedor, int? paymentTermDays}) =>
+    {
       'ref_fact': factura.secuencial.trim(),
       'nro_fact': factura.secuencial.trim(),
       'cliente': factura.cliente.trim(),
@@ -111,6 +114,7 @@ Map<String, dynamic> _facturaJson(Factura factura, {String? vendedor}) => {
           parseInvoiceDate(factura.fecha)?.toIso8601String().substring(0, 10),
       'venta': factura.total,
       if (vendedor != null) 'vendedor': vendedor,
+      if (paymentTermDays != null) 'payment_term_days': paymentTermDays,
     };
 
 class CobroMensual {
@@ -232,6 +236,7 @@ List<FilaVenta> construirFilasConsolidadas({
       vendedor: dato['vendedor']?.toString() ?? '',
       esmalte: (dato['esmaltes'] as num?)?.toInt() ?? 0,
       venta: (factura['venta'] as num?)?.toDouble() ?? 0,
+      paymentTermDays: _paymentTermFromInvoice(factura),
       abonos: pagos,
     );
   }
@@ -241,6 +246,17 @@ List<FilaVenta> construirFilasConsolidadas({
     return fecha != 0 ? fecha : b.numeroFactura.compareTo(a.numeroFactura);
   });
   return resultado;
+}
+
+int? _paymentTermFromInvoice(Map<String, dynamic> factura) {
+  final relation = factura['invoice_payment_terms'];
+  final term =
+      relation is List ? (relation.isEmpty ? null : relation.first) : relation;
+  if (term is! Map) return null;
+  final customer = term['billing_customers'];
+  return customer is Map
+      ? (customer['payment_term_days'] as num?)?.toInt()
+      : null;
 }
 
 class SupabaseReportesService {
@@ -299,7 +315,8 @@ class SupabaseReportesService {
         (desde, hasta) => _client
             .from('facturas_maestras')
             .select(
-              'ref_fact,cliente,nombre_comercial,fecha,nro_fact,venta',
+              'ref_fact,cliente,nombre_comercial,fecha,nro_fact,venta,'
+              'invoice_payment_terms(billing_customers(payment_term_days))',
             )
             .range(desde, hasta),
       ),
@@ -308,6 +325,35 @@ class SupabaseReportesService {
       filas: resultados[0],
       facturas: resultados[1],
     );
+  }
+
+  /// Snapshot canónico para exportar: no depende de pestañas, widgets ni de la
+  /// caché del reporte activo. Conserva el orden de fila de cada mes.
+  Future<List<FilaVenta>> obtenerFilasParaReportes(
+      Iterable<String> nombresReportes) async {
+    final meses = nombresReportes.toSet().toList(growable: false);
+    if (meses.isEmpty) return const [];
+    final rows = List<Map<String, dynamic>>.from(await _client
+        .from('reportes_ventas')
+        .select('mes_reporte,nro_fila,ref_fact,vendedor,esmaltes,abonos,'
+            'numeros_recibo,comentarios_abonos')
+        .inFilter('mes_reporte', meses)
+        .order('mes_reporte')
+        .order('nro_fila'));
+    final refs = rows
+        .map((row) => row['ref_fact']?.toString().trim() ?? '')
+        .where((ref) => ref.isNotEmpty)
+        .toSet()
+        .toList();
+    if (refs.isEmpty) return const [];
+    final invoices = List<Map<String, dynamic>>.from(await _client
+        .from('facturas_maestras')
+        .select('ref_fact,cliente,nombre_comercial,fecha,nro_fact,venta,'
+            'invoice_payment_terms(billing_customers(payment_term_days))')
+        .inFilter('ref_fact', refs));
+    final result = construirFilasConsolidadas(filas: rows, facturas: invoices);
+    result.sort((a, b) => a.numero.compareTo(b.numero));
+    return result;
   }
 
   Future<List<Map<String, dynamic>>> _obtenerTodasLasFacturas() =>

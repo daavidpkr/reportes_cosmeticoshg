@@ -376,12 +376,21 @@ class ReporteExporter {
     if (comentarios.isNotEmpty) {
       documento.addPage(
         pw.MultiPage(
-          pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(32),
+          pageFormat: PdfPageFormat.a4.landscape,
+          margin: const pw.EdgeInsets.symmetric(horizontal: 24, vertical: 22),
           header: (_) => _encabezado('COMENTARIOS DE ABONOS', rosa),
           footer: _piePagina,
           build: (_) => [
             pw.TableHelper.fromTextArray(
+              columnWidths: const {
+                0: pw.FlexColumnWidth(.65),
+                1: pw.FlexColumnWidth(1.25),
+                2: pw.FlexColumnWidth(2.5),
+                3: pw.FlexColumnWidth(1),
+                4: pw.FlexColumnWidth(1),
+                5: pw.FlexColumnWidth(2),
+                6: pw.FlexColumnWidth(4),
+              },
               headers: const [
                 'FILA',
                 'FACTURA',
@@ -398,8 +407,9 @@ class ReporteExporter {
                 fontWeight: pw.FontWeight.bold,
                 fontSize: 9,
               ),
-              cellStyle: const pw.TextStyle(fontSize: 9),
-              cellPadding: const pw.EdgeInsets.all(6),
+              cellStyle: const pw.TextStyle(fontSize: 8),
+              cellPadding:
+                  const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 6),
               border: pw.TableBorder.all(color: PdfColors.grey400, width: .5),
               oddRowDecoration: const pw.BoxDecoration(
                 color: PdfColors.grey100,

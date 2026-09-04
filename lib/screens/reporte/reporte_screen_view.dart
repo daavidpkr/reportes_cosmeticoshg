@@ -496,6 +496,7 @@ extension _ReporteScreenView on _ReporteScreenState {
                 onChanged: (v) => setState(() => _filtroEstado = v ?? 'todos'),
               ),
             ),
+            _filtroPlazoWidget(),
           ],
         ),
       );
@@ -653,6 +654,36 @@ extension _ReporteScreenView on _ReporteScreenState {
         ),
       );
 
+  List<int> get _plazosDisponibles =>
+      (_vistaGeneral ? _filasConsolidadas : _filas)
+          .map((fila) => fila.paymentTermDays)
+          .whereType<int>()
+          .toSet()
+          .toList()
+        ..sort();
+
+  Widget _filtroPlazoWidget({bool compact = false}) => SizedBox(
+        width: compact ? 155 : 180,
+        child: DropdownButtonFormField<String>(
+          isExpanded: true,
+          initialValue: _filtroPlazo,
+          decoration: InputDecoration(
+            labelText: 'Días de pago',
+            isDense: compact,
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            const DropdownMenuItem(value: '', child: Text('Todos')),
+            const DropdownMenuItem(
+                value: 'sin_establecer', child: Text('Sin establecer')),
+            ..._plazosDisponibles.map((days) => DropdownMenuItem(
+                value: '$days',
+                child: Text('$days ${days == 1 ? 'día' : 'días'}'))),
+          ],
+          onChanged: (value) => setState(() => _filtroPlazo = value ?? ''),
+        ),
+      );
+
   Widget _campoBusquedaRedisenado() => TextField(
         controller: _busquedaController,
         onChanged: (v) => setState(() => _filtro = v.trim()),
@@ -729,6 +760,7 @@ extension _ReporteScreenView on _ReporteScreenState {
           final actions = <Widget>[
             _filtroVendedorRedisenado(),
             _filtroEstadoRedisenado(),
+            _filtroPlazoWidget(compact: true),
             if (!_vistaGeneral) ...[
               _botonBarra(
                 Icons.upload_file,
@@ -1651,6 +1683,8 @@ extension _ReporteScreenView on _ReporteScreenState {
               Expanded(child: _filtroEstadoMovil()),
             ],
           ),
+          const SizedBox(height: 8),
+          _filtroPlazoWidget(),
           const SizedBox(height: 12),
           Row(
             children: [

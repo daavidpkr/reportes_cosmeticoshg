@@ -69,6 +69,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   String _filtro = '';
   String _filtroVendedor = '';
   String _filtroEstado = 'todos';
+  String _filtroPlazo = '';
   final Map<String, String> _filtrosColumnas = {};
   String? _ordenColumna;
   bool _ordenAscendente = true;
@@ -597,122 +598,154 @@ class _ReporteScreenState extends State<ReporteScreen> {
     final comentarioController = TextEditingController(text: abono.comentario);
     final formKey = GlobalKey<FormState>();
     var eliminar = false;
+    var pagoCompleto = false;
+    var valorManual = montoController.text;
+    final saldoInicial = fila.saldo + (nuevo ? 0 : abono.valor);
     final resultado = await showDialog<(double, int?, String)>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Abono ${indice + 1}'),
-        content: SizedBox(
-          width: 360,
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: montoController,
-                  autofocus: true,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Valor',
-                    prefixText: '\$ ',
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (valor) => validarValorAbono(valor ?? ''),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: reciboController,
-                  keyboardType: TextInputType.number,
-                  validator: (valor) => validarNumeroRecibo(valor ?? ''),
-                  decoration: const InputDecoration(
-                    labelText: 'Número de recibo (opcional)',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: comentarioController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Comentario',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          if (!nuevo && abono.valor > 0)
-            Semantics(
-              label: 'Eliminar abono ${indice + 1}',
-              button: true,
-              child: Tooltip(
-                message: 'Eliminar abono',
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.error),
-                  onPressed: () async {
-                    final factura = fila.numeroFactura.trim().isEmpty
-                        ? fila.referencia
-                        : fila.numeroFactura;
-                    final confirmar = await showDialog<bool>(
-                      context: context,
-                      barrierDismissible: false,
-                      builder: (context) => AlertDialog(
-                        title: const Text('Eliminar abono'),
-                        content: Text(
-                          'Se eliminará el abono de \$${abono.valor.toStringAsFixed(2)} de la factura $factura.\n\n'
-                          'El saldo pendiente aumentará nuevamente y los totales de cobros serán recalculados.\n\n'
-                          '¿Deseas continuar?',
+      builder: (context) => StatefulBuilder(
+          builder: (context, actualizar) => AlertDialog(
+                title: Text('Abono ${indice + 1}'),
+                content: SizedBox(
+                  width: 360,
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextFormField(
+                          controller: montoController,
+                          autofocus: true,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          readOnly: pagoCompleto,
+                          decoration: const InputDecoration(
+                            labelText: 'Valor',
+                            prefixText: '\$ ',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (valor) => validarValorAbono(valor ?? ''),
                         ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            child: const Text('Volver'),
+                        CheckboxListTile(
+                          key: const ValueKey('full-payment-checkbox'),
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Pago completo'),
+                          value: pagoCompleto,
+                          onChanged: (fila.anulada ||
+                                  fila.pagada ||
+                                  saldoInicial <= .005)
+                              ? null
+                              : (value) => actualizar(() {
+                                    pagoCompleto = value ?? false;
+                                    if (pagoCompleto) {
+                                      valorManual = montoController.text;
+                                      montoController.text =
+                                          saldoInicial.toStringAsFixed(2);
+                                    } else {
+                                      montoController.text = valorManual;
+                                    }
+                                  }),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: reciboController,
+                          keyboardType: TextInputType.number,
+                          validator: (valor) =>
+                              validarNumeroRecibo(valor ?? ''),
+                          decoration: const InputDecoration(
+                            labelText: 'Número de recibo (opcional)',
+                            border: OutlineInputBorder(),
                           ),
-                          FilledButton.icon(
-                            style: FilledButton.styleFrom(
-                                backgroundColor:
-                                    Theme.of(context).colorScheme.error),
-                            onPressed: () => Navigator.pop(context, true),
-                            icon: const Icon(Icons.delete_outline),
-                            label: const Text('Eliminar abono'),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: comentarioController,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            labelText: 'Comentario',
+                            border: OutlineInputBorder(),
                           ),
-                        ],
-                      ),
-                    );
-                    if (confirmar == true && context.mounted) {
-                      eliminar = true;
-                      Navigator.pop(context);
-                    }
-                  },
-                  icon: const Icon(Icons.delete_outline),
-                  label: const Text('Eliminar abono'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          FilledButton(
-            onPressed: () {
-              if (!(formKey.currentState?.validate() ?? false)) return;
-              Navigator.pop(context, (
-                double.tryParse(montoController.text.replaceAll(',', '.')) ?? 0,
-                reciboController.text.trim().isEmpty
-                    ? null
-                    : int.parse(reciboController.text.trim()),
-                comentarioController.text.trim(),
-              ));
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancelar'),
+                  ),
+                  if (!nuevo && abono.valor > 0)
+                    Semantics(
+                      label: 'Eliminar abono ${indice + 1}',
+                      button: true,
+                      child: Tooltip(
+                        message: 'Eliminar abono',
+                        child: TextButton.icon(
+                          style: TextButton.styleFrom(
+                              foregroundColor:
+                                  Theme.of(context).colorScheme.error),
+                          onPressed: () async {
+                            final factura = fila.numeroFactura.trim().isEmpty
+                                ? fila.referencia
+                                : fila.numeroFactura;
+                            final confirmar = await showDialog<bool>(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Eliminar abono'),
+                                content: Text(
+                                  'Se eliminará el abono de \$${abono.valor.toStringAsFixed(2)} de la factura $factura.\n\n'
+                                  'El saldo pendiente aumentará nuevamente y los totales de cobros serán recalculados.\n\n'
+                                  '¿Deseas continuar?',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, false),
+                                    child: const Text('Volver'),
+                                  ),
+                                  FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                        backgroundColor: Theme.of(context)
+                                            .colorScheme
+                                            .error),
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    icon: const Icon(Icons.delete_outline),
+                                    label: const Text('Eliminar abono'),
+                                  ),
+                                ],
+                              ),
+                            );
+                            if (confirmar == true && context.mounted) {
+                              eliminar = true;
+                              Navigator.pop(context);
+                            }
+                          },
+                          icon: const Icon(Icons.delete_outline),
+                          label: const Text('Eliminar abono'),
+                        ),
+                      ),
+                    ),
+                  FilledButton(
+                    onPressed: () {
+                      if (!(formKey.currentState?.validate() ?? false)) return;
+                      Navigator.pop(context, (
+                        double.tryParse(
+                                montoController.text.replaceAll(',', '.')) ??
+                            0,
+                        reciboController.text.trim().isEmpty
+                            ? null
+                            : int.parse(reciboController.text.trim()),
+                        comentarioController.text.trim(),
+                      ));
+                    },
+                    child: const Text('Guardar'),
+                  ),
+                ],
+              )),
     );
     unawaited(Future<void>.delayed(kThemeAnimationDuration, () {
       montoController.dispose();
@@ -1001,8 +1034,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
   Future<void> _guardar() async {
     await _guardarProgreso();
     if (!mounted) return;
-    var desde = _reportes.reportes.first.id;
-    var hasta = _reportes.reportes.last.id;
+    var mes = _reportes.activo.id;
+    var desde = mes;
+    var hasta = mes;
+    var porRango = false;
     String? vendedor;
     final opcion = await showDialog<bool>(
       context: context,
@@ -1014,52 +1049,72 @@ class _ReporteScreenState extends State<ReporteScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('Escoja el rango del reporte'),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Descargar por rango'),
+                  value: porRango,
+                  onChanged: (value) => actualizar(() {
+                    porRango = value ?? false;
+                    desde = mes;
+                    hasta = mes;
+                  }),
                 ),
                 const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: desde,
-                        decoration: const InputDecoration(
-                          labelText: 'Desde',
-                          border: OutlineInputBorder(),
+                if (!porRango)
+                  DropdownButtonFormField<String>(
+                    initialValue: mes,
+                    decoration: const InputDecoration(
+                        labelText: 'Mes', border: OutlineInputBorder()),
+                    items: _reportes.reportes
+                        .map((r) => DropdownMenuItem(
+                            value: r.id, child: Text(r.nombre)))
+                        .toList(),
+                    onChanged: (v) => actualizar(() => mes = v ?? mes),
+                  )
+                else
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: desde,
+                          decoration: const InputDecoration(
+                            labelText: 'Desde',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _reportes.reportes
+                              .map(
+                                (r) => DropdownMenuItem(
+                                  value: r.id,
+                                  child: Text(r.nombre),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) =>
+                              actualizar(() => desde = v ?? desde),
                         ),
-                        items: _reportes.reportes
-                            .map(
-                              (r) => DropdownMenuItem(
-                                value: r.id,
-                                child: Text(r.nombre),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) => actualizar(() => desde = v ?? desde),
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: hasta,
-                        decoration: const InputDecoration(
-                          labelText: 'Hasta',
-                          border: OutlineInputBorder(),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          initialValue: hasta,
+                          decoration: const InputDecoration(
+                            labelText: 'Hasta',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _reportes.reportes
+                              .map(
+                                (r) => DropdownMenuItem(
+                                  value: r.id,
+                                  child: Text(r.nombre),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) =>
+                              actualizar(() => hasta = v ?? hasta),
                         ),
-                        items: _reportes.reportes
-                            .map(
-                              (r) => DropdownMenuItem(
-                                value: r.id,
-                                child: Text(r.nombre),
-                              ),
-                            )
-                            .toList(),
-                        onChanged: (v) => actualizar(() => hasta = v ?? hasta),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
                 const SizedBox(height: 14),
                 DropdownButtonFormField<String?>(
                   initialValue: vendedor,
@@ -1103,6 +1158,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
       ),
     );
     if (opcion != true) return;
+    if (!porRango) {
+      desde = mes;
+      hasta = mes;
+    }
     if (desde.compareTo(hasta) > 0) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1118,7 +1177,21 @@ class _ReporteScreenState extends State<ReporteScreen> {
     final reportes = _reportes.reportes
         .where((r) => r.id.compareTo(desde) >= 0 && r.id.compareTo(hasta) <= 0)
         .toList();
-    final todas = reportes.expand((r) => r.filas).toList();
+    if (reportes.isEmpty) {
+      _mostrarErrorNube('No existe información para el período seleccionado.');
+      return;
+    }
+    // Deliberadamente no usamos `ReporteMensual.filas`: esa lista solo tiene
+    // los meses abiertos por la interfaz. La exportación siempre parte de un
+    // snapshot explícito de Supabase.
+    List<FilaVenta> todas;
+    try {
+      todas = await _supabaseReportes
+          .obtenerFilasParaReportes(reportes.map((r) => r.nombre));
+    } catch (error) {
+      _mostrarErrorNube('No se pudieron consultar los datos del PDF: $error');
+      return;
+    }
     final filas = vendedor == null
         ? todas
         : todas.where((f) => f.vendedor == vendedor).toList();
@@ -1344,6 +1417,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       _filtro = '';
       _filtroVendedor = '';
       _filtroEstado = 'todos';
+      _filtroPlazo = '';
 
       if (!mounted) return;
 
@@ -1476,6 +1550,15 @@ class _ReporteScreenState extends State<ReporteScreen> {
     }).where((item) {
       if (_filtroVendedor.isNotEmpty &&
           item.value.vendedor != _filtroVendedor) {
+        return false;
+      }
+      if (_filtroPlazo == 'sin_establecer' &&
+          item.value.paymentTermDays != null) {
+        return false;
+      }
+      if (_filtroPlazo.isNotEmpty &&
+          _filtroPlazo != 'sin_establecer' &&
+          item.value.paymentTermDays?.toString() != _filtroPlazo) {
         return false;
       }
       return switch (_filtroEstado) {
@@ -1672,6 +1755,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
           fila.vendedor.toLowerCase().contains(texto);
       if (!coincide ||
           (_filtroVendedor.isNotEmpty && fila.vendedor != _filtroVendedor)) {
+        return false;
+      }
+      if (_filtroPlazo == 'sin_establecer' && fila.paymentTermDays != null) {
+        return false;
+      }
+      if (_filtroPlazo.isNotEmpty &&
+          _filtroPlazo != 'sin_establecer' &&
+          fila.paymentTermDays?.toString() != _filtroPlazo) {
         return false;
       }
       return switch (_filtroEstado) {

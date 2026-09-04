@@ -23,6 +23,10 @@ class ReviewableInvoice {
   final Factura factura;
   final PreparedInvoiceXml file;
   String? vendedor;
+  int? paymentTermDays;
+  bool termEstablished = false;
+  String get customerKey =>
+      '${factura.cliente.trim().toLowerCase()}|${factura.nombreComercial.trim().toLowerCase()}';
 }
 
 class InvoiceBatchReview {

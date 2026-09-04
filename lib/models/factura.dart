@@ -31,8 +31,15 @@ class Factura {
 }
 
 class FacturaAsignada {
-  const FacturaAsignada({required this.factura, required this.vendedor});
+  const FacturaAsignada({
+    required this.factura,
+    required this.vendedor,
+    this.paymentTermDays,
+  });
 
   final Factura factura;
   final String vendedor;
+
+  /// Only supplied for a customer whose canonical term is missing.
+  final int? paymentTermDays;
 }
