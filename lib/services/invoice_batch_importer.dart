@@ -25,8 +25,9 @@ class ReviewableInvoice {
   String? vendedor;
   int? paymentTermDays;
   bool termEstablished = false;
-  String get customerKey =>
-      '${factura.cliente.trim().toLowerCase()}|${factura.nombreComercial.trim().toLowerCase()}';
+  String get customerKey => factura.identificacionComprador.trim().isNotEmpty
+      ? 'id:${factura.identificacionComprador.trim()}'
+      : '${factura.cliente.trim().toLowerCase()}|${factura.nombreComercial.trim().toLowerCase()}';
 }
 
 class InvoiceBatchReview {

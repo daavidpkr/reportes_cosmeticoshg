@@ -66,8 +66,7 @@ class CustomerTermsRepository implements CustomerTermsDataSource {
   }
 
   Map<String, dynamic> _identity(BillingCustomer customer) => {
-        'p_name': customer.name,
-        'p_commercial_name': customer.commercialName,
+        'p_customer_id': customer.id,
       };
 
   @override

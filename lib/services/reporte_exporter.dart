@@ -6,10 +6,73 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/fila_venta.dart';
+import '../models/billing_customer.dart';
 import 'web_download_stub.dart'
     if (dart.library.js_interop) 'web_download.dart';
 
 class ReporteExporter {
+  /// Customer export receives a fresh Supabase snapshot from ClientesScreen;
+  /// no identifier is included in this presentation document.
+  Future<String> guardarClientes(List<BillingCustomer> customers) async {
+    final document = pw.Document(title: 'Listado de clientes - Cosméticos HG');
+    final pink = PdfColor.fromHex('#B71157');
+    document.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4.landscape,
+      margin: const pw.EdgeInsets.all(24),
+      header: (_) => _encabezado('LISTADO DE CLIENTES', pink),
+      footer: _piePagina,
+      build: (_) => [
+        pw.Text(
+            'Generado: ${DateTime.now().toLocal().toString().substring(0, 16)}',
+            style: const pw.TextStyle(fontSize: 8)),
+        pw.SizedBox(height: 10),
+        pw.TableHelper.fromTextArray(
+          headers: const [
+            'NRO.',
+            'CLIENTE',
+            'NOMBRE COMERCIAL',
+            'PLAZO',
+            'HORARIO',
+            'ESTADO'
+          ],
+          data: List.generate(customers.length, (index) {
+            final c = customers[index];
+            return [
+              index + 1,
+              c.name,
+              c.commercialName,
+              c.paymentTermDays == null
+                  ? 'Pendiente'
+                  : '${c.paymentTermDays} días',
+              c.businessHours ?? 'Sin horario',
+              c.configured ? 'Configurado' : 'Pendiente'
+            ];
+          }),
+          headerDecoration: pw.BoxDecoration(color: pink),
+          headerStyle: pw.TextStyle(
+              color: PdfColors.white,
+              fontWeight: pw.FontWeight.bold,
+              fontSize: 8),
+          cellStyle: const pw.TextStyle(fontSize: 8),
+          cellPadding:
+              const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 5),
+          border: pw.TableBorder.all(color: PdfColors.grey400, width: .5),
+          oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+        ),
+      ],
+    ));
+    final bytes = await document.save();
+    const fileName = 'listado_clientes.pdf';
+    if (kIsWeb) {
+      descargarArchivoWeb(bytes, fileName);
+      return fileName;
+    }
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}${Platform.pathSeparator}$fileName');
+    await file.writeAsBytes(bytes, flush: true);
+    return file.path;
+  }
+
   Future<String> guardar(
     List<FilaVenta> filas, {
     String? vendedor,

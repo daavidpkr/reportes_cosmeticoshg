@@ -7,6 +7,7 @@ import '../services/bulk_schedule_review_repository.dart';
 import '../services/customer_terms_repository.dart';
 import '../services/customer_history_repository.dart';
 import '../services/payment_calendar_refresh.dart';
+import '../services/reporte_exporter.dart';
 import 'customer_history_screen.dart';
 
 class ClientesScreen extends StatefulWidget {
@@ -34,6 +35,23 @@ class _ClientesScreenState extends State<ClientesScreen> {
   static const pendingTerm = 'pending';
   bool _bulkBusy = false;
   BulkScheduleReview? _lastBulkReview;
+  bool _exporting = false;
+
+  Future<void> _downloadCustomers() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      // Always query again: export is not tied to the rendered/search result.
+      final customers = await _repository.listCustomers();
+      final path = await ReporteExporter().guardarClientes(customers);
+      if (mounted) _message('Listado de clientes descargado: $path');
+    } catch (_) {
+      if (mounted) _message('No se pudo descargar el listado de clientes.');
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   Future<void> _reload() async {
     final next = _repository.listCustomers();
     setState(() {
@@ -307,6 +325,16 @@ class _ClientesScreenState extends State<ClientesScreen> {
                               label: const Text('Revisar programaciones'),
                             ),
                           ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: FilledButton.tonalIcon(
+                          key: const ValueKey('download-customers'),
+                          onPressed: _exporting ? null : _downloadCustomers,
+                          icon: const Icon(Icons.download_outlined),
+                          label: const Text('Descargar clientes'),
                         ),
                       ),
                       const SizedBox(height: 10),

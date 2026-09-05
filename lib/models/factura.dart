@@ -5,6 +5,8 @@ class Factura {
     required this.fecha,
     required this.secuencial,
     required this.total,
+    this.identificacionComprador = '',
+    this.tipoIdentificacionComprador = '',
   });
 
   final String cliente;
@@ -13,12 +15,18 @@ class Factura {
   final String secuencial;
   final double total;
 
+  /// Internal customer identity. It is deliberately never rendered in UI/PDF.
+  final String identificacionComprador;
+  final String tipoIdentificacionComprador;
+
   Map<String, dynamic> toJson() => {
         'cliente': cliente,
         'nombreComercial': nombreComercial,
         'fecha': fecha,
         'secuencial': secuencial,
         'total': total,
+        'identificacionComprador': identificacionComprador,
+        'tipoIdentificacionComprador': tipoIdentificacionComprador,
       };
 
   factory Factura.fromJson(Map<String, dynamic> json) => Factura(
@@ -27,6 +35,10 @@ class Factura {
         fecha: json['fecha'] as String? ?? '',
         secuencial: json['secuencial'] as String? ?? '',
         total: (json['total'] as num?)?.toDouble() ?? 0,
+        identificacionComprador:
+            json['identificacionComprador'] as String? ?? '',
+        tipoIdentificacionComprador:
+            json['tipoIdentificacionComprador'] as String? ?? '',
       );
 }
 

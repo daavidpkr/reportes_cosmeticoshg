@@ -113,6 +113,9 @@ Map<String, dynamic> _facturaJson(Factura factura,
       'fecha':
           parseInvoiceDate(factura.fecha)?.toIso8601String().substring(0, 10),
       'venta': factura.total,
+      'identificacion_comprador': factura.identificacionComprador.trim(),
+      'tipo_identificacion_comprador':
+          factura.tipoIdentificacionComprador.trim(),
       if (vendedor != null) 'vendedor': vendedor,
       if (paymentTermDays != null) 'payment_term_days': paymentTermDays,
     };
@@ -241,10 +244,9 @@ List<FilaVenta> construirFilasConsolidadas({
     );
   }
   final resultado = unicas.values.toList();
-  resultado.sort((a, b) {
-    final fecha = b.fecha.compareTo(a.fecha);
-    return fecha != 0 ? fecha : b.numeroFactura.compareTo(a.numeroFactura);
-  });
+  // Preserve the stored reference but use numeric/natural order consistently.
+  resultado
+      .sort((a, b) => compareInvoiceReferences(a.referencia, b.referencia));
   return resultado;
 }
 
@@ -421,6 +423,10 @@ class SupabaseReportesService {
       fecha: respuesta['fecha']?.toString() ?? '',
       secuencial: respuesta['nro_fact']?.toString() ?? ref,
       total: (respuesta['venta'] as num?)?.toDouble() ?? 0,
+      identificacionComprador:
+          respuesta['identificacion_comprador']?.toString() ?? '',
+      tipoIdentificacionComprador:
+          respuesta['tipo_identificacion_comprador']?.toString() ?? '',
     );
   }
 
@@ -617,6 +623,9 @@ class SupabaseReportesService {
       'p_fecha': date.toIso8601String().substring(0, 10),
       'p_nro_fact': factura.secuencial,
       'p_venta': factura.total,
+      'p_identificacion_comprador': factura.identificacionComprador.trim(),
+      'p_tipo_identificacion_comprador':
+          factura.tipoIdentificacionComprador.trim(),
     });
   }
 

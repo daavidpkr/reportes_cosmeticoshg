@@ -22,6 +22,15 @@ String _xml(String reference, {String date = '19/08/2026'}) => '''
 </factura>
 ''';
 
+String _xmlWithBuyerId(String reference, String buyerId, String buyerType) =>
+    '''
+<factura><razonSocialComprador>Cliente variable $reference</razonSocialComprador>
+<direccionComprador>Quito | Comercial conservado</direccionComprador>
+<identificacionComprador>$buyerId</identificacionComprador>
+<tipoIdentificacionComprador>$buyerType</tipoIdentificacionComprador>
+<fechaEmision>19/08/2026</fechaEmision><secuencial>$reference</secuencial>
+<importeTotal>123.45</importeTotal></factura>''';
+
 SelectedInvoiceFile _file(String name, List<int> bytes) =>
     SelectedInvoiceFile(name: name, bytes: Uint8List.fromList(bytes));
 
@@ -178,6 +187,27 @@ void main() {
         ..anioPermitido = 2026;
     });
     tearDown(() => store.limpiar());
+
+    test('extrae identificación, tipo y ceros iniciales', () {
+      final parsed = store
+          .analizarTexto(_xmlWithBuyerId('000000656', ' 001-002 003 ', '04'));
+      expect(parsed.factura!.identificacionComprador, '001002003');
+      expect(parsed.factura!.tipoIdentificacionComprador, '04');
+      expect(parsed.factura!.nombreComercial, 'Comercial conservado');
+      expect(parsed.factura!.secuencial, '000000656');
+    });
+
+    test('XML directo, ZIP y mixto conservan la identidad de comprador',
+        () async {
+      final bytes = utf8.encode(_xmlWithBuyerId('001', '000123', '05'));
+      final batch = await _preparer.prepare([
+        _file('directo.xml', bytes),
+        _file('lote.zip', _zip({'interno.xml': bytes})),
+      ]);
+      final review = const InvoiceBatchImporter().review(batch, store: store);
+      expect(review.invoices, hasLength(1));
+      expect(review.invoices.single.factura.identificacionComprador, '000123');
+    });
 
     test('omite la misma referencia directa e interna', () async {
       final batch = await _preparer.prepare([

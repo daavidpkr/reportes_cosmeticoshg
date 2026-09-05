@@ -70,6 +70,11 @@ class FacturasStore {
       fecha: fecha,
       secuencial: secuencial,
       total: _parsearMonto(_extraer(texto, 'importeTotal')),
+      identificacionComprador: _normalizarIdentificacion(
+        _extraer(texto, 'identificacionComprador') ?? '',
+      ),
+      tipoIdentificacionComprador:
+          (_extraer(texto, 'tipoIdentificacionComprador') ?? '').trim(),
     );
     return (resultado: ResultadoFactura.agregada, factura: factura);
   }
@@ -105,6 +110,10 @@ class FacturasStore {
     final valor = expresion.firstMatch(texto)?.group(1)?.trim();
     return valor == null ? null : _decodificarXml(valor);
   }
+
+  /// Keeps leading zeroes while removing formatting punctuation consistently.
+  String _normalizarIdentificacion(String value) =>
+      value.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
 
   String _decodificarXml(String valor) => valor
       .replaceAll('&amp;', '&')

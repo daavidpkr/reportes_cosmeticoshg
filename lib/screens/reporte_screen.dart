@@ -17,6 +17,7 @@ import 'carga_facturas_screen.dart';
 import 'cobros_mensuales_view.dart';
 import 'clientes_screen.dart';
 import 'estadisticas_screen.dart';
+import 'general_search_screen.dart';
 import 'payment_calendar/payment_calendar_screen.dart';
 import 'payment_reminders_screen.dart';
 import 'reporte/report_responsive_layout.dart';
@@ -80,6 +81,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   bool _vistaClientes = false;
   bool _vistaCalendario = false;
   bool _vistaCargaFacturas = false;
+  bool _vistaBusquedaGeneral = false;
   int _seccionMovil = 0;
   int _handledCalendarRequestId = 0;
   final _busquedaController = TextEditingController();
@@ -126,6 +128,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
     _vistaEstadisticas = false;
     _vistaVendedores = false;
     _vistaClientes = false;
+    _vistaBusquedaGeneral = false;
     _seccionMovil = 3;
   }
 
@@ -145,6 +148,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         _vistaEstadisticas = false;
         _vistaVendedores = false;
         _vistaClientes = false;
+        _vistaBusquedaGeneral = false;
       });
 
   void _mostrarReporteVentas() => setState(() {
@@ -155,6 +159,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         _vistaEstadisticas = false;
         _vistaVendedores = false;
         _vistaClientes = false;
+        _vistaBusquedaGeneral = false;
         _seccionMovil = 0;
       });
 
@@ -1543,7 +1548,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
     final texto = _filtro.toLowerCase();
     final resultado = _filas.asMap().entries.where((item) {
       if (texto.isEmpty) return true;
-      return item.value.numeroFactura.toLowerCase().contains(texto) ||
+      return item.value.referencia.toLowerCase().contains(texto) ||
+          item.value.numeroFactura.toLowerCase().contains(texto) ||
           item.value.cliente.toLowerCase().contains(texto) ||
           item.value.nombreComercial.toLowerCase().contains(texto) ||
           item.value.vendedor.toLowerCase().contains(texto);
@@ -1824,29 +1830,35 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       )
                     : _vistaClientes
                         ? const ClientesScreen()
-                        : _vistaVendedores
-                            ? VendedoresContent(store: _vendedores)
-                            : _vistaEstadisticas
-                                ? const EstadisticasScreen()
-                                : _vistaCobrosMensuales
-                                    ? CobrosMensualesView(
-                                        key: ValueKey(_versionCobrosMensuales),
-                                      )
-                                    : LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          final layout =
-                                              ReportResponsiveLayout.forWidth(
-                                            constraints.maxWidth,
-                                          );
-                                          return ReportDesktopFrame(
-                                            layout: layout,
-                                            header: _encabezadoPagina(layout),
-                                            kpis: _tarjetasResumen(layout),
-                                            toolbar: _barraRedisenada(layout),
-                                            table: _tarjetaTabla(),
-                                          );
-                                        },
-                                      ),
+                        : _vistaBusquedaGeneral
+                            ? const GeneralSearchScreen()
+                            : _vistaVendedores
+                                ? VendedoresContent(store: _vendedores)
+                                : _vistaEstadisticas
+                                    ? const EstadisticasScreen()
+                                    : _vistaCobrosMensuales
+                                        ? CobrosMensualesView(
+                                            key: ValueKey(
+                                                _versionCobrosMensuales),
+                                          )
+                                        : LayoutBuilder(
+                                            builder: (context, constraints) {
+                                              final layout =
+                                                  ReportResponsiveLayout
+                                                      .forWidth(
+                                                constraints.maxWidth,
+                                              );
+                                              return ReportDesktopFrame(
+                                                layout: layout,
+                                                header:
+                                                    _encabezadoPagina(layout),
+                                                kpis: _tarjetasResumen(layout),
+                                                toolbar:
+                                                    _barraRedisenada(layout),
+                                                table: _tarjetaTabla(),
+                                              );
+                                            },
+                                          ),
           ),
         ],
       ),

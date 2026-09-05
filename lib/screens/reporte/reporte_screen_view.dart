@@ -688,7 +688,7 @@ extension _ReporteScreenView on _ReporteScreenState {
         controller: _busquedaController,
         onChanged: (v) => setState(() => _filtro = v.trim()),
         decoration: InputDecoration(
-          hintText: 'Buscar factura, cliente, nombre comercial o vendedor',
+          hintText: 'Buscar referencia, factura, cliente o nombre comercial',
           prefixIcon: const Icon(Icons.search, size: 19),
           suffixIcon: _filtro.isEmpty
               ? null
@@ -1092,6 +1092,17 @@ extension _ReporteScreenView on _ReporteScreenState {
                         _vistaVendedores = false;
                         _vistaGeneral = false;
                         _seccionMovil = 3;
+                      }),
+                    ),
+                    _pestana(
+                      'Búsqueda general',
+                      _vistaBusquedaGeneral,
+                      () => setState(() {
+                        _vistaBusquedaGeneral = true;
+                        _vistaCalendario =
+                            _vistaCargaFacturas = _vistaClientes = false;
+                        _vistaCobrosMensuales = _vistaEstadisticas =
+                            _vistaVendedores = _vistaGeneral = false;
                       }),
                     ),
                     _pestana(
@@ -1959,6 +1970,14 @@ extension _ReporteScreenView on _ReporteScreenState {
                 switch (value) {
                   case 'clients':
                     _mostrarClientes();
+                  case 'global_search':
+                    setState(() {
+                      _vistaBusquedaGeneral = true;
+                      _vistaCalendario =
+                          _vistaCargaFacturas = _vistaClientes = false;
+                      _vistaCobrosMensuales = _vistaEstadisticas =
+                          _vistaVendedores = _vistaGeneral = false;
+                    });
                   case 'collections':
                     setState(() {
                       _vistaCalendario = false;
@@ -2012,6 +2031,12 @@ extension _ReporteScreenView on _ReporteScreenState {
                     ])),
                 const PopupMenuDivider(),
                 CheckedPopupMenuItem(
+                    value: 'global_search',
+                    checked: _vistaBusquedaGeneral,
+                    child: const ListTile(
+                        leading: Icon(Icons.manage_search_outlined),
+                        title: Text('Búsqueda general'))),
+                CheckedPopupMenuItem(
                     value: 'collections',
                     checked: _vistaCobrosMensuales,
                     child: const ListTile(
@@ -2061,6 +2086,7 @@ extension _ReporteScreenView on _ReporteScreenState {
                 _vistaEstadisticas ||
                 _vistaVendedores ||
                 _vistaClientes ||
+                _vistaBusquedaGeneral ||
                 _vistaCalendario ||
                 _vistaCargaFacturas
             ? null
@@ -2088,6 +2114,7 @@ extension _ReporteScreenView on _ReporteScreenState {
               _vistaCobrosMensuales = false;
               _vistaClientes = indice == 2;
               _vistaVendedores = false;
+              _vistaBusquedaGeneral = false;
               _vistaEstadisticas = false;
               _vistaGeneral = indice == 1;
             });
@@ -2130,108 +2157,117 @@ extension _ReporteScreenView on _ReporteScreenState {
                     ? SafeArea(child: VendedoresContent(store: _vendedores))
                     : _vistaClientes
                         ? const SafeArea(child: ClientesScreen())
-                        : _vistaEstadisticas
-                            ? const SafeArea(child: EstadisticasScreen())
-                            : _vistaCobrosMensuales
-                                ? SafeArea(
-                                    child: CobrosMensualesView(
-                                        key: ValueKey(_versionCobrosMensuales)),
-                                  )
-                                : SafeArea(
-                                    child: CustomScrollView(
-                                      keyboardDismissBehavior:
-                                          ScrollViewKeyboardDismissBehavior
-                                              .onDrag,
-                                      slivers: [
-                                        SliverPadding(
-                                          padding: const EdgeInsets.fromLTRB(
-                                              14, 16, 14, 8),
-                                          sliver: SliverList.list(
-                                            children: [
-                                              _encabezadoMovil(),
-                                              const SizedBox(height: 14),
-                                              _resumenMovil(),
-                                              const SizedBox(height: 14),
-                                              _controlesMoviles(),
-                                              const SizedBox(height: 16),
-                                              Row(
+                        : _vistaBusquedaGeneral
+                            ? const SafeArea(child: GeneralSearchScreen())
+                            : _vistaEstadisticas
+                                ? const SafeArea(child: EstadisticasScreen())
+                                : _vistaCobrosMensuales
+                                    ? SafeArea(
+                                        child: CobrosMensualesView(
+                                            key: ValueKey(
+                                                _versionCobrosMensuales)),
+                                      )
+                                    : SafeArea(
+                                        child: CustomScrollView(
+                                          keyboardDismissBehavior:
+                                              ScrollViewKeyboardDismissBehavior
+                                                  .onDrag,
+                                          slivers: [
+                                            SliverPadding(
+                                              padding:
+                                                  const EdgeInsets.fromLTRB(
+                                                      14, 16, 14, 8),
+                                              sliver: SliverList.list(
                                                 children: [
-                                                  Text(
-                                                    _vistaGeneral
-                                                        ? 'Todos los registros'
-                                                        : 'Clientes',
-                                                    style: TextStyle(
-                                                      color: context.hg.plum,
-                                                      fontSize: 13,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
+                                                  _encabezadoMovil(),
+                                                  const SizedBox(height: 14),
+                                                  _resumenMovil(),
+                                                  const SizedBox(height: 14),
+                                                  _controlesMoviles(),
+                                                  const SizedBox(height: 16),
+                                                  Row(
+                                                    children: [
+                                                      Text(
+                                                        _vistaGeneral
+                                                            ? 'Todos los registros'
+                                                            : 'Clientes',
+                                                        style: TextStyle(
+                                                          color:
+                                                              context.hg.plum,
+                                                          fontSize: 13,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                      ),
+                                                      const Spacer(),
+                                                      Text(
+                                                        '${_vistaGeneral ? _filasGenerales.length : _filasVisibles.length} registros',
+                                                        style: TextStyle(
+                                                          color: context
+                                                              .hg.mutedText,
+                                                          fontSize: 11,
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
-                                                  const Spacer(),
-                                                  Text(
-                                                    '${_vistaGeneral ? _filasGenerales.length : _filasVisibles.length} registros',
-                                                    style: TextStyle(
-                                                      color:
-                                                          context.hg.mutedText,
-                                                      fontSize: 11,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                              if (_descripcionFiltro
-                                                  .isNotEmpty) ...[
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  _descripcionFiltro,
-                                                  style: TextStyle(
-                                                    color: context.hg.mutedText,
-                                                    fontSize: 12,
-                                                  ),
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                        ),
-                                        _listaMovil(),
-                                        SliverToBoxAdapter(
-                                          child: Padding(
-                                            padding: const EdgeInsets.fromLTRB(
-                                                14, 4, 14, 110),
-                                            child: Column(
-                                              children: [
-                                                SizedBox(
-                                                  width: double.infinity,
-                                                  child: FilledButton.icon(
-                                                    onPressed: _reiniciar,
-                                                    style:
-                                                        FilledButton.styleFrom(
-                                                      backgroundColor:
-                                                          context.hg.danger,
-                                                      foregroundColor:
-                                                          Colors.white,
-                                                      padding:
-                                                          const EdgeInsets.all(
-                                                              13),
-                                                      shape:
-                                                          RoundedRectangleBorder(
-                                                        borderRadius:
-                                                            BorderRadius
-                                                                .circular(12),
+                                                  if (_descripcionFiltro
+                                                      .isNotEmpty) ...[
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      _descripcionFiltro,
+                                                      style: TextStyle(
+                                                        color: context
+                                                            .hg.mutedText,
+                                                        fontSize: 12,
                                                       ),
                                                     ),
-                                                    icon: const Icon(
-                                                        Icons.delete_outline,
-                                                        size: 18),
-                                                    label: const Text(
-                                                        'Eliminar reporte'),
-                                                  ),
-                                                ),
-                                              ],
+                                                  ],
+                                                ],
+                                              ),
                                             ),
-                                          ),
+                                            _listaMovil(),
+                                            SliverToBoxAdapter(
+                                              child: Padding(
+                                                padding:
+                                                    const EdgeInsets.fromLTRB(
+                                                        14, 4, 14, 110),
+                                                child: Column(
+                                                  children: [
+                                                    SizedBox(
+                                                      width: double.infinity,
+                                                      child: FilledButton.icon(
+                                                        onPressed: _reiniciar,
+                                                        style: FilledButton
+                                                            .styleFrom(
+                                                          backgroundColor:
+                                                              context.hg.danger,
+                                                          foregroundColor:
+                                                              Colors.white,
+                                                          padding:
+                                                              const EdgeInsets
+                                                                  .all(13),
+                                                          shape:
+                                                              RoundedRectangleBorder(
+                                                            borderRadius:
+                                                                BorderRadius
+                                                                    .circular(
+                                                                        12),
+                                                          ),
+                                                        ),
+                                                        icon: const Icon(
+                                                            Icons
+                                                                .delete_outline,
+                                                            size: 18),
+                                                        label: const Text(
+                                                            'Eliminar reporte'),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
                                         ),
-                                      ],
-                                    ),
-                                  ),
+                                      ),
       ));
 }
