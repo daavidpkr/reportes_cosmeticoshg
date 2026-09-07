@@ -93,14 +93,14 @@ void main() {
     );
 
     expect(resultado, hasLength(2));
-    expect(resultado.map((fila) => fila.referencia), ['669', '592']);
+    expect(resultado.map((fila) => fila.referencia), ['592', '669']);
     expect(resultado.map((fila) => fila.numeroFactura),
-        ['000000669', '000000592']);
+        ['000000592', '000000669']);
     expect(resultado.fold<double>(0, (s, f) => s + f.venta), 150);
     expect(resultado.fold<double>(0, (s, f) => s + f.totalAbonos), 80);
     expect(resultado.fold<double>(0, (s, f) => s + f.saldo), 70);
     expect(resultado.fold<int>(0, (s, f) => s + f.esmalte), 5);
-    expect(resultado.last.abonos, hasLength(3));
+    expect(resultado.first.abonos, hasLength(3));
   });
 
   test('omite referencias vacías y facturas huérfanas', () {

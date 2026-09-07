@@ -29,6 +29,8 @@ void main() {
       'nombre_comercial': 'Local',
       'fecha': '2026-07-27',
       'venta': 42.5,
+      'identificacion_comprador': '',
+      'tipo_identificacion_comprador': '',
     });
   });
 

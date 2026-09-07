@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cosmeticos_hg_reportes/models/billing_customer.dart';
 import 'package:cosmeticos_hg_reportes/models/bulk_schedule_review.dart';
 import 'package:cosmeticos_hg_reportes/models/customer_history.dart';
@@ -249,6 +251,48 @@ class FlakyHistory extends FakeHistory {
         sort: sort);
   }
 }
+
+class DeferredHistory extends FakeHistory {
+  final requests = <({String search, Completer<CustomerHistoryPage> result})>[];
+
+  @override
+  Future<CustomerHistoryPage> load(
+      {required String customerId,
+      required int offset,
+      String status = 'all',
+      String search = '',
+      String sort = 'recent'}) {
+    final result = Completer<CustomerHistoryPage>();
+    requests.add((search: search, result: result));
+    return result.future;
+  }
+}
+
+CustomerHistoryPage historyWithInvoice(String reference) => CustomerHistoryPage(
+    summary: const CustomerHistorySummary(
+        totalSales: 10,
+        totalPaid: 0,
+        balance: 10,
+        totalInvoices: 1,
+        paidInvoices: 0,
+        pendingInvoices: 1,
+        overdueInvoices: 0,
+        cancelledInvoices: 0),
+    invoices: [
+      CustomerHistoryInvoice(
+          reference: reference,
+          invoiceNumber: reference,
+          date: DateTime(2026, 9, 1),
+          seller: '',
+          reportMonth: '',
+          sale: 10,
+          paid: 0,
+          balance: 10,
+          cancelled: false,
+          overdue: false,
+          payments: const [])
+    ],
+    filteredCount: 1);
 
 class RosaHistory extends FakeHistory {
   int loads = 0;
@@ -651,6 +695,59 @@ void main() {
     await tester.pumpAndSettle();
     expect(history.attempts, 2);
     expect(find.text('Total histórico'), findsOneWidget);
+    expect(find.text('No se pudo cargar el historial.'), findsNothing);
+  });
+
+  testWidgets('ignora una respuesta obsoleta y conserva la consulta reciente',
+      (tester) async {
+    final history = DeferredHistory();
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: FakeCustomerTerms(), historyRepository: history))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cliente configurado'));
+    await tester.pump();
+    expect(history.requests, hasLength(1));
+    history.requests.first.result.complete(historyWithInvoice('INITIAL'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(find.text('Total histórico'), findsOneWidget);
+    await tester.drag(find.byType(Scrollable).last, const Offset(0, -500));
+    await tester.pumpAndSettle();
+
+    final invoiceSearch = find.byKey(const ValueKey('customer-history-search'));
+    expect(invoiceSearch, findsOneWidget);
+    await tester.enterText(invoiceSearch, 'anterior');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(history.requests, hasLength(2));
+    await tester.enterText(invoiceSearch, 'nueva');
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(history.requests, hasLength(3));
+    expect(history.requests[2].search, 'nueva');
+
+    history.requests[2].result.complete(historyWithInvoice('NEW'));
+    await tester.pumpAndSettle();
+    history.requests[1].result.complete(historyWithInvoice('OLD'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Factura NEW'), findsOneWidget);
+    expect(find.text('Factura OLD'), findsNothing);
+  });
+
+  testWidgets('cero facturas muestra estado vacío y no un error',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ClientesScreen(
+                repository: FakeCustomerTerms(),
+                historyRepository: FakeHistory()))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cliente configurado'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Este cliente todavía no tiene facturas asociadas.'),
+        findsOneWidget);
     expect(find.text('No se pudo cargar el historial.'), findsNothing);
   });
 

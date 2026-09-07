@@ -79,10 +79,7 @@ class CustomerHistoryInvoice {
         reminderDate: _date(json['reminder_date']),
         calendarComment: json['calendar_comment']?.toString() ?? '',
         scheduleSource: json['schedule_source']?.toString(),
-        payments: (json['payments'] as List? ?? const [])
-            .map((item) => CustomerHistoryPayment.fromJson(
-                Map<String, dynamic>.from(item as Map)))
-            .toList(),
+        payments: _payments(json['payments']),
       );
 }
 
@@ -176,3 +173,24 @@ class CustomerHistoryPage {
 
 DateTime? _date(Object? value) =>
     value == null ? null : DateTime.tryParse(value.toString());
+
+List<CustomerHistoryPayment> _payments(Object? value) {
+  final result = <CustomerHistoryPayment>[];
+
+  void add(Object? item) {
+    if (item is Map) {
+      result.add(
+          CustomerHistoryPayment.fromJson(Map<String, dynamic>.from(item)));
+    } else if (item is List) {
+      // Accept the nested shape returned briefly by the 20260904122000 RPC.
+      // The database migration flattens new responses; this keeps older/cached
+      // responses from making the complete customer profile unusable.
+      for (final nested in item) {
+        add(nested);
+      }
+    }
+  }
+
+  add(value);
+  return result;
+}

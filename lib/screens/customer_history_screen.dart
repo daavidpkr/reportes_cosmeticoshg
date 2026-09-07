@@ -40,6 +40,8 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
   late BillingCustomer customer = widget.customer;
   bool actionBusy = false;
   final reprogramming = <String>{};
+  int _loadGeneration = 0;
+  String? _activeRequestKey;
 
   @override
   void initState() {
@@ -49,13 +51,24 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
 
   @override
   void dispose() {
+    _loadGeneration++;
     debounce?.cancel();
     searchController.dispose();
     super.dispose();
   }
 
   Future<void> _load({bool more = false}) async {
-    if (more ? loadingMore : loading) return;
+    final offset = more ? invoices.length : 0;
+    final requestKey = [
+      customer.id,
+      offset,
+      status,
+      searchController.text.trim(),
+      sort,
+    ].join('|');
+    if (_activeRequestKey == requestKey) return;
+    final generation = ++_loadGeneration;
+    _activeRequestKey = requestKey;
     setState(() {
       if (more) {
         loadingMore = true;
@@ -67,12 +80,12 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
     try {
       final page = await repository.load(
         customerId: customer.id,
-        offset: more ? invoices.length : 0,
+        offset: offset,
         status: status,
         search: searchController.text,
         sort: sort,
       );
-      if (!mounted) return;
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         if (page.customer != null) {
           customer = BillingCustomer.fromJson(page.customer!);
@@ -83,15 +96,16 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
         invoices.addAll(page.invoices);
       });
     } catch (_) {
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() => error = 'No se pudo cargar el historial.');
       }
     } finally {
-      if (mounted) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           loading = false;
           loadingMore = false;
         });
+        _activeRequestKey = null;
       }
     }
   }
@@ -357,6 +371,10 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                     else if (error != null && summary == null)
                       _ErrorState(message: error!, retry: _load)
                     else ...[
+                      if (error != null) ...[
+                        _ErrorState(message: error!, retry: _load),
+                        const SizedBox(height: 12),
+                      ],
                       _Kpis(summary: summary!, wide: wide),
                       const SizedBox(height: 12),
                       _DebtSummary(summary: summary!),
@@ -369,7 +387,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                           child: Center(
                               child: Text(searchController.text.isEmpty &&
                                       status == 'all'
-                                  ? 'Este cliente todavía no tiene facturas registradas.'
+                                  ? 'Este cliente todavía no tiene facturas asociadas.'
                                   : 'No se encontraron facturas con estos filtros.')),
                         )
                       else
@@ -404,6 +422,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
 
   Widget _toolbar(bool wide) {
     final search = TextField(
+      key: const ValueKey('customer-history-search'),
       controller: searchController,
       onChanged: _search,
       decoration: const InputDecoration(

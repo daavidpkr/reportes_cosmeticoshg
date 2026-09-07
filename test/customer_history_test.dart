@@ -62,4 +62,70 @@ void main() {
         ['Pagada', 'Vencida', 'Anulada']);
     expect(page.invoices[1].payments.single.receiptNumber, 2);
   });
+
+  test('un historial vacío es un resultado válido', () {
+    final page = CustomerHistoryPage.fromJson({
+      'summary': null,
+      'filtered_count': 0,
+      'invoices': null,
+    });
+
+    expect(page.invoices, isEmpty);
+    expect(page.filteredCount, 0);
+    expect(page.summary.totalInvoices, 0);
+  });
+
+  test('campos opcionales nulos no invalidan una factura', () {
+    final page = CustomerHistoryPage.fromJson({
+      'summary': const {},
+      'filtered_count': 1,
+      'invoices': [
+        {
+          'reference': 'A',
+          'invoice_number': null,
+          'invoice_date': '2026-01-01',
+          'seller': null,
+          'report_month': null,
+          'sale': 10,
+          'paid': null,
+          'balance': 10,
+          'cancelled': null,
+          'overdue': null,
+          'reminder_date': null,
+          'calendar_comment': null,
+          'payments': null,
+        }
+      ],
+    });
+
+    expect(page.invoices.single.status, 'Pendiente');
+    expect(page.invoices.single.payments, isEmpty);
+    expect(page.invoices.single.reminderDate, isNull);
+  });
+
+  test('tolera y aplana la respuesta histórica de abonos', () {
+    final page = CustomerHistoryPage.fromJson({
+      'summary': const {},
+      'filtered_count': 1,
+      'invoices': [
+        {
+          'reference': 'A',
+          'invoice_number': 'A',
+          'invoice_date': '2026-01-01',
+          'sale': 50.67,
+          'paid': 50.67,
+          'balance': 0,
+          'payments': [
+            [
+              {'amount': 50.67, 'receipt': 1464, 'comment': 'Transferencia'}
+            ]
+          ],
+        }
+      ],
+    });
+
+    expect(page.invoices.single.payments, hasLength(1));
+    expect(page.invoices.single.payments.single.amount, 50.67);
+    expect(page.invoices.single.payments.single.receiptNumber, 1464);
+  });
 }
