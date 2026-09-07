@@ -16,14 +16,16 @@ void main() {
     });
 
     test('la tabla ocupa el ancho útil y limita el scroll a 1024', () {
-      for (final width in [1280.0, 1366.0, 1600.0, 1920.0]) {
+      for (final width in [1600.0, 1920.0]) {
         final layout = ReportResponsiveLayout.forWidth(width);
         expect(layout.table.tableWidth, layout.contentWidth);
         expect(layout.table.needsHorizontalScroll, isFalse);
       }
-      final narrow = ReportResponsiveLayout.forWidth(1024);
-      expect(narrow.table.tableWidth, 1180);
-      expect(narrow.table.needsHorizontalScroll, isTrue);
+      for (final width in [1024.0, 1280.0, 1366.0]) {
+        final narrow = ReportResponsiveLayout.forWidth(width);
+        expect(narrow.table.tableWidth, 1380);
+        expect(narrow.table.needsHorizontalScroll, isTrue);
+      }
     });
 
     test('el sobrante amplio prioriza cliente, nombre y vendedor', () {

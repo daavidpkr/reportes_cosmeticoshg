@@ -598,6 +598,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
     Abono? borrador,
     String? mesReporte,
   }) async {
+    if (fila.anulada) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Una factura anulada no puede recibir abonos.'),
+        ),
+      );
+      return false;
+    }
     final abono = borrador ?? (nuevo ? Abono() : fila.abonos[indice]);
     final montoController = TextEditingController(
       text: abono.valor == 0 ? '' : abono.valor.toStringAsFixed(2),
@@ -913,14 +921,16 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     trailing: Text(
                       '\$${fila.abonos[indice].valor.toStringAsFixed(2)}',
                     ),
-                    onTap: () async {
-                      await _editarAbono(
-                        fila,
-                        indice,
-                        mesReporte: mesReporte,
-                      );
-                      actualizar(() {});
-                    },
+                    onTap: fila.anulada
+                        ? null
+                        : () async {
+                            await _editarAbono(
+                              fila,
+                              indice,
+                              mesReporte: mesReporte,
+                            );
+                            actualizar(() {});
+                          },
                   ),
               ],
             ),
@@ -931,10 +941,12 @@ class _ReporteScreenState extends State<ReporteScreen> {
               child: const Text('Cerrar'),
             ),
             FilledButton.icon(
-              onPressed: () async {
-                await _agregarAbono(fila, mesReporte: mesReporte);
-                actualizar(() {});
-              },
+              onPressed: fila.anulada
+                  ? null
+                  : () async {
+                      await _agregarAbono(fila, mesReporte: mesReporte);
+                      actualizar(() {});
+                    },
               icon: const Icon(Icons.add),
               label: const Text('Añadir abono'),
             ),

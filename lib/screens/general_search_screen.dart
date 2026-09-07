@@ -125,40 +125,27 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
 
   Widget _paymentButton(GlobalInvoiceRow invoice, int index, double scale) {
     final payment = invoice.row.abonos[index];
-    return Tooltip(
-      message: payment.valor == 0
+    return ReportPaymentButton(
+      payment: payment,
+      tooltip: payment.valor == 0
           ? 'Añadir abono · ${invoice.reportMonth}'
           : 'Número de recibo: '
               '${payment.numeroRecibo?.toString() ?? 'Sin número de recibo (registro histórico)'}\n'
               'Comentario: ${payment.comentario.isEmpty ? 'Sin comentario' : payment.comentario}',
-      child: SizedBox(
-        width: 82 * scale,
-        child: OutlinedButton(
-          key: ValueKey(
-            'global-payment-${invoice.reportMonth}-${invoice.row.numero}-$index',
-          ),
-          style: OutlinedButton.styleFrom(
-            padding: EdgeInsets.symmetric(horizontal: 6 * scale),
-            minimumSize: Size.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            visualDensity: VisualDensity.compact,
-            textStyle: TextStyle(fontSize: 14 * scale),
-          ),
-          onPressed: () async {
-            final changed = await widget.onEditPayment(
-              invoice,
-              index,
-              isNew: false,
-            );
-            if (changed && mounted) setState(() {});
-          },
-          child: Text(
-            payment.valor == 0
-                ? 'Añadir'
-                : '\$${payment.valor.toStringAsFixed(2)}',
-          ),
-        ),
+      buttonKey: ValueKey(
+        'global-payment-${invoice.reportMonth}-${invoice.row.numero}-$index',
       ),
+      fontSize: 14 * scale,
+      onPressed: invoice.row.anulada
+          ? null
+          : () async {
+              final changed = await widget.onEditPayment(
+                invoice,
+                index,
+                isNew: false,
+              );
+              if (changed && mounted) setState(() {});
+            },
     );
   }
 
@@ -208,6 +195,7 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
         DataCell(_paymentButton(invoice, 1, scale)),
         DataCell(SizedBox(
           width: 42 * scale,
+          height: ReportPaymentButton.touchHeight,
           child: IconButton.filledTonal(
             key: ValueKey(
               'global-additional-${invoice.reportMonth}-${row.numero}',
@@ -317,9 +305,7 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
                 else
                   Expanded(
                     child: ReportTableContentFrame(
-                      minimumWidth: geometry.tableWidth < 1380
-                          ? 1380
-                          : geometry.tableWidth,
+                      minimumWidth: geometry.tableWidth,
                       table: ReportInvoiceTable(
                         mode: ReportInvoiceTableMode.globalSearch,
                         geometry: geometry,

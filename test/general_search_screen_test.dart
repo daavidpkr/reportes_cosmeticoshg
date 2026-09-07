@@ -13,6 +13,8 @@ GlobalInvoiceRow invoice({
   String month = 'Julio 2026',
   int number = 7,
   List<Abono>? payments,
+  String seller = '01 - Ana',
+  double sale = 100,
 }) =>
     GlobalInvoiceRow(
       reportMonth: month,
@@ -23,9 +25,9 @@ GlobalInvoiceRow invoice({
         nombreComercial: 'Comercial Uno',
         fecha: '2026-07-15',
         numeroFactura: 'FAC-2',
-        vendedor: '01 - Ana',
+        vendedor: seller,
         esmalte: 3,
-        venta: 100,
+        venta: sale,
         abonos: payments ?? [Abono(valor: 20), Abono()],
       ),
     );
@@ -161,5 +163,55 @@ void main() {
 
     expect(actions, ['Marzo 2025:0:false', 'Marzo 2025:additional']);
     expect(find.text(r'$25.00'), findsOneWidget);
+  });
+
+  testWidgets('cancelled invoices keep both payment controls disabled',
+      (tester) async {
+    var attempts = 0;
+    await tester.pumpWidget(app(
+      search: (_, {required offset, required limit}) async => [
+        invoice(seller: 'ANULADA'),
+      ],
+      edit: (item, index, {required isNew}) async {
+        attempts++;
+        return true;
+      },
+    ));
+    await tester.pumpAndSettle();
+
+    for (var index = 0; index < 2; index++) {
+      final button = tester.widget<OutlinedButton>(find.byKey(
+        ValueKey('global-payment-Julio 2026-7-$index'),
+      ));
+      expect(button.onPressed, isNull);
+      expect(
+          tester.getSize(find.byKey(
+            ValueKey('global-payment-Julio 2026-7-$index'),
+          )),
+          const Size(104, 48));
+    }
+    expect(attempts, 0);
+  });
+
+  testWidgets('paid invoices preserve the existing edit action',
+      (tester) async {
+    var editedIndex = -1;
+    await tester.pumpWidget(app(
+      search: (_, {required offset, required limit}) async => [
+        invoice(payments: [Abono(valor: 100), Abono()]),
+      ],
+      edit: (item, index, {required isNew}) async {
+        editedIndex = index;
+        return false;
+      },
+    ));
+    await tester.pumpAndSettle();
+
+    final existing = tester.widget<OutlinedButton>(find.byKey(
+      const ValueKey('global-payment-Julio 2026-7-0'),
+    ));
+    existing.onPressed!();
+    await tester.pumpAndSettle();
+    expect(editedIndex, 0);
   });
 }

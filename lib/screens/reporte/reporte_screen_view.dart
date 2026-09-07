@@ -43,6 +43,7 @@ extension _ReporteScreenView on _ReporteScreenState {
       );
   Widget _abonosAdicionales(FilaVenta fila) => SizedBox(
         width: 42 * _escalaReporte,
+        height: ReportPaymentButton.touchHeight,
         child: IconButton.filledTonal(
           padding: EdgeInsets.zero,
           visualDensity: VisualDensity.compact,
@@ -73,26 +74,15 @@ extension _ReporteScreenView on _ReporteScreenState {
 
   Widget _botonAbono(FilaVenta fila, int indice) {
     final abono = fila.abonos[indice];
-    return Tooltip(
-      message: abono.valor == 0
+    return ReportPaymentButton(
+      payment: abono,
+      tooltip: abono.valor == 0
           ? 'Añadir abono'
           : 'Número de recibo: '
               '${abono.numeroRecibo?.toString() ?? 'Sin número de recibo (registro histórico)'}\n'
               'Comentario: ${abono.comentario.isEmpty ? 'Sin comentario' : abono.comentario}',
-      child: SizedBox(
-        width: 82 * _escalaReporte,
-        child: OutlinedButton(
-          style: OutlinedButton.styleFrom(
-            padding: EdgeInsets.symmetric(horizontal: 6 * _escalaReporte),
-            visualDensity: VisualDensity.compact,
-            textStyle: TextStyle(fontSize: 14 * _escalaReporte),
-          ),
-          onPressed: () => _editarAbono(fila, indice),
-          child: Text(
-            abono.valor == 0 ? 'Añadir' : '\$${abono.valor.toStringAsFixed(2)}',
-          ),
-        ),
-      ),
+      fontSize: 14 * _escalaReporte,
+      onPressed: fila.anulada ? null : () => _editarAbono(fila, indice),
     );
   }
 

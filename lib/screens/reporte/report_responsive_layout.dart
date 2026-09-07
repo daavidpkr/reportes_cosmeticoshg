@@ -87,7 +87,7 @@ class ReportTableGeometry {
         : 0.0;
     return ReportTableGeometry(
       availableWidth: layout.contentWidth,
-      minimumReadableWidth: layout.compact ? 1180 : 1280,
+      minimumReadableWidth: 1380,
       clientWidth: 220 * scale + wideSurplus * .42,
       businessNameWidth: 205 * scale + wideSurplus * .36,
       sellerWidth: 115 * scale + wideSurplus * .22,
