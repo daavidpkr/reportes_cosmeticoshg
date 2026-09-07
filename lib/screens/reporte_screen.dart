@@ -19,6 +19,7 @@ import 'clientes_screen.dart';
 import 'estadisticas_screen.dart';
 import 'general_search_screen.dart';
 import 'payment_calendar/payment_calendar_screen.dart';
+import 'reporte/report_invoice_table.dart';
 import 'payment_reminders_screen.dart';
 import 'reporte/report_responsive_layout.dart';
 import 'vendedores_screen.dart';
@@ -38,6 +39,34 @@ const mobileReportMenuSectionLabels = <String>[
   'Vendedores',
   'Estadísticas'
 ];
+
+enum ReportDestination {
+  sales,
+  general,
+  monthlyCollections,
+  clients,
+  globalSearch,
+  sellers,
+  statistics,
+  calendar,
+  invoiceImport,
+}
+
+int? mobileNavigationIndex(ReportDestination destination) =>
+    switch (destination) {
+      ReportDestination.sales => 0,
+      ReportDestination.general => 1,
+      ReportDestination.clients => 2,
+      ReportDestination.calendar => 3,
+      _ => null,
+    };
+
+ReportDestination destinationForMobileIndex(int index) => switch (index) {
+      1 => ReportDestination.general,
+      2 => ReportDestination.clients,
+      3 => ReportDestination.calendar,
+      _ => ReportDestination.sales,
+    };
 
 class ReporteScreen extends StatefulWidget {
   const ReporteScreen({
@@ -74,15 +103,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   final Map<String, String> _filtrosColumnas = {};
   String? _ordenColumna;
   bool _ordenAscendente = true;
-  bool _vistaGeneral = false;
-  bool _vistaCobrosMensuales = false;
-  bool _vistaEstadisticas = false;
-  bool _vistaVendedores = false;
-  bool _vistaClientes = false;
-  bool _vistaCalendario = false;
-  bool _vistaCargaFacturas = false;
-  bool _vistaBusquedaGeneral = false;
-  int _seccionMovil = 0;
+  ReportDestination _destination = ReportDestination.sales;
   int _handledCalendarRequestId = 0;
   final _busquedaController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
@@ -90,8 +111,26 @@ class _ReporteScreenState extends State<ReporteScreen> {
   int _versionBusqueda = 0;
   final Set<int> _filasExpandidas = {};
   bool _actualizando = false;
+  final Set<String> _abonosGuardandose = {};
   int _versionCobrosMensuales = 0;
   List<FilaVenta> _filasConsolidadas = const [];
+
+  bool get _vistaGeneral => _destination == ReportDestination.general;
+  bool get _vistaCobrosMensuales =>
+      _destination == ReportDestination.monthlyCollections;
+  bool get _vistaEstadisticas => _destination == ReportDestination.statistics;
+  bool get _vistaVendedores => _destination == ReportDestination.sellers;
+  bool get _vistaClientes => _destination == ReportDestination.clients;
+  bool get _vistaCalendario => _destination == ReportDestination.calendar;
+  bool get _vistaCargaFacturas =>
+      _destination == ReportDestination.invoiceImport;
+  bool get _vistaBusquedaGeneral =>
+      _destination == ReportDestination.globalSearch;
+
+  void _navigate(ReportDestination destination) {
+    if (_destination == destination) return;
+    setState(() => _destination = destination);
+  }
 
   ReportResponsiveLayout get _reportLayout =>
       ReportResponsiveLayout.forWidth(MediaQuery.sizeOf(context).width);
@@ -121,15 +160,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       return;
     }
     _handledCalendarRequestId = widget.calendarRequestId;
-    _vistaCalendario = true;
-    _vistaCargaFacturas = false;
-    _vistaGeneral = false;
-    _vistaCobrosMensuales = false;
-    _vistaEstadisticas = false;
-    _vistaVendedores = false;
-    _vistaClientes = false;
-    _vistaBusquedaGeneral = false;
-    _seccionMovil = 3;
+    _destination = ReportDestination.calendar;
   }
 
   @override
@@ -140,38 +171,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
     super.dispose();
   }
 
-  void _abrirRecordatorios() => setState(() {
-        _vistaCalendario = true;
-        _vistaCargaFacturas = false;
-        _vistaGeneral = false;
-        _vistaCobrosMensuales = false;
-        _vistaEstadisticas = false;
-        _vistaVendedores = false;
-        _vistaClientes = false;
-        _vistaBusquedaGeneral = false;
-      });
+  void _abrirRecordatorios() => _navigate(ReportDestination.calendar);
 
-  void _mostrarReporteVentas() => setState(() {
-        _vistaCalendario = false;
-        _vistaCargaFacturas = false;
-        _vistaGeneral = false;
-        _vistaCobrosMensuales = false;
-        _vistaEstadisticas = false;
-        _vistaVendedores = false;
-        _vistaClientes = false;
-        _vistaBusquedaGeneral = false;
-        _seccionMovil = 0;
-      });
+  void _mostrarReporteVentas() => _navigate(ReportDestination.sales);
 
-  void _mostrarClientes() => setState(() {
-        _vistaCalendario = false;
-        _vistaCargaFacturas = false;
-        _vistaClientes = true;
-        _vistaVendedores = false;
-        _vistaCobrosMensuales = false;
-        _vistaEstadisticas = false;
-        _vistaGeneral = false;
-      });
+  void _mostrarClientes() => _navigate(ReportDestination.clients);
 
   Future<void> _cargarVendedores() async {
     await _vendedores.cargar();
@@ -587,11 +591,12 @@ class _ReporteScreenState extends State<ReporteScreen> {
     _normalizarFilas();
   }
 
-  Future<void> _editarAbono(
+  Future<bool> _editarAbono(
     FilaVenta fila,
     int indice, {
     bool nuevo = false,
     Abono? borrador,
+    String? mesReporte,
   }) async {
     final abono = borrador ?? (nuevo ? Abono() : fila.abonos[indice]);
     final montoController = TextEditingController(
@@ -757,10 +762,15 @@ class _ReporteScreenState extends State<ReporteScreen> {
       reciboController.dispose();
       comentarioController.dispose();
     }));
-    if (!mounted) return;
+    if (!mounted) return false;
     if (eliminar) {
-      await _eliminarAbono(fila, indice, abono);
-      return;
+      await _eliminarAbono(
+        fila,
+        indice,
+        abono,
+        mesReporte: mesReporte,
+      );
+      return true;
     }
     if (resultado != null) {
       final totalPropuesto = fila.totalAbonos - abono.valor + resultado.$1;
@@ -774,10 +784,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ),
           ),
         );
-        return;
+        return false;
       }
     }
-    if (resultado == null) return;
+    if (resultado == null) return false;
 
     // Persistimos una copia: totales y saldo visibles no cambian hasta que la
     // RPC confirme. Ante cualquier error, el estado local permanece intacto.
@@ -792,42 +802,62 @@ class _ReporteScreenState extends State<ReporteScreen> {
     } else {
       propuesta.abonos[indice] = abonoPropuesto;
     }
+    final reportName = mesReporte ?? _reportes.activo.nombre;
+    final saveKey = '$reportName:${fila.numero}:$indice';
+    if (!_abonosGuardandose.add(saveKey)) return false;
     late final FilaVenta confirmada;
     try {
       confirmada = await _supabaseReportes.guardarFila(
         propuesta,
-        _reportes.activo.nombre,
+        reportName,
       );
     } catch (error) {
-      if (!mounted) return;
+      _abonosGuardandose.remove(saveKey);
+      if (!mounted) return false;
       _mostrarErrorNube(
         'No fue posible guardar el abono. Inténtalo nuevamente.',
       );
-      await _editarAbono(
+      return _editarAbono(
         fila,
         indice,
         nuevo: nuevo,
         borrador: abonoPropuesto,
+        mesReporte: mesReporte,
       );
-      return;
     }
-    if (!mounted) return;
+    _abonosGuardandose.remove(saveKey);
+    if (!mounted) return false;
     setState(() {
       fila.abonos
         ..clear()
         ..addAll(confirmada.abonos);
-      _asegurarFilaVacia();
+      if (mesReporte == null) _asegurarFilaVacia();
     });
-    await _guardarProgreso();
+    if (mesReporte == null) {
+      await _guardarProgreso();
+      await _actualizarConsumidoresDeAbonos();
+    } else {
+      await _cargarReportes();
+      if (mounted) setState(() => _versionCobrosMensuales++);
+    }
+    return true;
   }
 
   Future<void> _eliminarAbono(
-      FilaVenta fila, int indice, Abono esperado) async {
+    FilaVenta fila,
+    int indice,
+    Abono esperado, {
+    String? mesReporte,
+  }) async {
     late final FilaVenta confirmada;
     try {
       confirmada = await _supabaseReportes.eliminarAbono(
-          fila, _reportes.activo.nombre, indice, esperado);
-      await _actualizarConsumidoresDeAbonos();
+          fila, mesReporte ?? _reportes.activo.nombre, indice, esperado);
+      if (mesReporte == null) {
+        await _actualizarConsumidoresDeAbonos();
+      } else {
+        await _cargarReportes();
+      }
     } catch (_) {
       if (!mounted) return;
       _mostrarErrorNube(
@@ -839,19 +869,27 @@ class _ReporteScreenState extends State<ReporteScreen> {
       fila.abonos
         ..clear()
         ..addAll(confirmada.abonos);
-      _asegurarFilaVacia();
+      if (mesReporte == null) _asegurarFilaVacia();
     });
-    await _guardarProgreso();
+    if (mesReporte == null) await _guardarProgreso();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Abono eliminado correctamente.')));
   }
 
-  Future<void> _agregarAbono(FilaVenta fila) async {
-    await _editarAbono(fila, fila.abonos.length, nuevo: true);
+  Future<void> _agregarAbono(FilaVenta fila, {String? mesReporte}) async {
+    await _editarAbono(
+      fila,
+      fila.abonos.length,
+      nuevo: true,
+      mesReporte: mesReporte,
+    );
   }
 
-  Future<void> _gestionarAbonosAdicionales(FilaVenta fila) async {
+  Future<void> _gestionarAbonosAdicionales(
+    FilaVenta fila, {
+    String? mesReporte,
+  }) async {
     await showDialog<void>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -876,7 +914,11 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       '\$${fila.abonos[indice].valor.toStringAsFixed(2)}',
                     ),
                     onTap: () async {
-                      await _editarAbono(fila, indice);
+                      await _editarAbono(
+                        fila,
+                        indice,
+                        mesReporte: mesReporte,
+                      );
                       actualizar(() {});
                     },
                   ),
@@ -890,7 +932,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ),
             FilledButton.icon(
               onPressed: () async {
-                await _agregarAbono(fila);
+                await _agregarAbono(fila, mesReporte: mesReporte);
                 actualizar(() {});
               },
               icon: const Icon(Icons.add),
@@ -903,16 +945,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   void _gestionarVendedores() {
-    setState(() {
-      _vistaCalendario = false;
-      _vistaCargaFacturas = false;
-      _vistaVendedores = true;
-      _vistaClientes = false;
-      _vistaCobrosMensuales = false;
-      _vistaEstadisticas = false;
-      _vistaGeneral = false;
-      _seccionMovil = 4;
-    });
+    _navigate(ReportDestination.sellers);
   }
 
   // Conservado temporalmente como referencia de la interfaz anterior.
@@ -1804,6 +1837,19 @@ class _ReporteScreenState extends State<ReporteScreen> {
     return partes.join(' · ');
   }
 
+  Widget _busquedaGeneral() => GeneralSearchScreen(
+        onEditPayment: (invoice, index, {required isNew}) => _editarAbono(
+          invoice.row,
+          index,
+          nuevo: isNew,
+          mesReporte: invoice.reportMonth,
+        ),
+        onManageAdditionalPayments: (invoice) => _gestionarAbonosAdicionales(
+          invoice.row,
+          mesReporte: invoice.reportMonth,
+        ),
+      );
+
   @override
   Widget build(BuildContext context) {
     if (_esReleaseMovil) return _vistaMovil();
@@ -1831,7 +1877,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     : _vistaClientes
                         ? const ClientesScreen()
                         : _vistaBusquedaGeneral
-                            ? const GeneralSearchScreen()
+                            ? _busquedaGeneral()
                             : _vistaVendedores
                                 ? VendedoresContent(store: _vendedores)
                                 : _vistaEstadisticas

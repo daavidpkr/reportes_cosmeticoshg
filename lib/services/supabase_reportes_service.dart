@@ -261,11 +261,81 @@ int? _paymentTermFromInvoice(Map<String, dynamic> factura) {
       : null;
 }
 
+class GlobalInvoiceRow {
+  const GlobalInvoiceRow({
+    required this.row,
+    required this.reportMonth,
+    this.paymentDate,
+  });
+
+  final FilaVenta row;
+  final String reportMonth;
+  final DateTime? paymentDate;
+}
+
+GlobalInvoiceRow globalInvoiceRowFromJson(Map<String, dynamic> data) {
+  final amounts = data['abonos'] is List ? data['abonos'] as List : const [];
+  final receipts = data['numeros_recibo'] is List
+      ? data['numeros_recibo'] as List
+      : const [];
+  final comments = data['comentarios_abonos'] is List
+      ? data['comentarios_abonos'] as List
+      : const [];
+  final payments = List<Abono>.generate(amounts.length, (index) {
+    return Abono(
+      valor: (amounts[index] as num?)?.toDouble() ?? 0,
+      numeroRecibo: index < receipts.length && receipts[index] != null
+          ? int.tryParse(receipts[index].toString())
+          : null,
+      comentario:
+          index < comments.length ? comments[index]?.toString() ?? '' : '',
+    );
+  });
+  while (payments.length < 2) {
+    payments.add(Abono());
+  }
+  return GlobalInvoiceRow(
+    reportMonth: data['mes_reporte']?.toString() ?? '',
+    paymentDate: DateTime.tryParse(data['fecha_programada']?.toString() ?? ''),
+    row: FilaVenta(
+      numero: (data['nro_fila'] as num?)?.toInt() ?? 0,
+      referencia: data['ref_fact']?.toString() ?? '',
+      cliente: data['cliente']?.toString() ?? '',
+      nombreComercial: data['nombre_comercial']?.toString() ?? '',
+      fecha: data['fecha']?.toString() ?? '',
+      numeroFactura: data['nro_fact']?.toString() ?? '',
+      vendedor: data['vendedor']?.toString() ?? '',
+      esmalte: (data['esmaltes'] as num?)?.toInt() ?? 0,
+      venta: (data['venta'] as num?)?.toDouble() ?? 0,
+      paymentTermDays: (data['plazo_pago_dias'] as num?)?.toInt(),
+      abonos: payments,
+    ),
+  );
+}
+
 class SupabaseReportesService {
   SupabaseReportesService({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
+
+  Future<List<GlobalInvoiceRow>> buscarFilasGlobales(
+    String query, {
+    required int offset,
+    int limit = 50,
+  }) async {
+    final response = await _client.rpc(
+      'enterprise_search_invoice_rows',
+      params: {
+        'p_search': query.trim(),
+        'p_offset': offset,
+        'p_limit': limit,
+      },
+    );
+    return List<Map<String, dynamic>>.from(response as List)
+        .map(globalInvoiceRowFromJson)
+        .toList(growable: false);
+  }
 
   Future<List<Map<String, dynamic>>> obtenerReportesMensuales() async {
     final respuesta = await _client

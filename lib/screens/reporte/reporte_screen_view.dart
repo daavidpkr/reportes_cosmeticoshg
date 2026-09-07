@@ -298,7 +298,7 @@ extension _ReporteScreenView on _ReporteScreenState {
       minimumWidth: geometry.tableWidth,
       table: _tablaCompartida(
         geometry: geometry,
-        mode: ReportTableMode.readOnly,
+        mode: ReportInvoiceTableMode.readOnly,
         filas: _filasGenerales
             .map((fila) => _crearFilaLectura(fila, geometry))
             .toList(),
@@ -306,42 +306,20 @@ extension _ReporteScreenView on _ReporteScreenState {
     );
   }
 
-  DataTable _tablaCompartida({
-    required ReportTableMode mode,
+  Widget _tablaCompartida({
+    required ReportInvoiceTableMode mode,
     required ReportTableGeometry geometry,
     required List<DataRow> filas,
   }) =>
-      DataTable(
-        key: ValueKey('report-data-table-${mode.name}'),
-        horizontalMargin: 7 * _escalaReporte,
-        columnSpacing: 10 * _escalaReporte,
-        dataRowMinHeight: 38 * _escalaReporte,
-        dataRowMaxHeight: 58 * _escalaReporte,
-        headingRowHeight: 46 * _escalaReporte,
-        headingRowColor: WidgetStatePropertyAll(context.hg.tableHeader),
-        headingTextStyle: TextStyle(
-          color: context.hg.mutedText,
-          fontWeight: FontWeight.w600,
-          letterSpacing: .7,
-          fontSize: _reportLayout.tableHeadingFontSize,
-        ),
-        dataTextStyle: TextStyle(fontSize: _reportLayout.tableFontSize),
-        columns: [
-          DataColumn(label: _encabezadoSinFiltro('NRO')),
-          DataColumn(label: _encabezadoSinFiltro('REF. (FACT)')),
-          DataColumn(label: _encabezado('CLIENTE', 'cliente')),
-          DataColumn(label: _encabezado('NOMBRE COMERCIAL', 'nombre')),
-          DataColumn(label: _encabezado('FECHA', 'fecha')),
-          DataColumn(label: _encabezado('NRO. FACT.', 'factura')),
-          DataColumn(label: _encabezado('VENDEDOR', 'vendedor')),
-          DataColumn(label: _encabezadoSinFiltro('ESMALTE')),
-          DataColumn(label: _encabezado('VENTA', 'venta')),
-          DataColumn(label: _encabezadoSinFiltro('ABONO 1')),
-          DataColumn(label: _encabezadoSinFiltro('ABONO 2')),
-          const DataColumn(label: SizedBox.shrink()),
-          DataColumn(label: _encabezadoSinFiltro('TOT. ABONO')),
-          DataColumn(label: _encabezado('SALDO', 'saldo')),
-        ],
+      ReportInvoiceTable(
+        mode: mode,
+        geometry: geometry,
+        scale: _escalaReporte,
+        headingFontSize: _reportLayout.tableHeadingFontSize,
+        dataFontSize: _reportLayout.tableFontSize,
+        headerBuilder: (label, filterKey) => filterKey == null
+            ? _encabezadoSinFiltro(label)
+            : _encabezado(label, filterKey),
         rows: filas,
       );
 
@@ -400,7 +378,7 @@ extension _ReporteScreenView on _ReporteScreenState {
       minimumWidth: geometry.tableWidth,
       table: _tablaCompartida(
         geometry: geometry,
-        mode: ReportTableMode.editable,
+        mode: ReportInvoiceTableMode.editable,
         filas: _filasVisibles
             .map((item) => _crearFila(item.key, item.value, geometry))
             .toList(),
@@ -557,7 +535,9 @@ extension _ReporteScreenView on _ReporteScreenState {
                 label: const Text('Eliminar reporte de cliente'),
               ),
               FilledButton.tonalIcon(
-                onPressed: () => setState(() => _vistaGeneral = !_vistaGeneral),
+                onPressed: () => _navigate(_vistaGeneral
+                    ? ReportDestination.sales
+                    : ReportDestination.general),
                 icon: Icon(
                   _vistaGeneral ? Icons.calendar_view_month : Icons.table_view,
                 ),
@@ -737,15 +717,7 @@ extension _ReporteScreenView on _ReporteScreenState {
     }
   }
 
-  void _abrirCargaFacturas() => setState(() {
-        _vistaCargaFacturas = true;
-        _vistaCalendario = false;
-        _vistaGeneral = false;
-        _vistaCobrosMensuales = false;
-        _vistaEstadisticas = false;
-        _vistaVendedores = false;
-        _vistaClientes = false;
-      });
+  void _abrirCargaFacturas() => _navigate(ReportDestination.invoiceImport);
 
   Widget _barraRedisenada(ReportResponsiveLayout layout) => Container(
         key: const ValueKey('report-toolbar'),
@@ -1042,82 +1014,35 @@ extension _ReporteScreenView on _ReporteScreenState {
                   children: [
                     _pestana(
                       'Reporte de ventas',
-                      !_vistaGeneral &&
-                          !_vistaCobrosMensuales &&
-                          !_vistaEstadisticas &&
-                          !_vistaVendedores &&
-                          !_vistaClientes &&
-                          !_vistaCalendario &&
-                          !_vistaCargaFacturas,
+                      _destination == ReportDestination.sales,
                       _mostrarReporteVentas,
                     ),
                     _pestana(
                       'Reporte general',
-                      _vistaGeneral &&
-                          !_vistaCobrosMensuales &&
-                          !_vistaEstadisticas &&
-                          !_vistaVendedores &&
-                          !_vistaClientes,
-                      () => setState(() {
-                        _vistaCalendario = false;
-                        _vistaCargaFacturas = false;
-                        _vistaGeneral = true;
-                        _vistaCobrosMensuales = false;
-                        _vistaEstadisticas = false;
-                        _vistaVendedores = false;
-                        _vistaClientes = false;
-                      }),
+                      _destination == ReportDestination.general,
+                      () => _navigate(ReportDestination.general),
                     ),
                     _pestana(
                       'Reporte de Cobros Mensuales',
                       _vistaCobrosMensuales,
-                      () => setState(() {
-                        _vistaCalendario = false;
-                        _vistaCargaFacturas = false;
-                        _vistaCobrosMensuales = true;
-                        _vistaEstadisticas = false;
-                        _vistaVendedores = false;
-                        _vistaClientes = false;
-                      }),
+                      () => _navigate(ReportDestination.monthlyCollections),
                     ),
                     _pestana(
                       'Clientes',
                       _vistaClientes,
-                      () => setState(() {
-                        _vistaCalendario = false;
-                        _vistaCargaFacturas = false;
-                        _vistaClientes = true;
-                        _vistaCobrosMensuales = false;
-                        _vistaEstadisticas = false;
-                        _vistaVendedores = false;
-                        _vistaGeneral = false;
-                        _seccionMovil = 3;
-                      }),
+                      _mostrarClientes,
                     ),
                     _pestana(
                       'Búsqueda general',
                       _vistaBusquedaGeneral,
-                      () => setState(() {
-                        _vistaBusquedaGeneral = true;
-                        _vistaCalendario =
-                            _vistaCargaFacturas = _vistaClientes = false;
-                        _vistaCobrosMensuales = _vistaEstadisticas =
-                            _vistaVendedores = _vistaGeneral = false;
-                      }),
+                      () => _navigate(ReportDestination.globalSearch),
                     ),
                     _pestana(
                         'Vendedores', _vistaVendedores, _gestionarVendedores),
                     _pestana(
                       'Estadísticas',
                       _vistaEstadisticas,
-                      () => setState(() {
-                        _vistaCalendario = false;
-                        _vistaCargaFacturas = false;
-                        _vistaEstadisticas = true;
-                        _vistaCobrosMensuales = false;
-                        _vistaVendedores = false;
-                        _vistaClientes = false;
-                      }),
+                      () => _navigate(ReportDestination.statistics),
                     ),
                   ],
                 ),
@@ -1912,13 +1837,7 @@ extension _ReporteScreenView on _ReporteScreenState {
       );
 
   Widget _vistaMovil() => PopScope(
-      canPop: _seccionMovil == 0 &&
-          !_vistaCalendario &&
-          !_vistaCargaFacturas &&
-          !_vistaCobrosMensuales &&
-          !_vistaEstadisticas &&
-          !_vistaVendedores &&
-          !_vistaClientes,
+      canPop: _destination == ReportDestination.sales,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop) _mostrarReporteVentas();
       },
@@ -1971,35 +1890,13 @@ extension _ReporteScreenView on _ReporteScreenState {
                   case 'clients':
                     _mostrarClientes();
                   case 'global_search':
-                    setState(() {
-                      _vistaBusquedaGeneral = true;
-                      _vistaCalendario =
-                          _vistaCargaFacturas = _vistaClientes = false;
-                      _vistaCobrosMensuales = _vistaEstadisticas =
-                          _vistaVendedores = _vistaGeneral = false;
-                    });
+                    _navigate(ReportDestination.globalSearch);
                   case 'collections':
-                    setState(() {
-                      _vistaCalendario = false;
-                      _vistaCargaFacturas = false;
-                      _vistaCobrosMensuales = true;
-                      _vistaEstadisticas = false;
-                      _vistaVendedores = false;
-                      _vistaClientes = false;
-                      _vistaGeneral = false;
-                    });
+                    _navigate(ReportDestination.monthlyCollections);
                   case 'sellers':
                     _gestionarVendedores();
                   case 'statistics':
-                    setState(() {
-                      _vistaCalendario = false;
-                      _vistaCargaFacturas = false;
-                      _vistaEstadisticas = true;
-                      _vistaCobrosMensuales = false;
-                      _vistaVendedores = false;
-                      _vistaClientes = false;
-                      _vistaGeneral = false;
-                    });
+                    _navigate(ReportDestination.statistics);
                   case 'notifications':
                     await Navigator.of(context).push(MaterialPageRoute<void>(
                         builder: (_) => const PaymentRemindersScreen()));
@@ -2101,43 +1998,34 @@ extension _ReporteScreenView on _ReporteScreenState {
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
-        bottomNavigationBar: NavigationBar(
-          height: 68,
-          selectedIndex: _seccionMovil,
-          indicatorColor: Theme.of(context).colorScheme.secondaryContainer,
-          onDestinationSelected: (indice) {
-            setState(() {
-              _vistaCalendario = false;
-              _vistaCargaFacturas = false;
-              _seccionMovil = indice;
-              _vistaCalendario = indice == 3;
-              _vistaCobrosMensuales = false;
-              _vistaClientes = indice == 2;
-              _vistaVendedores = false;
-              _vistaBusquedaGeneral = false;
-              _vistaEstadisticas = false;
-              _vistaGeneral = indice == 1;
-            });
-          },
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.receipt_long_outlined),
-              label: 'Ventas',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.bar_chart_outlined),
-              label: 'General',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.groups_outlined),
-              label: 'Clientes',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.calendar_month_outlined),
-              label: 'Calendario',
-            ),
-          ],
-        ),
+        bottomNavigationBar: mobileNavigationIndex(_destination) == null
+            ? null
+            : NavigationBar(
+                height: 68,
+                selectedIndex: mobileNavigationIndex(_destination)!,
+                indicatorColor:
+                    Theme.of(context).colorScheme.secondaryContainer,
+                onDestinationSelected: (index) =>
+                    _navigate(destinationForMobileIndex(index)),
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.receipt_long_outlined),
+                    label: 'Ventas',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.bar_chart_outlined),
+                    label: 'General',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.groups_outlined),
+                    label: 'Clientes',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.calendar_month_outlined),
+                    label: 'Calendario',
+                  ),
+                ],
+              ),
         body: _vistaCalendario
             ? PaymentCalendarView(
                 key: ValueKey(widget.calendarRequestId),
@@ -2158,7 +2046,7 @@ extension _ReporteScreenView on _ReporteScreenState {
                     : _vistaClientes
                         ? const SafeArea(child: ClientesScreen())
                         : _vistaBusquedaGeneral
-                            ? const SafeArea(child: GeneralSearchScreen())
+                            ? SafeArea(child: _busquedaGeneral())
                             : _vistaEstadisticas
                                 ? const SafeArea(child: EstadisticasScreen())
                                 : _vistaCobrosMensuales
