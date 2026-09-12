@@ -4,6 +4,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/facturas_store.dart';
 import '../models/factura.dart';
@@ -11,8 +12,6 @@ import '../services/invoice_batch_importer.dart';
 import '../services/invoice_file_preparer.dart';
 import '../services/supabase_reportes_service.dart';
 import '../services/vendedores_store.dart';
-import '../services/customer_terms_repository.dart';
-import '../models/billing_customer.dart';
 import '../theme/hg_theme.dart';
 
 const _maxPaymentTermDays = 3650;
@@ -80,51 +79,31 @@ class _InvoiceReviewDialogState extends State<InvoiceReviewDialog> {
   bool _guardando = false;
   String? _masivo;
   String? _plazoMasivo;
-  bool _cargandoPlazos = true;
 
   @override
   void initState() {
     super.initState();
-    if (widget.requirePaymentTerms) {
-      _cargarPlazos();
-    } else {
-      _cargandoPlazos = false;
+    if (!widget.requirePaymentTerms) {
       for (final invoice in widget.review.invoices) {
         invoice.termEstablished = true;
       }
     }
   }
 
-  Future<void> _cargarPlazos() async {
-    try {
-      final customers = await CustomerTermsRepository().listCustomers();
-      final byKey = <String, BillingCustomer>{
-        for (final customer in customers)
-          '${customer.name.trim().toLowerCase()}|${customer.commercialName.trim().toLowerCase()}':
-              customer,
-      };
-      final shared = <String, int?>{};
-      for (final invoice in widget.review.invoices) {
-        final existing = byKey[invoice.customerKey];
-        invoice.termEstablished = existing?.paymentTermDays != null;
-        invoice.paymentTermDays = shared.putIfAbsent(
-            invoice.customerKey, () => existing?.paymentTermDays);
-      }
-    } catch (_) {
-      // A missing canonical read is unsafe: leave the import disabled instead
-      // of guessing a customer term from its visible name.
-    } finally {
-      if (mounted) setState(() => _cargandoPlazos = false);
-    }
-  }
-
   int get _asignadas => widget.review.invoices
       .where((item) => item.vendedor?.isNotEmpty ?? false)
       .length;
-  bool get _plazosListos =>
-      !_cargandoPlazos &&
-      widget.review.invoices.every(
-          (item) => item.termEstablished || item.paymentTermDays != null);
+  bool get _plazosListos => widget.review.invoices.every((item) =>
+      !item.customerAmbiguous &&
+      (item.termEstablished || item.paymentTermDays != null));
+  int get _plazosPendientes => widget.review.invoices
+      .map((item) => item.customerKey)
+      .toSet()
+      .where((key) => widget.review.invoices.any((item) =>
+          item.customerKey == key &&
+          !item.termEstablished &&
+          item.paymentTermDays == null))
+      .length;
 
   Future<void> _aplicarATodas(String value) async {
     if (_asignadas > 0) {
@@ -206,7 +185,7 @@ class _InvoiceReviewDialogState extends State<InvoiceReviewDialog> {
                         Text('Revisar y asignar vendedores y plazos',
                             style: Theme.of(context).textTheme.headlineSmall),
                         Text(
-                            '$_asignadas con vendedor · ${_plazosListos ? 'plazos listos' : 'plazos pendientes'}'),
+                            '$_asignadas con vendedor · $_plazosPendientes plazos pendientes'),
                       ])),
                   IconButton(
                       tooltip: 'Cancelar importación',
@@ -250,22 +229,29 @@ class _InvoiceReviewDialogState extends State<InvoiceReviewDialog> {
                           width: 190,
                           child: TextFormField(
                             initialValue: _plazoMasivo,
-                            enabled: !_cargandoPlazos,
+                            enabled: widget.review.invoices.any((item) =>
+                                !item.termEstablished &&
+                                !item.customerAmbiguous),
                             keyboardType: TextInputType.number,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly
+                            ],
                             decoration: const InputDecoration(
                                 labelText: 'Asignar días a pendientes'),
                             onChanged: (value) {
                               final days = int.tryParse(value);
-                              if (days == null ||
-                                  days < 0 ||
-                                  days > _maxPaymentTermDays) {
-                                return;
-                              }
+                              final validDays = days != null &&
+                                      days >= 0 &&
+                                      days <= _maxPaymentTermDays
+                                  ? days
+                                  : null;
                               setState(() {
                                 _plazoMasivo = value;
                                 for (final invoice in widget.review.invoices
-                                    .where((i) => !i.termEstablished)) {
-                                  invoice.paymentTermDays = days;
+                                    .where((i) =>
+                                        !i.termEstablished &&
+                                        !i.customerAmbiguous)) {
+                                  invoice.paymentTermDays = validDays;
                                 }
                               });
                             },
@@ -282,25 +268,37 @@ class _InvoiceReviewDialogState extends State<InvoiceReviewDialog> {
                     padding: EdgeInsets.all(12),
                     child: Text(
                         'No hay vendedores disponibles en el catálogo sincronizado.')),
+              if (widget.review.invoices.any((item) => item.customerAmbiguous))
+                Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Text(
+                        'Hay clientes ambiguos. Corrige o vincula su perfil antes de importar; no se seleccionará uno automáticamente.',
+                        style: TextStyle(
+                            color: Theme.of(context).colorScheme.error))),
               const Divider(),
               Expanded(
                   child: ListView.builder(
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
                 itemCount: visibles.length,
-                itemBuilder: (_, index) => _InvoiceReviewCard(
-                    invoice: visibles[index],
-                    vendedores: widget.vendedores,
-                    onChanged: () => setState(() => _masivo = null),
-                    onTermChanged: (days) => setState(() {
-                          for (final sameCustomer in widget.review.invoices
-                              .where((item) =>
-                                  item.customerKey ==
-                                      visibles[index].customerKey &&
-                                  !item.termEstablished)) {
-                            sameCustomer.paymentTermDays = days;
-                          }
-                        })),
+                itemBuilder: (_, index) {
+                  final invoice = visibles[index];
+                  final firstForCustomer = widget.review.invoices.firstWhere(
+                      (item) => item.customerKey == invoice.customerKey);
+                  return _InvoiceReviewCard(
+                      invoice: invoice,
+                      showTermEditor: identical(invoice, firstForCustomer),
+                      vendedores: widget.vendedores,
+                      onChanged: () => setState(() => _masivo = null),
+                      onTermChanged: (days) => setState(() {
+                            for (final sameCustomer in widget.review.invoices
+                                .where((item) =>
+                                    item.customerKey == invoice.customerKey &&
+                                    !item.termEstablished)) {
+                              sameCustomer.paymentTermDays = days;
+                            }
+                          }));
+                },
               )),
               if (widget.review.fileIssues.isNotEmpty ||
                   widget.review.issues.isNotEmpty)
@@ -372,10 +370,12 @@ class _InvoiceReviewDialogState extends State<InvoiceReviewDialog> {
 class _InvoiceReviewCard extends StatelessWidget {
   const _InvoiceReviewCard(
       {required this.invoice,
+      required this.showTermEditor,
       required this.vendedores,
       required this.onChanged,
       required this.onTermChanged});
   final ReviewableInvoice invoice;
+  final bool showTermEditor;
   final List<Vendedor> vendedores;
   final VoidCallback onChanged;
   final ValueChanged<int?> onTermChanged;
@@ -435,22 +435,35 @@ class _InvoiceReviewCard extends StatelessWidget {
                 },
               );
               final plazo = invoice.termEstablished
-                  ? Text('Días de pago: ${invoice.paymentTermDays} días')
-                  : TextFormField(
-                      key: ValueKey('term-${invoice.factura.secuencial}'),
-                      initialValue: invoice.paymentTermDays?.toString() ?? '',
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          labelText: 'Días de pago obligatorios'),
-                      onChanged: (value) {
-                        final days = int.tryParse(value);
-                        if (days != null &&
-                            days >= 0 &&
-                            days <= _maxPaymentTermDays) {
-                          onTermChanged(days);
-                        }
-                      },
-                    );
+                  ? Text('Plazo configurado: ${invoice.paymentTermDays} días')
+                  : invoice.customerAmbiguous
+                      ? Text(invoice.resolutionError!,
+                          style: TextStyle(
+                              color: Theme.of(context).colorScheme.error))
+                      : !showTermEditor
+                          ? Text(invoice.paymentTermDays == null
+                              ? 'Plazo pendiente (se asigna una sola vez por cliente)'
+                              : 'Plazo del lote: ${invoice.paymentTermDays} días')
+                          : TextFormField(
+                              key: ValueKey(
+                                  'term-${invoice.factura.secuencial}'),
+                              initialValue:
+                                  invoice.paymentTermDays?.toString() ?? '',
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly
+                              ],
+                              decoration: const InputDecoration(
+                                  labelText: 'Días de pago obligatorios'),
+                              onChanged: (value) {
+                                final days = int.tryParse(value);
+                                onTermChanged(days != null &&
+                                        days >= 0 &&
+                                        days <= _maxPaymentTermDays
+                                    ? days
+                                    : null);
+                              },
+                            );
               return constraints.maxWidth >= 700
                   ? Row(children: [
                       Expanded(child: info),
@@ -636,6 +649,10 @@ class _CargaFacturasViewState extends State<CargaFacturasView> {
             context: context,
             builder: (_) => InvoiceIssuesDialog(review: revision));
       } else {
+        final resolutions =
+            await service.resolverClientesImportacion(revision.invoices);
+        applyCustomerImportResolutions(revision.invoices, resolutions);
+        if (!mounted) return;
         final asignadas = await showDialog<List<FacturaAsignada>>(
           context: context,
           barrierDismissible: false,

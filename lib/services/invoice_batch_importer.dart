@@ -19,15 +19,109 @@ class InvoiceReviewIssue {
 }
 
 class ReviewableInvoice {
-  ReviewableInvoice({required this.factura, required this.file});
+  ReviewableInvoice({required this.factura, required this.file})
+      : customerKey = invoiceCustomerKey(factura);
   final Factura factura;
   final PreparedInvoiceXml file;
   String? vendedor;
   int? paymentTermDays;
   bool termEstablished = false;
-  String get customerKey => factura.identificacionComprador.trim().isNotEmpty
-      ? 'id:${factura.identificacionComprador.trim()}'
-      : '${factura.cliente.trim().toLowerCase()}|${factura.nombreComercial.trim().toLowerCase()}';
+  String customerKey;
+  String? customerId;
+  String? resolutionError;
+
+  bool get customerAmbiguous => resolutionError != null;
+}
+
+String invoiceCustomerKey(Factura factura) {
+  final identification = factura.identificacionComprador
+      .replaceAll(RegExp(r'[^A-Za-z0-9]'), '')
+      .toUpperCase();
+  if (identification.isNotEmpty) return 'id:$identification';
+  String normalize(String value) =>
+      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  return 'legacy:${normalize(factura.cliente)}|${normalize(factura.nombreComercial)}';
+}
+
+class CustomerImportResolution {
+  const CustomerImportResolution({
+    required this.groupKey,
+    required this.status,
+    this.customerId,
+    this.paymentTermDays,
+    this.message,
+  });
+
+  final String groupKey;
+  final String status;
+  final String? customerId;
+  final int? paymentTermDays;
+  final String? message;
+
+  factory CustomerImportResolution.fromJson(Map<String, dynamic> json) =>
+      CustomerImportResolution(
+        groupKey: json['group_key']?.toString() ?? '',
+        status: json['status']?.toString() ?? 'ambiguous',
+        customerId: json['customer_id']?.toString(),
+        paymentTermDays: (json['payment_term_days'] as num?)?.toInt(),
+        message: json['message']?.toString(),
+      );
+}
+
+List<Map<String, String>> buildCustomerResolutionPayload(
+    Iterable<ReviewableInvoice> invoices) {
+  final unique = <String, ReviewableInvoice>{};
+  for (final invoice in invoices) {
+    unique.putIfAbsent(invoice.customerKey, () => invoice);
+  }
+  return unique.entries
+      .map((entry) => {
+            'group_key': entry.key,
+            'identificacion_comprador':
+                entry.value.factura.identificacionComprador,
+            'tipo_identificacion_comprador':
+                entry.value.factura.tipoIdentificacionComprador,
+            'cliente': entry.value.factura.cliente,
+            'nombre_comercial': entry.value.factura.nombreComercial,
+          })
+      .toList(growable: false);
+}
+
+void applyCustomerImportResolutions(
+  Iterable<ReviewableInvoice> invoices,
+  Iterable<CustomerImportResolution> resolutions,
+) {
+  final byInputKey = <String, CustomerImportResolution>{
+    for (final resolution in resolutions) resolution.groupKey: resolution,
+  };
+  for (final invoice in invoices) {
+    final resolution = byInputKey[invoice.customerKey];
+    if (resolution == null) {
+      invoice.resolutionError =
+          'No se pudo resolver este cliente de forma segura.';
+      continue;
+    }
+    if (resolution.status == 'ambiguous') {
+      invoice.resolutionError = resolution.message ??
+          'Hay más de un perfil compatible; revisa el cliente antes de importar.';
+      continue;
+    }
+    invoice.customerId = resolution.customerId;
+    if (resolution.customerId != null) {
+      invoice.customerKey = 'customer:${resolution.customerId}';
+    }
+    invoice.paymentTermDays = resolution.paymentTermDays;
+    invoice.termEstablished = resolution.paymentTermDays != null;
+  }
+
+  // Different input spellings can resolve to the same canonical customer.
+  // Share one state across every invoice after canonical IDs are known.
+  final canonical = <String, ReviewableInvoice>{};
+  for (final invoice in invoices.where((item) => !item.customerAmbiguous)) {
+    final first = canonical.putIfAbsent(invoice.customerKey, () => invoice);
+    invoice.paymentTermDays = first.paymentTermDays;
+    invoice.termEstablished = first.termEstablished;
+  }
 }
 
 class InvoiceBatchReview {

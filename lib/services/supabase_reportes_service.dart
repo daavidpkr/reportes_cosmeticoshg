@@ -538,6 +538,17 @@ class SupabaseReportesService {
         .toSet();
   }
 
+  Future<List<CustomerImportResolution>> resolverClientesImportacion(
+      Iterable<ReviewableInvoice> invoices) async {
+    final payload = buildCustomerResolutionPayload(invoices);
+    if (payload.isEmpty) return const [];
+    final value = await _client.rpc('resolve_enterprise_import_customers',
+        params: {'p_customers': payload});
+    return List<Map<String, dynamic>>.from(value as List)
+        .map(CustomerImportResolution.fromJson)
+        .toList(growable: false);
+  }
+
   Future<int> importarFacturasMensualesAsignadas(
       Iterable<FacturaAsignada> facturas, int anio, int mes) async {
     final lote = facturas.toList(growable: false);

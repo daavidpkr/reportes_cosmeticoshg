@@ -338,6 +338,177 @@ void main() {
     });
   });
 
+  group('resolución canónica de plazos', () {
+    late FacturasStore store;
+
+    setUp(() {
+      store = FacturasStore.instance
+        ..limpiar()
+        ..mesPermitido = 8
+        ..anioPermitido = 2026;
+    });
+    tearDown(() => store.limpiar());
+
+    Future<InvoiceBatchReview> reviewFor(List<String> xml) async {
+      final batch = await _preparer.prepare([
+        for (var index = 0; index < xml.length; index++)
+          _file('$index.xml', utf8.encode(xml[index])),
+      ]);
+      return const InvoiceBatchImporter().review(batch, store: store);
+    }
+
+    test('normaliza identificación conservando ceros para agrupar', () async {
+      final review = await reviewFor([
+        _xmlWithBuyerId('101', ' 000-123 ', '04'),
+        _xmlWithBuyerId('102', '000123', '04'),
+      ]);
+      expect(review.invoices.map((item) => item.customerKey).toSet(),
+          {'id:000123'});
+      expect(buildCustomerResolutionPayload(review.invoices), hasLength(1));
+    });
+
+    test('cliente nuevo y existente sin plazo quedan pendientes', () async {
+      final review = await reviewFor([
+        _xmlWithBuyerId('103', 'NEW-1', '04'),
+        _xmlWithBuyerId('104', 'OLD-1', '04'),
+      ]);
+      applyCustomerImportResolutions(review.invoices, const [
+        CustomerImportResolution(groupKey: 'id:NEW1', status: 'new'),
+        CustomerImportResolution(
+            groupKey: 'id:OLD1',
+            status: 'existing_without_term',
+            customerId: 'customer-old'),
+      ]);
+      expect(review.invoices.every((item) => !item.termEstablished), isTrue);
+      expect(review.invoices.every((item) => item.paymentTermDays == null),
+          isTrue);
+    });
+
+    test('cliente existente conserva 60 días en todas sus facturas', () async {
+      final review = await reviewFor([
+        _xmlWithBuyerId('105', '001-002-003', '04'),
+        _xmlWithBuyerId('106', '001002003', '04'),
+      ]);
+      applyCustomerImportResolutions(review.invoices, const [
+        CustomerImportResolution(
+            groupKey: 'id:001002003',
+            status: 'existing_with_term',
+            customerId: 'lorena-equivalent',
+            paymentTermDays: 60),
+      ]);
+      expect(review.invoices.every((item) => item.termEstablished), isTrue);
+      expect(review.invoices.map((item) => item.paymentTermDays), [60, 60]);
+      expect(review.invoices.map((item) => item.customerKey).toSet(),
+          {'customer:lorena-equivalent'});
+    });
+
+    test('customer_id canónico reúne entradas con nombres diferentes',
+        () async {
+      final review = await reviewFor([
+        _xmlWithBuyerId('107', 'A-1', '04'),
+        _xmlWithBuyerId('108', 'B-2', '04'),
+      ]);
+      applyCustomerImportResolutions(review.invoices, const [
+        CustomerImportResolution(
+            groupKey: 'id:A1',
+            status: 'existing_with_term',
+            customerId: 'canonical',
+            paymentTermDays: 30),
+        CustomerImportResolution(
+            groupKey: 'id:B2',
+            status: 'existing_with_term',
+            customerId: 'canonical',
+            paymentTermDays: 30),
+      ]);
+      expect(review.invoices.map((item) => item.customerKey).toSet(),
+          {'customer:canonical'});
+    });
+
+    test('coincidencia ambigua no se asigna ni se habilita', () async {
+      final review = await reviewFor([
+        _xmlWithBuyerId('109', 'AMB-1', '04'),
+      ]);
+      applyCustomerImportResolutions(review.invoices, const [
+        CustomerImportResolution(
+            groupKey: 'id:AMB1',
+            status: 'ambiguous',
+            message: 'Dos perfiles históricos coinciden.'),
+      ]);
+      expect(review.invoices.single.customerAmbiguous, isTrue);
+      expect(review.invoices.single.customerId, isNull);
+    });
+  });
+
+  testWidgets('plazo existente no se solicita y permite confirmar',
+      (tester) async {
+    final store = FacturasStore.instance
+      ..limpiar()
+      ..mesPermitido = 8
+      ..anioPermitido = 2026;
+    addTearDown(store.limpiar);
+    final batch = await _preparer.prepare([
+      _file(
+          'lorena.xml', utf8.encode(_xmlWithBuyerId('110', '001002003', '04'))),
+    ]);
+    final review = const InvoiceBatchImporter().review(batch, store: store);
+    applyCustomerImportResolutions(review.invoices, const [
+      CustomerImportResolution(
+          groupKey: 'id:001002003',
+          status: 'existing_with_term',
+          customerId: 'lorena-equivalent',
+          paymentTermDays: 60),
+    ]);
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: InvoiceReviewDialog(
+      review: review,
+      requirePaymentTerms: true,
+      vendedores: const [Vendedor(codigo: '01', nombre: 'Ana')],
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('Plazo configurado: 60 días'), findsOneWidget);
+    expect(find.text('Días de pago obligatorios'), findsNothing);
+    await tester.tap(find.byKey(const ValueKey('assign-all-seller')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('01 - Ana').last);
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<FilledButton>(
+                find.byKey(const ValueKey('confirm-invoice-import')))
+            .onPressed,
+        isNotNull);
+  });
+
+  testWidgets('varias facturas sin plazo muestran un solo editor',
+      (tester) async {
+    final store = FacturasStore.instance
+      ..limpiar()
+      ..mesPermitido = 8
+      ..anioPermitido = 2026;
+    addTearDown(store.limpiar);
+    final batch = await _preparer.prepare([
+      _file('uno.xml', utf8.encode(_xmlWithBuyerId('111', 'NEW-2', '04'))),
+      _file('dos.xml', utf8.encode(_xmlWithBuyerId('112', 'NEW-2', '04'))),
+    ]);
+    final review = const InvoiceBatchImporter().review(batch, store: store);
+    applyCustomerImportResolutions(review.invoices, const [
+      CustomerImportResolution(groupKey: 'id:NEW2', status: 'new'),
+    ]);
+    await tester.binding.setSurfaceSize(const Size(900, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: InvoiceReviewDialog(
+      review: review,
+      requirePaymentTerms: true,
+      vendedores: const [Vendedor(codigo: '01', nombre: 'Ana')],
+    ))));
+    await tester.pumpAndSettle();
+    expect(find.text('Días de pago obligatorios'), findsOneWidget);
+    expect(find.textContaining('se asigna una sola vez'), findsOneWidget);
+  });
+
   testWidgets('revisión exige vendedor, permite masivo y cambio individual',
       (tester) async {
     final store = FacturasStore.instance
