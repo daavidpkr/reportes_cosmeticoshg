@@ -686,7 +686,7 @@ extension _ReporteScreenView on _ReporteScreenState {
       return;
     }
     try {
-      final ruta = await _exporter.guardarResumenMensual(
+      final resultado = await _exporter.guardarResumenMensual(
         filas,
         periodo: _reportes.activo.nombre,
         nombresVendedores: {
@@ -696,7 +696,7 @@ extension _ReporteScreenView on _ReporteScreenState {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Reporte mensual guardado en: $ruta')),
+        SnackBar(content: Text(resultado.confirmationMessage)),
       );
     } catch (error) {
       if (!mounted) return;

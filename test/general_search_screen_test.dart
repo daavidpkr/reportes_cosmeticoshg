@@ -36,12 +36,14 @@ Widget app({
   required GlobalInvoiceSearch search,
   GlobalPaymentEditor? edit,
   GlobalAdditionalPayments? additional,
+  bool mobileCards = false,
 }) =>
     MaterialApp(
       theme: ThemeData(extensions: const [HgThemeColors.light]),
       home: Scaffold(
         body: GeneralSearchScreen(
           search: search,
+          useMobileCards: mobileCards,
           onEditPayment:
               edit ?? (invoice, index, {required isNew}) async => false,
           onManageAdditionalPayments: additional ?? (invoice) async {},
@@ -50,11 +52,49 @@ Widget app({
     );
 
 void main() {
+  Future<void> runSearch(WidgetTester tester, String value) async {
+    await tester.enterText(
+      find.byKey(const ValueKey('global-search-field')),
+      value,
+    );
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pump();
+  }
+
+  testWidgets('starts empty and clearing cancels and hides results',
+      (tester) async {
+    final calls = <String>[];
+    await tester.pumpWidget(app(
+      search: (query, {required offset, required limit}) async {
+        calls.add(query);
+        return [invoice()];
+      },
+    ));
+    await tester.pump();
+
+    expect(calls, isEmpty);
+    expect(find.text('Escribe para buscar una factura'), findsOneWidget);
+    expect(find.byType(ReportInvoiceTable), findsNothing);
+
+    await runSearch(tester, '  cliente  ');
+    expect(calls, ['cliente']);
+    expect(find.byType(ReportInvoiceTable), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('global-search-field')),
+      '   ',
+    );
+    await tester.pump();
+    expect(calls, ['cliente']);
+    expect(find.text('Escribe para buscar una factura'), findsOneWidget);
+    expect(find.byType(ReportInvoiceTable), findsNothing);
+  });
+
   testWidgets('uses the canonical complete report table', (tester) async {
     await tester.pumpWidget(app(
       search: (_, {required offset, required limit}) async => [invoice()],
     ));
-    await tester.pumpAndSettle();
+    await runSearch(tester, 'cliente');
 
     expect(find.byType(ReportInvoiceTable), findsOneWidget);
     for (final label
@@ -85,13 +125,13 @@ void main() {
     }
 
     await tester.pumpWidget(app(search: search));
-    await tester.pumpAndSettle();
+    await tester.pump();
     await tester.enterText(
         find.byKey(const ValueKey('global-search-field')), 'primera');
     await tester.pump(const Duration(milliseconds: 349));
-    expect(calls, ['']);
+    expect(calls, isEmpty);
     await tester.pump(const Duration(milliseconds: 1));
-    expect(calls, ['', 'primera']);
+    expect(calls, ['primera']);
 
     await tester.enterText(
         find.byKey(const ValueKey('global-search-field')), 'segunda');
@@ -120,7 +160,7 @@ void main() {
         return [invoice(reference: '51', number: 51)];
       },
     ));
-    await tester.pumpAndSettle();
+    await runSearch(tester, 'factura');
     expect(offsets, [0]);
 
     final loadMore = tester.widget<TextButton>(
@@ -148,7 +188,7 @@ void main() {
       },
       additional: (item) async => actions.add('${item.reportMonth}:additional'),
     ));
-    await tester.pumpAndSettle();
+    await runSearch(tester, 'cliente');
 
     final firstPayment = tester.widget<OutlinedButton>(find.byKey(
       const ValueKey('global-payment-Marzo 2025-7-0'),
@@ -177,7 +217,7 @@ void main() {
         return true;
       },
     ));
-    await tester.pumpAndSettle();
+    await runSearch(tester, 'anulada');
 
     for (var index = 0; index < 2; index++) {
       final button = tester.widget<OutlinedButton>(find.byKey(
@@ -205,7 +245,7 @@ void main() {
         return false;
       },
     ));
-    await tester.pumpAndSettle();
+    await runSearch(tester, 'pagada');
 
     final existing = tester.widget<OutlinedButton>(find.byKey(
       const ValueKey('global-payment-Julio 2026-7-0'),
@@ -213,5 +253,39 @@ void main() {
     existing.onPressed!();
     await tester.pumpAndSettle();
     expect(editedIndex, 0);
+  });
+
+  testWidgets('Android renders responsive cards with all financial actions',
+      (tester) async {
+    await tester.pumpWidget(app(
+      mobileCards: true,
+      search: (_, {required offset, required limit}) async => [
+        invoice(payments: [Abono(valor: 20), Abono(), Abono(valor: 5)]),
+      ],
+    ));
+    await runSearch(tester, 'cliente');
+
+    expect(find.byKey(const ValueKey('global-search-cards')), findsOneWidget);
+    expect(find.byType(ReportInvoiceTable), findsNothing);
+    for (final text in [
+      'Cliente Uno',
+      'Comercial Uno',
+      'FAC-2',
+      '01 - Ana',
+      r'$100.00',
+      r'$25.00',
+      r'$75.00',
+      'PENDIENTE',
+    ]) {
+      expect(find.text(text), findsOneWidget);
+    }
+    expect(
+      find.byKey(const ValueKey('global-payment-Julio 2026-7-0')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('global-additional-Julio 2026-7')),
+      findsOneWidget,
+    );
   });
 }

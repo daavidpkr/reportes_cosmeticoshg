@@ -1,19 +1,21 @@
-import 'dart:io';
+import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/fila_venta.dart';
 import '../models/billing_customer.dart';
-import 'web_download_stub.dart'
-    if (dart.library.js_interop) 'web_download.dart';
+import 'document_download_service.dart';
 
 class ReporteExporter {
+  ReporteExporter({DocumentDownloadService? downloads})
+      : _downloads = downloads ?? DocumentDownloadService();
+
+  final DocumentDownloadService _downloads;
+
   /// Customer export receives a fresh Supabase snapshot from ClientesScreen;
   /// no identifier is included in this presentation document.
-  Future<String> guardarClientes(List<BillingCustomer> customers) async {
+  Future<SavedDocument> guardarClientes(List<BillingCustomer> customers) async {
     final document = pw.Document(title: 'Listado de clientes - Cosméticos HG');
     final pink = PdfColor.fromHex('#B71157');
     document.addPage(pw.MultiPage(
@@ -63,17 +65,14 @@ class ReporteExporter {
     ));
     final bytes = await document.save();
     const fileName = 'listado_clientes.pdf';
-    if (kIsWeb) {
-      descargarArchivoWeb(bytes, fileName);
-      return fileName;
-    }
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}${Platform.pathSeparator}$fileName');
-    await file.writeAsBytes(bytes, flush: true);
-    return file.path;
+    return _downloads.save(
+      bytes: bytes,
+      fileName: fileName,
+      mimeType: 'application/pdf',
+    );
   }
 
-  Future<String> guardar(
+  Future<SavedDocument> guardar(
     List<FilaVenta> filas, {
     String? vendedor,
     Map<String, String> nombresVendedores = const {},
@@ -96,20 +95,14 @@ class ReporteExporter {
       periodo: periodo,
     );
 
-    if (kIsWeb) {
-      descargarArchivoWeb(bytes, nombreArchivo);
-      return nombreArchivo;
-    }
-
-    final directorio = await getApplicationDocumentsDirectory();
-    final archivo = File(
-      '${directorio.path}${Platform.pathSeparator}$nombreArchivo',
+    return _downloads.save(
+      bytes: bytes,
+      fileName: nombreArchivo,
+      mimeType: 'application/pdf',
     );
-    await archivo.writeAsBytes(bytes, flush: true);
-    return archivo.path;
   }
 
-  Future<String> guardarResumenMensual(
+  Future<SavedDocument> guardarResumenMensual(
     List<FilaVenta> filas, {
     required String periodo,
     Map<String, String> nombresVendedores = const {},
@@ -125,17 +118,11 @@ class ReporteExporter {
       nombresVendedores: nombresVendedores,
     );
 
-    if (kIsWeb) {
-      descargarArchivoWeb(bytes, nombreArchivo);
-      return nombreArchivo;
-    }
-
-    final directorio = await getApplicationDocumentsDirectory();
-    final archivo = File(
-      '${directorio.path}${Platform.pathSeparator}$nombreArchivo',
+    return _downloads.save(
+      bytes: bytes,
+      fileName: nombreArchivo,
+      mimeType: 'application/pdf',
     );
-    await archivo.writeAsBytes(bytes, flush: true);
-    return archivo.path;
   }
 
   Future<Uint8List> _generarResumenMensualPdf(

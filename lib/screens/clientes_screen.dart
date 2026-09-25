@@ -43,10 +43,12 @@ class _ClientesScreenState extends State<ClientesScreen> {
     try {
       // Always query again: export is not tied to the rendered/search result.
       final customers = await _repository.listCustomers();
-      final path = await ReporteExporter().guardarClientes(customers);
-      if (mounted) _message('Listado de clientes descargado: $path');
-    } catch (_) {
-      if (mounted) _message('No se pudo descargar el listado de clientes.');
+      final result = await ReporteExporter().guardarClientes(customers);
+      if (mounted) _message(result.confirmationMessage);
+    } catch (error) {
+      if (mounted) {
+        _message('No se pudo guardar el listado de clientes: $error');
+      }
     } finally {
       if (mounted) setState(() => _exporting = false);
     }

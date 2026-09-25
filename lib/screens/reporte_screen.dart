@@ -865,6 +865,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         await _actualizarConsumidoresDeAbonos();
       } else {
         await _cargarReportes();
+        if (mounted) setState(() => _versionCobrosMensuales++);
       }
     } catch (_) {
       if (!mounted) return;
@@ -1255,7 +1256,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       return;
     }
     try {
-      final ruta = await _exporter.guardar(
+      final resultado = await _exporter.guardar(
         filas,
         vendedor: vendedor,
         periodo: '${reportes.first.nombre} a ${reportes.last.nombre}',
@@ -1267,7 +1268,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('PDF guardado en: $ruta')));
+      ).showSnackBar(SnackBar(content: Text(resultado.confirmationMessage)));
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
