@@ -118,12 +118,6 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
     }
   }
 
-  String _referenceWithoutZeros(String value) {
-    final clean = value.trim();
-    if (clean.isEmpty) return '';
-    return int.tryParse(clean)?.toString() ?? clean;
-  }
-
   Future<void> _editPayment(GlobalInvoiceRow invoice, int index) async {
     final changed = await widget.onEditPayment(invoice, index, isNew: false);
     if (changed && mounted) await _load(replace: true);
@@ -195,10 +189,10 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
       key: ValueKey(
           'global-${invoice.reportMonth}-${row.numero}-${row.referencia}'),
       color: row.anulada
-          ? WidgetStatePropertyAll(context.hg.danger.withValues(alpha: .12))
+          ? WidgetStatePropertyAll(context.hg.danger.withValues(alpha: .18))
           : row.pagada
               ? WidgetStatePropertyAll(
-                  context.hg.positive.withValues(alpha: .12))
+                  context.hg.positive.withValues(alpha: .18))
               : null,
       cells: [
         DataCell(SizedBox(
@@ -208,7 +202,7 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
           message: 'Mes original: ${invoice.reportMonth}',
           child: SizedBox(
               width: 72 * scale,
-              child: Text(_referenceWithoutZeros(row.referencia))),
+              child: Text(visibleTableReference(row.referencia))),
         )),
         DataCell(_longText(row.cliente, geometry.clientWidth)),
         DataCell(_longText(row.nombreComercial, geometry.businessNameWidth)),
@@ -275,7 +269,7 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(
-              child: Text('Ref. ${_referenceWithoutZeros(row.referencia)}',
+              child: Text('Ref. ${visibleTableReference(row.referencia)}',
                   style: Theme.of(context)
                       .textTheme
                       .titleMedium

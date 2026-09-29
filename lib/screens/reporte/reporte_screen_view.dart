@@ -176,10 +176,10 @@ extension _ReporteScreenView on _ReporteScreenState {
       DataRow(
         key: ValueKey(fila.numero),
         color: fila.anulada
-            ? WidgetStatePropertyAll(context.hg.danger.withValues(alpha: 0.12))
+            ? WidgetStatePropertyAll(context.hg.danger.withValues(alpha: 0.18))
             : fila.pagada
                 ? WidgetStatePropertyAll(
-                    context.hg.positive.withValues(alpha: 0.12))
+                    context.hg.positive.withValues(alpha: 0.18))
                 : null,
         cells: [
           DataCell(
@@ -203,7 +203,7 @@ extension _ReporteScreenView on _ReporteScreenState {
           DataCell(
             SizedBox(
               width: 72 * _escalaReporte,
-              child: Text(fila.referencia),
+              child: Text(visibleTableReference(fila.referencia)),
             ),
           ),
           DataCell(_textoTablaLargo(fila.cliente, geometry.clientWidth)),
@@ -652,85 +652,108 @@ extension _ReporteScreenView on _ReporteScreenState {
   Widget _encabezadoPagina(ReportResponsiveLayout layout) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: layout.compact ? 6 : 10,
-            runSpacing: 10,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              SizedBox(
-                width: layout.compact ? 300 : 390,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Reporte de ventas',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: Theme.of(context).colorScheme.onSurface,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final title = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Reporte de ventas',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Registro mensual de facturas, abonos y saldos por cliente',
+                    style:
+                        TextStyle(fontSize: 12.5, color: context.hg.mutedText),
+                  ),
+                ],
+              );
+              final controls = Wrap(
+                alignment: WrapAlignment.end,
+                spacing: layout.compact ? 6 : 10,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _nuevoReporte,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Registro mensual de facturas, abonos y saldos por cliente',
-                      style: TextStyle(
-                          fontSize: 12.5, color: context.hg.mutedText),
+                    icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                    label: const Text('Nuevo mes'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _abrirCargaFacturas,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
                     ),
+                    icon: const Icon(Icons.upload_file, size: 18),
+                    label: Text('Subir facturas (${_facturas.cantidad})'),
+                  ),
+                  SizedBox(
+                    width: 190,
+                    child: DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      initialValue: _reportes.reportes.isEmpty
+                          ? null
+                          : _reportes.activo.id,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.calendar_month, size: 19),
+                        isDense: true,
+                      ),
+                      items: _reportes.reportes
+                          .map(
+                            (r) => DropdownMenuItem(
+                              value: r.id,
+                              child: Text(
+                                r.nombre,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (id) async {
+                        if (id == null) return;
+                        await _guardarProgreso();
+                        _activarReporte(
+                          _reportes.reportes.firstWhere((r) => r.id == id),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              );
+              if (constraints.maxWidth >= 960) {
+                return Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Expanded(child: title),
+                    const SizedBox(width: 12),
+                    controls,
                   ],
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed: _nuevoReporte,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                icon: const Icon(Icons.calendar_month_outlined, size: 18),
-                label: const Text('Nuevo mes'),
-              ),
-              OutlinedButton.icon(
-                onPressed: _abrirCargaFacturas,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(0, 48),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ),
-                icon: const Icon(Icons.upload_file, size: 18),
-                label: Text('Subir facturas (${_facturas.cantidad})'),
-              ),
-              SizedBox(
-                width: 190,
-                child: DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue:
-                      _reportes.reportes.isEmpty ? null : _reportes.activo.id,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.calendar_month, size: 19),
-                    isDense: true,
-                  ),
-                  items: _reportes.reportes
-                      .map(
-                        (r) => DropdownMenuItem(
-                          value: r.id,
-                          child: Text(
-                            r.nombre,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (id) async {
-                    if (id == null) return;
-                    await _guardarProgreso();
-                    _activarReporte(
-                        _reportes.reportes.firstWhere((r) => r.id == id));
-                  },
-                ),
-              ),
-            ],
+                );
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  title,
+                  const SizedBox(height: 10),
+                  Align(alignment: Alignment.centerRight, child: controls),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 12),
           LayoutBuilder(
@@ -1046,7 +1069,7 @@ extension _ReporteScreenView on _ReporteScreenState {
                         Text(
                           [
                             if (fila.referencia.isNotEmpty)
-                              'Ref. ${fila.referencia}',
+                              'Ref. ${visibleTableReference(fila.referencia)}',
                             if (fila.numeroFactura.isNotEmpty)
                               fila.numeroFactura,
                           ].join(' · '),
@@ -1167,7 +1190,9 @@ extension _ReporteScreenView on _ReporteScreenState {
                       Expanded(
                         child: _textoCampoMovil(
                           'Ref. (Fact)',
-                          fila.referencia.isEmpty ? '—' : fila.referencia,
+                          fila.referencia.isEmpty
+                              ? '—'
+                              : visibleTableReference(fila.referencia),
                         ),
                       ),
                     ],
@@ -1604,63 +1629,71 @@ extension _ReporteScreenView on _ReporteScreenState {
             style: TextStyle(color: context.hg.mutedText, fontSize: 11),
           ),
           const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue:
-                      _reportes.reportes.isEmpty ? null : _reportes.activo.id,
-                  decoration: const InputDecoration(
-                    prefixIcon: Icon(Icons.calendar_month_outlined, size: 17),
-                    prefixIconConstraints: BoxConstraints(minWidth: 34),
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 8, vertical: 9),
-                    isDense: true,
+          Align(
+            alignment: Alignment.centerRight,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 298),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      initialValue: _reportes.reportes.isEmpty
+                          ? null
+                          : _reportes.activo.id,
+                      decoration: const InputDecoration(
+                        prefixIcon:
+                            Icon(Icons.calendar_month_outlined, size: 17),
+                        prefixIconConstraints: BoxConstraints(minWidth: 34),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 8, vertical: 9),
+                        isDense: true,
+                      ),
+                      items: _reportes.reportes
+                          .map((r) => DropdownMenuItem(
+                              value: r.id, child: Text(r.nombre)))
+                          .toList(),
+                      onChanged: (id) async {
+                        if (id == null) return;
+                        await _guardarProgreso();
+                        _activarReporte(
+                            _reportes.reportes.firstWhere((r) => r.id == id));
+                      },
+                    ),
                   ),
-                  items: _reportes.reportes
-                      .map((r) =>
-                          DropdownMenuItem(value: r.id, child: Text(r.nombre)))
-                      .toList(),
-                  onChanged: (id) async {
-                    if (id == null) return;
-                    await _guardarProgreso();
-                    _activarReporte(
-                        _reportes.reportes.firstWhere((r) => r.id == id));
-                  },
-                ),
-              ),
-              const SizedBox(width: 6),
-              OutlinedButton(
-                onPressed: _nuevoReporte,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(48, 48),
-                  padding: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                  const SizedBox(width: 6),
+                  OutlinedButton(
+                    onPressed: _nuevoReporte,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Tooltip(
+                      message: 'Nuevo mes',
+                      child: Icon(Icons.add_box_outlined, size: 19),
+                    ),
                   ),
-                ),
-                child: const Tooltip(
-                  message: 'Nuevo mes',
-                  child: Icon(Icons.add_box_outlined, size: 19),
-                ),
-              ),
-              const SizedBox(width: 6),
-              OutlinedButton(
-                onPressed: _abrirCargaFacturas,
-                style: OutlinedButton.styleFrom(
-                  minimumSize: const Size(48, 48),
-                  padding: EdgeInsets.zero,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                  const SizedBox(width: 6),
+                  OutlinedButton(
+                    onPressed: _abrirCargaFacturas,
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(48, 48),
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: const Tooltip(
+                      message: 'Subir facturas',
+                      child: Icon(Icons.upload_file, size: 19),
+                    ),
                   ),
-                ),
-                child: const Tooltip(
-                  message: 'Subir facturas',
-                  child: Icon(Icons.upload_file, size: 19),
-                ),
+                ],
               ),
-            ],
+            ),
           ),
         ],
       );

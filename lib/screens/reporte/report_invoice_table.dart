@@ -11,6 +11,14 @@ typedef ReportInvoiceHeaderBuilder = Widget Function(
   String? filterKey,
 );
 
+/// Formats a reference for table cells without changing its stored value.
+String visibleTableReference(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) return '';
+  final visible = trimmed.replaceFirst(RegExp(r'^0+'), '');
+  return visible.isEmpty ? '0' : visible;
+}
+
 class ReportPaymentButton extends StatelessWidget {
   const ReportPaymentButton({
     required this.payment,

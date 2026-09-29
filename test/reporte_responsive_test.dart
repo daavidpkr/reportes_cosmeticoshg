@@ -1,8 +1,17 @@
 import 'package:cosmeticos_hg_reportes/screens/reporte_screen.dart';
+import 'package:cosmeticos_hg_reportes/screens/reporte/report_invoice_table.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('la referencia visible oculta solo ceros iniciales', () {
+    expect(visibleTableReference('000000717'), '717');
+    expect(visibleTableReference('000'), '0');
+    expect(visibleTableReference('000ABC'), 'ABC');
+    expect(visibleTableReference('ABC-001'), 'ABC-001');
+    expect(visibleTableReference(''), '');
+  });
+
   group('geometría responsive compartida de reportes', () {
     test('selecciona las tres densidades con tipografía propia', () {
       expect(

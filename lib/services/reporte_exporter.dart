@@ -324,7 +324,7 @@ class ReporteExporter {
                 .map(
                   (fila) => [
                     fila.numero,
-                    _referenciaParaPdf(fila.referencia),
+                    fila.referencia,
                     fila.cliente,
                     fila.nombreComercial,
                     fila.fecha,
@@ -531,13 +531,6 @@ class ReporteExporter {
       );
 
   String _dinero(double valor) => '\$${valor.toStringAsFixed(2)}';
-
-  /// Solo modifica la presentación. Las referencias alfanuméricas se conservan.
-  String _referenciaParaPdf(String valor) {
-    final limpio = valor.trim();
-    if (!RegExp(r'^\d+$').hasMatch(limpio)) return valor;
-    return limpio.replaceFirst(RegExp(r'^0+(?=\d)'), '');
-  }
 }
 
 class _ResumenVendedorPdf {
