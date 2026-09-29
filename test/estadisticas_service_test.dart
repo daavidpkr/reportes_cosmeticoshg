@@ -6,6 +6,7 @@ void main() {
     reportes: const [
       {'anio': 2026, 'mes': 7},
       {'anio': 2026, 'mes': 8},
+      {'anio': 2026, 'mes': 8},
     ],
     filas: const [
       {
@@ -64,6 +65,11 @@ void main() {
   });
 
   test('filtra año e histórico y encuentra período anterior', () {
+    expect(data.periodos.map((periodo) => periodo.id), ['2026-07', '2026-08']);
+    expect(
+      data.periodos.map((periodo) => periodo.anio).toSet(),
+      {2026},
+    );
     expect(data.resumen(const PeriodoEstadisticas.anio(2026)).ventas, 1200);
     expect(data.resumen(const PeriodoEstadisticas.todo()).facturas, 3);
     expect(

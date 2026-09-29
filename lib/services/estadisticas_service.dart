@@ -34,6 +34,13 @@ class PeriodoEstadisticas {
       : mes == null
           ? '$anio'
           : '${nombresMeses[mes! - 1]} $anio';
+
+  @override
+  bool operator ==(Object other) =>
+      other is PeriodoEstadisticas && other.anio == anio && other.mes == mes;
+
+  @override
+  int get hashCode => Object.hash(anio, mes);
 }
 
 class RegistroEstadistico {
@@ -337,15 +344,16 @@ EstadisticasData construirEstadisticas({
   required List<Map<String, dynamic>> filas,
   required List<Map<String, dynamic>> facturas,
 }) {
-  final periodos = <PeriodoEstadisticas>[];
+  final periodosPorId = <String, PeriodoEstadisticas>{};
   final porNombre = <String, PeriodoEstadisticas>{};
   for (final r in reportes) {
     final a = (r['anio'] as num?)?.toInt(), m = (r['mes'] as num?)?.toInt();
     if (a == null || m == null || m < 1 || m > 12) continue;
     final p = PeriodoEstadisticas.mes(a, m);
-    periodos.add(p);
+    periodosPorId[p.id] = p;
     porNombre[p.etiqueta] = p;
   }
+  final periodos = periodosPorId.values.toList();
   periodos.sort((a, b) => a.id.compareTo(b.id));
   final fm = {
     for (final f in facturas) f['ref_fact']?.toString().trim() ?? '': f,

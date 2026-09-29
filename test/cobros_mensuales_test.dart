@@ -56,4 +56,50 @@ void main() {
     expect(cobros.single.nombre, 'Mayo 2026');
     expect(cobros.single.valorPorCobrar, 0);
   });
+
+  test('no duplica facturas y excluye anuladas del saldo mensual', () {
+    final cobros = calcularCobrosMensuales(
+      reportes: const [
+        {'anio': 2026, 'mes': 9},
+      ],
+      filas: const [
+        {
+          'mes_reporte': 'Septiembre 2026',
+          'ref_fact': '0010',
+          'vendedor': '01 - Ana',
+          'abonos': [25],
+        },
+        {
+          'mes_reporte': 'Septiembre 2026',
+          'ref_fact': '0010',
+          'vendedor': '01 - Ana',
+          'abonos': [25],
+        },
+        {
+          'mes_reporte': 'Septiembre 2026',
+          'ref_fact': '0011',
+          'vendedor': 'ANULADA',
+          'abonos': [],
+        },
+      ],
+      facturas: const [
+        {'ref_fact': '0010', 'venta': 100},
+        {'ref_fact': '0011', 'venta': 500},
+      ],
+    );
+
+    expect(cobros.single.valorPorCobrar, 75);
+  });
+
+  test('interpreta agregados históricos del servidor', () {
+    final aggregates = ReportAggregates.fromJson(const {
+      'historical_nail_polish': 42,
+      'historical_sales': 1234.5,
+      'total_receivable': 321.25,
+    });
+
+    expect(aggregates.historicalNailPolish, 42);
+    expect(aggregates.historicalSales, 1234.5);
+    expect(aggregates.totalReceivable, 321.25);
+  });
 }

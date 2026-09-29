@@ -85,7 +85,11 @@ class _EstadisticasScreenState extends State<EstadisticasScreen> {
         : (r.ventas - ra.ventas) / ra.ventas * 100;
     final opciones = <PeriodoEstadisticas>[
       const PeriodoEstadisticas.todo(),
-      ...d.periodos.map((e) => PeriodoEstadisticas.anio(e.anio)).toSet(),
+      ...d.periodos
+          .map((e) => e.anio)
+          .whereType<int>()
+          .toSet()
+          .map(PeriodoEstadisticas.anio),
       ...d.periodos,
     ];
     return RefreshIndicator(

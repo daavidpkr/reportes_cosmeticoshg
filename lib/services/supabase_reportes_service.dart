@@ -148,6 +148,31 @@ class CobroMensual {
       ][mes - 1]} $anio';
 }
 
+class ReportAggregates {
+  const ReportAggregates({
+    required this.historicalNailPolish,
+    required this.historicalSales,
+    required this.totalReceivable,
+  });
+
+  const ReportAggregates.empty()
+      : historicalNailPolish = 0,
+        historicalSales = 0,
+        totalReceivable = 0;
+
+  final int historicalNailPolish;
+  final double historicalSales;
+  final double totalReceivable;
+
+  factory ReportAggregates.fromJson(Map<String, dynamic> json) =>
+      ReportAggregates(
+        historicalNailPolish:
+            (json['historical_nail_polish'] as num?)?.toInt() ?? 0,
+        historicalSales: (json['historical_sales'] as num?)?.toDouble() ?? 0,
+        totalReceivable: (json['total_receivable'] as num?)?.toDouble() ?? 0,
+      );
+}
+
 List<CobroMensual> calcularCobrosMensuales({
   required List<Map<String, dynamic>> reportes,
   required List<Map<String, dynamic>> filas,
@@ -158,10 +183,25 @@ List<CobroMensual> calcularCobrosMensuales({
       factura['ref_fact']?.toString().trim() ?? '':
           (factura['venta'] as num?)?.toDouble() ?? 0,
   };
-  final saldosPorReporte = <String, double>{};
+  final filasUnicas = <String, Map<String, dynamic>>{};
   for (final dato in filas) {
     final nombreReporte = dato['mes_reporte']?.toString() ?? '';
     final referencia = dato['ref_fact']?.toString().trim() ?? '';
+    if (nombreReporte.isEmpty || referencia.isEmpty) continue;
+    final key = '$nombreReporte::$referencia';
+    final anterior = filasUnicas[key];
+    if (anterior == null ||
+        dato['vendedor']?.toString().trim().toUpperCase() == 'ANULADA') {
+      filasUnicas[key] = dato;
+    }
+  }
+  final saldosPorReporte = <String, double>{};
+  for (final dato in filasUnicas.values) {
+    final nombreReporte = dato['mes_reporte']?.toString() ?? '';
+    final referencia = dato['ref_fact']?.toString().trim() ?? '';
+    if (dato['vendedor']?.toString().trim().toUpperCase() == 'ANULADA') {
+      continue;
+    }
     final abonos = dato['abonos'];
     final fila = FilaVenta(
       numero: 0,
@@ -347,6 +387,13 @@ class SupabaseReportesService {
     return List<Map<String, dynamic>>.from(respuesta);
   }
 
+  Future<ReportAggregates> obtenerAgregadosReportes() async {
+    final response = await _client.rpc('enterprise_report_aggregates');
+    return ReportAggregates.fromJson(
+      Map<String, dynamic>.from(response as Map),
+    );
+  }
+
   /// Calcula el mismo saldo que [FilaVenta.saldo] para cada reporte existente.
   /// Supabase es la única fuente: no utiliza el estado ni el almacenamiento local.
   Future<List<CobroMensual>> obtenerCobrosMensuales() async {
@@ -366,7 +413,7 @@ class SupabaseReportesService {
       _obtenerEnPaginas(
         (desde, hasta) => _client
             .from('reportes_ventas')
-            .select('mes_reporte, ref_fact, abonos')
+            .select('mes_reporte, ref_fact, vendedor, abonos')
             .range(desde, hasta),
       );
 

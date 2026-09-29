@@ -12,22 +12,34 @@ class CobrosMensualesView extends StatefulWidget {
 
 class _CobrosMensualesViewState extends State<CobrosMensualesView> {
   final _service = SupabaseReportesService();
-  late Future<List<CobroMensual>> _cobros;
+  late Future<(List<CobroMensual>, ReportAggregates)> _cobros;
 
   @override
   void initState() {
     super.initState();
-    _cobros = _service.obtenerCobrosMensuales();
+    _cobros = _cargar();
+  }
+
+  Future<(List<CobroMensual>, ReportAggregates)> _cargar() async {
+    final result = await Future.wait([
+      _service.obtenerCobrosMensuales(),
+      _service.obtenerAgregadosReportes(),
+    ]);
+    return (
+      result[0] as List<CobroMensual>,
+      result[1] as ReportAggregates,
+    );
   }
 
   Future<void> _actualizar() async {
-    final consulta = _service.obtenerCobrosMensuales();
+    final consulta = _cargar();
     setState(() => _cobros = consulta);
     await consulta;
   }
 
   @override
-  Widget build(BuildContext context) => FutureBuilder<List<CobroMensual>>(
+  Widget build(BuildContext context) =>
+      FutureBuilder<(List<CobroMensual>, ReportAggregates)>(
         future: _cobros,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -36,7 +48,9 @@ class _CobrosMensualesViewState extends State<CobrosMensualesView> {
           if (snapshot.hasError) {
             return _EstadoError(error: snapshot.error, actualizar: _actualizar);
           }
-          final cobros = snapshot.data ?? const [];
+          final data = snapshot.data ??
+              (const <CobroMensual>[], const ReportAggregates.empty());
+          final cobros = data.$1;
           return RefreshIndicator(
             onRefresh: _actualizar,
             child: ListView(
@@ -49,6 +63,47 @@ class _CobrosMensualesViewState extends State<CobrosMensualesView> {
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                     color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: Container(
+                      key: const ValueKey('monthly-total-receivable'),
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 16,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.hg.warningContainer,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.schedule, color: context.hg.warning),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Total por cobrar',
+                              style: TextStyle(
+                                color: context.hg.mutedText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          Text(
+                            '\$${data.$2.totalReceivable.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              color: context.hg.warning,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 18),

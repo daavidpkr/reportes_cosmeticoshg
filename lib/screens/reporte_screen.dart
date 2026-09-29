@@ -7,7 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/fila_venta.dart';
 import '../services/facturas_store.dart';
-import '../services/optimistic_persistence.dart';
+import '../services/invoice_batch_importer.dart';
+import '../services/report_filter_preferences.dart';
 import '../services/reporte_exporter.dart';
 import '../services/reportes_store.dart';
 import '../services/supabase_reportes_service.dart';
@@ -30,7 +31,6 @@ part 'reporte/reporte_screen_view.dart';
 
 const mobileReportNavigationLabels = <String>[
   'Ventas',
-  'General',
   'Clientes',
   'Calendario'
 ];
@@ -42,7 +42,6 @@ const mobileReportMenuSectionLabels = <String>[
 
 enum ReportDestination {
   sales,
-  general,
   monthlyCollections,
   clients,
   globalSearch,
@@ -55,16 +54,14 @@ enum ReportDestination {
 int? mobileNavigationIndex(ReportDestination destination) =>
     switch (destination) {
       ReportDestination.sales => 0,
-      ReportDestination.general => 1,
-      ReportDestination.clients => 2,
-      ReportDestination.calendar => 3,
+      ReportDestination.clients => 1,
+      ReportDestination.calendar => 2,
       _ => null,
     };
 
 ReportDestination destinationForMobileIndex(int index) => switch (index) {
-      1 => ReportDestination.general,
-      2 => ReportDestination.clients,
-      3 => ReportDestination.calendar,
+      1 => ReportDestination.clients,
+      2 => ReportDestination.calendar,
       _ => ReportDestination.sales,
     };
 
@@ -94,6 +91,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   final _exporter = ReporteExporter();
   final _vendedores = VendedoresStore();
   final _reportes = ReportesStore();
+  final _filterPreferences = ReportFilterPreferencesStore();
   final _supabaseReportes = SupabaseReportesService();
   late List<FilaVenta> _filas;
   String _filtro = '';
@@ -107,15 +105,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
   int _handledCalendarRequestId = 0;
   final _busquedaController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
-  Timer? _busquedaFacturaTimer;
-  int _versionBusqueda = 0;
   final Set<int> _filasExpandidas = {};
   bool _actualizando = false;
   final Set<String> _abonosGuardandose = {};
   int _versionCobrosMensuales = 0;
-  List<FilaVenta> _filasConsolidadas = const [];
+  ReportAggregates _historicalAggregates = const ReportAggregates.empty();
+  String? _filterUserId;
+  String? _filterOrganizationId;
 
-  bool get _vistaGeneral => _destination == ReportDestination.general;
   bool get _vistaCobrosMensuales =>
       _destination == ReportDestination.monthlyCollections;
   bool get _vistaEstadisticas => _destination == ReportDestination.statistics;
@@ -141,8 +138,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   void initState() {
     super.initState();
     _crearFilas();
-    _cargarVendedores();
-    _cargarReportes();
+    _inicializar();
     _applyCalendarRequest();
   }
 
@@ -166,7 +162,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
   @override
   void dispose() {
     _filasSubscription?.cancel();
-    _busquedaFacturaTimer?.cancel();
     _busquedaController.dispose();
     super.dispose();
   }
@@ -177,6 +172,94 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   void _mostrarClientes() => _navigate(ReportDestination.clients);
 
+  Future<void> _inicializar() async {
+    await Future.wait([_cargarVendedores(), _cargarReportes()]);
+    await _restaurarFiltros();
+  }
+
+  Future<void> _restaurarFiltros() async {
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final organization =
+          await Supabase.instance.client.rpc('current_organization_id');
+      final organizationId = organization?.toString();
+      if (userId == null || organizationId == null || organizationId.isEmpty) {
+        return;
+      }
+      _filterUserId = userId;
+      _filterOrganizationId = organizationId;
+      final saved = await _filterPreferences.load(
+        userId: userId,
+        organizationId: organizationId,
+      );
+      if (!mounted || saved == null) return;
+      final validSeller = saved.seller.isEmpty ||
+          saved.seller == _opcionAnulada ||
+          _vendedores.vendedores
+              .any((seller) => seller.etiqueta == saved.seller);
+      setState(() {
+        _filtro = saved.query;
+        _filtroVendedor = validSeller ? saved.seller : '';
+        _filtroEstado = saved.status;
+        _filtroPlazo = saved.paymentTerm;
+        _filtrosColumnas
+          ..clear()
+          ..addAll(saved.columnFilters);
+        _ordenColumna = saved.sortColumn;
+        _ordenAscendente = saved.sortAscending;
+        _busquedaController.text = _filtro;
+      });
+      if (!validSeller) unawaited(_guardarFiltros());
+    } catch (_) {
+      // La configuración local nunca debe impedir cargar los datos remotos.
+    }
+  }
+
+  Future<void> _guardarFiltros() async {
+    final userId = _filterUserId;
+    final organizationId = _filterOrganizationId;
+    if (userId == null || organizationId == null) return;
+    await _filterPreferences.save(
+      userId: userId,
+      organizationId: organizationId,
+      value: ReportFilterPreferences(
+        query: _filtro,
+        seller: _filtroVendedor,
+        status: _filtroEstado,
+        paymentTerm: _filtroPlazo,
+        columnFilters: Map.unmodifiable(_filtrosColumnas),
+        sortColumn: _ordenColumna,
+        sortAscending: _ordenAscendente,
+      ),
+    );
+  }
+
+  void _actualizarFiltros(VoidCallback change) {
+    setState(change);
+    unawaited(_guardarFiltros());
+  }
+
+  Future<void> _limpiarFiltros() async {
+    setState(() {
+      _filtro = '';
+      _filtroVendedor = '';
+      _filtroEstado = 'todos';
+      _filtroPlazo = '';
+      _filtrosColumnas.clear();
+      _ordenColumna = null;
+      _ordenAscendente = true;
+      _busquedaController.clear();
+    });
+    final userId = _filterUserId;
+    final organizationId = _filterOrganizationId;
+    if (userId != null && organizationId != null) {
+      await _filterPreferences.clear(
+        userId: userId,
+        organizationId: organizationId,
+      );
+    }
+  }
+
   Future<void> _cargarVendedores() async {
     await _vendedores.cargar();
     if (mounted) setState(() {});
@@ -184,11 +267,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   Future<void> _cargarReportes() async {
     try {
-      final datos = await _supabaseReportes.obtenerReportesMensuales();
+      final resultados = await Future.wait([
+        _supabaseReportes.obtenerReportesMensuales(),
+        _supabaseReportes.obtenerAgregadosReportes(),
+      ]);
+      final datos = List<Map<String, dynamic>>.from(resultados[0] as List);
 
       await _reportes.cargarDesdeNube(datos);
-
-      final consolidadas = await _supabaseReportes.obtenerFilasConsolidadas();
 
       if (datos.isEmpty) {
         await _supabaseReportes.guardarReporteMensual(
@@ -199,7 +284,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
       if (!mounted) return;
 
-      _filasConsolidadas = consolidadas;
+      _historicalAggregates = resultados[1] as ReportAggregates;
 
       _activarReporte(_reportes.activo, guardar: false);
     } catch (error) {
@@ -235,10 +320,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   Future<void> _actualizarConsumidoresDeAbonos() async {
-    final consolidadas = await _supabaseReportes.obtenerFilasConsolidadas();
+    final aggregates = await _supabaseReportes.obtenerAgregadosReportes();
     if (!mounted) return;
     setState(() {
-      _filasConsolidadas = consolidadas;
+      _historicalAggregates = aggregates;
       _versionCobrosMensuales++;
     });
   }
@@ -251,8 +336,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
       ..mesPermitido = reporte.mes
       ..anioPermitido = reporte.anio
       ..cargar(reporte.facturas);
-    _filtrosColumnas.clear();
-    _ordenColumna = null;
     if (mounted) setState(() {});
     _escucharReporteActivo();
     if (guardar) _guardarProgreso();
@@ -451,95 +534,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   void _crearFilas() {
     _filas = [FilaVenta(numero: 1)];
-  }
-
-  void _buscarFactura(int indice, String referencia) {
-    _busquedaFacturaTimer?.cancel();
-    final version = ++_versionBusqueda;
-    _busquedaFacturaTimer = Timer(const Duration(milliseconds: 350), () {
-      _buscarFacturaAhora(indice, referencia, version);
-    });
-  }
-
-  void _cambiarReferencia(FilaVenta fila, String referencia) {
-    setState(() {
-      fila.referencia = referencia;
-      _asegurarFilaVacia();
-    });
-    final indice = _filas.indexOf(fila);
-    if (indice >= 0) _buscarFactura(indice, referencia);
-  }
-
-  Future<void> _buscarFacturaAhora(
-    int indice,
-    String referencia,
-    int version,
-  ) async {
-    final valor = referencia.trim();
-    if (valor.isEmpty || indice >= _filas.length) return;
-    var factura = _facturas.buscar(valor);
-    try {
-      factura ??= await _supabaseReportes.buscarFacturaPorRef(valor);
-    } catch (error) {
-      _mostrarErrorNube('No se pudo consultar la factura: $error');
-      return;
-    }
-    if (!mounted || version != _versionBusqueda || indice >= _filas.length) {
-      return;
-    }
-    if (factura == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Factura no encontrada')));
-      return;
-    }
-    final facturaEncontrada = factura;
-    final repetida = _filas.asMap().entries.where((item) {
-      return item.key != indice &&
-          item.value.numeroFactura == facturaEncontrada.secuencial;
-    }).firstOrNull;
-    if (repetida != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'La factura ${facturaEncontrada.secuencial} ya fue agregada en la fila ${repetida.value.numero}.',
-          ),
-          backgroundColor: context.hg.warning,
-        ),
-      );
-      return;
-    }
-    final fila = _filas[indice];
-    final filaAnterior = FilaVenta.fromJson(fila.toJson());
-    setState(() {
-      fila.referencia = valor;
-      fila.cliente = facturaEncontrada.cliente;
-      fila.nombreComercial = facturaEncontrada.nombreComercial;
-      fila.fecha = facturaEncontrada.fecha;
-      fila.numeroFactura = facturaEncontrada.secuencial;
-      fila.venta = facturaEncontrada.total;
-      _asegurarFilaVacia();
-    });
-    await _guardarProgreso();
-    final guardada = await persistirConReversion(
-      persistir: () =>
-          _supabaseReportes.guardarFila(fila, _reportes.activo.nombre),
-      revertir: () async {
-        if (!mounted) return;
-        setState(() {
-          final indiceActual = _filas.indexOf(fila);
-          if (indiceActual >= 0) _filas[indiceActual] = filaAnterior;
-          _normalizarFilas();
-        });
-        await _guardarProgreso();
-      },
-    );
-    if (!guardada && mounted) {
-      _mostrarErrorNube(
-        'No fue posible guardar la factura en Supabase. '
-        'La factura no fue registrada.',
-      );
-    }
   }
 
   Future<void> _completarFacturaNube(FilaVenta fila, String referencia) async {
@@ -1376,7 +1370,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
     );
     controller.dispose();
     if (resultado != null && mounted) {
-      setState(() {
+      _actualizarFiltros(() {
         _filtro = resultado.texto;
         _filtroVendedor = resultado.vendedor;
         _filtroEstado = resultado.estado;
@@ -1464,11 +1458,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
           _reportes.activo.mes,
         );
       }
-
-      _filtro = '';
-      _filtroVendedor = '';
-      _filtroEstado = 'todos';
-      _filtroPlazo = '';
 
       if (!mounted) return;
 
@@ -1633,11 +1622,16 @@ class _ReporteScreenState extends State<ReporteScreen> {
         if (a.value.tieneDatos && !b.value.tieneDatos) return -1;
         final izquierda = _valorOrden(a.value, columna);
         final derecha = _valorOrden(b.value, columna);
-        final comparacion = izquierda is num && derecha is num
-            ? izquierda.compareTo(derecha)
-            : izquierda.toString().toLowerCase().compareTo(
-                  derecha.toString().toLowerCase(),
-                );
+        final comparacion = columna == 'referencia'
+            ? compareInvoiceReferences(
+                izquierda.toString(),
+                derecha.toString(),
+              )
+            : izquierda is num && derecha is num
+                ? izquierda.compareTo(derecha)
+                : izquierda.toString().toLowerCase().compareTo(
+                      derecha.toString().toLowerCase(),
+                    );
         return _ordenAscendente ? comparacion : -comparacion;
       });
     }
@@ -1663,7 +1657,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   Object _valorOrden(FilaVenta fila, String columna) => switch (columna) {
         'nro' => fila.numero,
-        'referencia' => int.tryParse(fila.referencia) ?? fila.referencia,
+        'referencia' => fila.referencia,
         'factura' => int.tryParse(fila.numeroFactura) ?? fila.numeroFactura,
         'fecha' => _fechaParaOrdenar(fila.fecha),
         'esmalte' => fila.esmalte,
@@ -1718,7 +1712,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
     );
     controller.dispose();
     if (valor == null || !mounted) return;
-    setState(() {
+    _actualizarFiltros(() {
       if (valor.isEmpty) {
         _filtrosColumnas.remove(columna);
       } else {
@@ -1744,14 +1738,14 @@ class _ReporteScreenState extends State<ReporteScreen> {
             ),
             onSelected: (accion) {
               if (accion == 'asc' || accion == 'desc') {
-                setState(() {
+                _actualizarFiltros(() {
                   _ordenColumna = columna;
                   _ordenAscendente = accion == 'asc';
                 });
               } else if (accion == 'filter') {
                 _filtrarColumna(columna, titulo);
               } else {
-                setState(() => _filtrosColumnas.remove(columna));
+                _actualizarFiltros(() => _filtrosColumnas.remove(columna));
               }
             },
             itemBuilder: (_) => [
@@ -1771,9 +1765,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   Widget _encabezadoSinFiltro(String titulo) => Text(titulo);
 
-  List<FilaVenta> get _filasParaTotales => _vistaGeneral
-      ? _filasGenerales
-      : _filasVisibles.map((item) => item.value).toList();
+  List<FilaVenta> get _filasParaTotales =>
+      _filasVisibles.map((item) => item.value).toList();
   int get _totalEsmaltes =>
       _filasParaTotales.where((fila) => !fila.anulada).fold(
             0,
@@ -1794,46 +1787,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
             0,
             (suma, fila) => suma + fila.saldo,
           );
-
-  List<FilaVenta> get _filasGenerales {
-    final texto = _filtro.toLowerCase();
-    final resultado = _filasConsolidadas.where((fila) {
-      if (!fila.tieneDatos) return false;
-      final coincide = texto.isEmpty ||
-          fila.referencia.toLowerCase().contains(texto) ||
-          fila.numeroFactura.toLowerCase().contains(texto) ||
-          fila.cliente.toLowerCase().contains(texto) ||
-          fila.nombreComercial.toLowerCase().contains(texto) ||
-          fila.vendedor.toLowerCase().contains(texto);
-      if (!coincide ||
-          (_filtroVendedor.isNotEmpty && fila.vendedor != _filtroVendedor)) {
-        return false;
-      }
-      if (_filtroPlazo == 'sin_establecer' && fila.paymentTermDays != null) {
-        return false;
-      }
-      if (_filtroPlazo.isNotEmpty &&
-          _filtroPlazo != 'sin_establecer' &&
-          fila.paymentTermDays?.toString() != _filtroPlazo) {
-        return false;
-      }
-      return switch (_filtroEstado) {
-        'pagados' => fila.pagada,
-        'pendientes' => !fila.pagada,
-        _ => true,
-      };
-    }).toList();
-    final columna = _ordenColumna;
-    if (columna != null) {
-      resultado.sort((a, b) {
-        final comparacion = _valorOrden(a, columna).toString().compareTo(
-              _valorOrden(b, columna).toString(),
-            );
-        return _ordenAscendente ? comparacion : -comparacion;
-      });
-    }
-    return resultado;
-  }
 
   // ignore: unused_element
   String get _descripcionFiltro {

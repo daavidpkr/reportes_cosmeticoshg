@@ -67,9 +67,9 @@ class ReportPaymentButton extends StatelessWidget {
       );
 }
 
-/// Canonical table used by monthly sales, the consolidated report and global
-/// invoice search. Row behavior is supplied by each screen, while geometry,
-/// columns and visual formatting remain identical.
+/// Canonical table used by monthly sales and global invoice search. Row
+/// behavior is supplied by each screen, while geometry, columns and visual
+/// formatting remain identical.
 class ReportInvoiceTable extends StatelessWidget {
   const ReportInvoiceTable({
     required this.mode,
@@ -134,7 +134,7 @@ class ReportInvoiceTable extends StatelessWidget {
         dataTextStyle: TextStyle(fontSize: dataFontSize),
         columns: [
           DataColumn(label: _header(columnLabels[0], null, 24 * scale)),
-          DataColumn(label: _header(columnLabels[1], null, 72 * scale)),
+          DataColumn(label: _header(columnLabels[1], 'referencia', 72 * scale)),
           DataColumn(
               label: _header(columnLabels[2], 'cliente', geometry.clientWidth)),
           DataColumn(
