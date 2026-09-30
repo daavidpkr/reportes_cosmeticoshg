@@ -1026,15 +1026,28 @@ extension _ReporteScreenView on _ReporteScreenState {
 
   Widget _tarjetaFilaMovil(FilaVenta fila) {
     final expandida = _filasExpandidas.contains(fila.numero);
+    final brightness = Theme.of(context).brightness;
+    final statusColor = fila.anulada
+        ? context.hg.danger
+        : fila.pagada
+            ? context.hg.positive
+            : null;
+    final statusBorderColor = fila.anulada
+        ? const Color(0xFFFF1744)
+        : fila.pagada
+            ? const Color(0xFF00E676)
+            : Theme.of(context).colorScheme.outlineVariant;
     return Container(
       decoration: BoxDecoration(
-        color: fila.anulada
-            ? context.hg.danger.withValues(alpha: .12)
-            : fila.pagada
-                ? context.hg.positive.withValues(alpha: .12)
-                : context.hg.panel,
+        color: statusColor?.withValues(
+              alpha: brightness == Brightness.dark ? .28 : .24,
+            ) ??
+            context.hg.panel,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        border: Border.all(
+          color: statusBorderColor,
+          width: statusColor == null ? 1 : 1.4,
+        ),
       ),
       child: Column(
         children: [

@@ -317,8 +317,11 @@ void main() {
       expect(
           card.color,
           warning.withValues(
-            alpha: brightness == Brightness.dark ? .28 : .22,
+            alpha: brightness == Brightness.dark ? .28 : .24,
           ));
+      final shape = card.shape! as RoundedRectangleBorder;
+      expect(shape.side.color, const Color(0xFFFFFF00));
+      expect(shape.side.width, 1.4);
       expect(tester.takeException(), isNull);
     });
   }

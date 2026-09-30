@@ -266,16 +266,23 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
         : row.pagada
             ? context.hg.positive
             : context.hg.warning;
-    final cardColor = row.anulada || row.pagada
-        ? statusColor.withValues(alpha: .07)
-        : statusColor.withValues(
-            alpha: Theme.of(context).brightness == Brightness.dark ? .28 : .22,
-          );
+    final cardColor = statusColor.withValues(
+      alpha: Theme.of(context).brightness == Brightness.dark ? .28 : .24,
+    );
+    final borderColor = row.anulada
+        ? const Color(0xFFFF1744)
+        : row.pagada
+            ? const Color(0xFF00E676)
+            : const Color(0xFFFFFF00);
     return Card(
       key: ValueKey(
           'global-card-${invoice.reportMonth}-${row.numero}-${row.referencia}'),
       margin: const EdgeInsets.only(bottom: 12),
       color: cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: borderColor, width: 1.4),
+      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
