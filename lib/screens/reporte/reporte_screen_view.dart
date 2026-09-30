@@ -824,6 +824,14 @@ extension _ReporteScreenView on _ReporteScreenState {
         ),
         child: Row(
           children: [
+            if (!isPrimaryReportDestination(_destination)) ...[
+              IconButton(
+                tooltip: 'Atrás',
+                onPressed: _goBack,
+                icon: const Icon(Icons.arrow_back, color: Colors.white),
+              ),
+              const SizedBox(width: 4),
+            ],
             ClipRRect(
               borderRadius: BorderRadius.circular(9),
               child: Image.asset('web/icons/Icon-192.png',
@@ -1706,12 +1714,20 @@ extension _ReporteScreenView on _ReporteScreenState {
       );
 
   Widget _vistaMovil() => PopScope(
-      canPop: _destination == ReportDestination.sales,
+      canPop: isPrimaryReportDestination(_destination),
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _mostrarReporteVentas();
+        if (!didPop) _goBack();
       },
       child: Scaffold(
         appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leading: isPrimaryReportDestination(_destination)
+              ? null
+              : IconButton(
+                  tooltip: 'Atrás',
+                  onPressed: _goBack,
+                  icon: const Icon(Icons.arrow_back),
+                ),
           foregroundColor: Colors.white,
           flexibleSpace: const DecoratedBox(
             decoration: BoxDecoration(
@@ -1756,10 +1772,6 @@ extension _ReporteScreenView on _ReporteScreenState {
               icon: const Icon(Icons.menu),
               onSelected: (value) async {
                 switch (value) {
-                  case 'clients':
-                    _mostrarClientes();
-                  case 'global_search':
-                    _navigate(ReportDestination.globalSearch);
                   case 'collections':
                     _navigate(ReportDestination.monthlyCollections);
                   case 'sellers':
@@ -1796,12 +1808,6 @@ extension _ReporteScreenView on _ReporteScreenState {
                           ])
                     ])),
                 const PopupMenuDivider(),
-                CheckedPopupMenuItem(
-                    value: 'global_search',
-                    checked: _vistaBusquedaGeneral,
-                    child: const ListTile(
-                        leading: Icon(Icons.manage_search_outlined),
-                        title: Text('Búsqueda general'))),
                 CheckedPopupMenuItem(
                     value: 'collections',
                     checked: _vistaCobrosMensuales,
@@ -1876,20 +1882,7 @@ extension _ReporteScreenView on _ReporteScreenState {
                     Theme.of(context).colorScheme.secondaryContainer,
                 onDestinationSelected: (index) =>
                     _navigate(destinationForMobileIndex(index)),
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.receipt_long_outlined),
-                    label: 'Ventas',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.groups_outlined),
-                    label: 'Clientes',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.calendar_month_outlined),
-                    label: 'Calendario',
-                  ),
-                ],
+                destinations: mobileReportNavigationDestinations,
               ),
         body: _vistaCalendario
             ? PaymentCalendarView(
@@ -1902,7 +1895,7 @@ extension _ReporteScreenView on _ReporteScreenState {
                     key: ValueKey(_reportes.activo.id),
                     mes: _reportes.activo.mes,
                     anio: _reportes.activo.anio,
-                    onVolver: _mostrarReporteVentas,
+                    onVolver: _goBack,
                     onFacturasGuardadas: _actualizarDesdeSupabase,
                     vendedores: _vendedores.vendedores,
                   )

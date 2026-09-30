@@ -31,8 +31,27 @@ part 'reporte/reporte_screen_view.dart';
 
 const mobileReportNavigationLabels = <String>[
   'Ventas',
+  'Búsqueda general',
   'Clientes',
   'Calendario'
+];
+const mobileReportNavigationDestinations = <NavigationDestination>[
+  NavigationDestination(
+    icon: Icon(Icons.receipt_long_outlined),
+    label: 'Ventas',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.manage_search_outlined),
+    label: 'Búsqueda general',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.groups_outlined),
+    label: 'Clientes',
+  ),
+  NavigationDestination(
+    icon: Icon(Icons.calendar_month_outlined),
+    label: 'Calendario',
+  ),
 ];
 const mobileReportMenuSectionLabels = <String>[
   'Cobros mensuales',
@@ -54,16 +73,21 @@ enum ReportDestination {
 int? mobileNavigationIndex(ReportDestination destination) =>
     switch (destination) {
       ReportDestination.sales => 0,
-      ReportDestination.clients => 1,
-      ReportDestination.calendar => 2,
+      ReportDestination.globalSearch => 1,
+      ReportDestination.clients => 2,
+      ReportDestination.calendar => 3,
       _ => null,
     };
 
 ReportDestination destinationForMobileIndex(int index) => switch (index) {
-      1 => ReportDestination.clients,
-      2 => ReportDestination.calendar,
+      1 => ReportDestination.globalSearch,
+      2 => ReportDestination.clients,
+      3 => ReportDestination.calendar,
       _ => ReportDestination.sales,
     };
+
+bool isPrimaryReportDestination(ReportDestination destination) =>
+    mobileNavigationIndex(destination) != null;
 
 class ReporteScreen extends StatefulWidget {
   const ReporteScreen({
@@ -102,6 +126,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   String? _ordenColumna;
   bool _ordenAscendente = true;
   ReportDestination _destination = ReportDestination.sales;
+  final List<ReportDestination> _destinationHistory = [];
   int _handledCalendarRequestId = 0;
   final _busquedaController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
@@ -126,7 +151,32 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   void _navigate(ReportDestination destination) {
     if (_destination == destination) return;
-    setState(() => _destination = destination);
+    setState(() {
+      if (isPrimaryReportDestination(destination)) {
+        _destinationHistory.clear();
+      } else {
+        final previousIndex = _destinationHistory.lastIndexOf(destination);
+        if (previousIndex >= 0) {
+          _destinationHistory.removeRange(
+            previousIndex,
+            _destinationHistory.length,
+          );
+        } else if (_destinationHistory.isEmpty ||
+            _destinationHistory.last != _destination) {
+          _destinationHistory.add(_destination);
+        }
+      }
+      _destination = destination;
+    });
+  }
+
+  void _goBack() {
+    if (isPrimaryReportDestination(_destination)) return;
+    setState(() {
+      _destination = _destinationHistory.isEmpty
+          ? ReportDestination.sales
+          : _destinationHistory.removeLast();
+    });
   }
 
   ReportResponsiveLayout get _reportLayout =>
@@ -156,6 +206,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       return;
     }
     _handledCalendarRequestId = widget.calendarRequestId;
+    _destinationHistory.clear();
     _destination = ReportDestination.calendar;
   }
 
@@ -1836,7 +1887,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                         key: ValueKey(_reportes.activo.id),
                         mes: _reportes.activo.mes,
                         anio: _reportes.activo.anio,
-                        onVolver: _mostrarReporteVentas,
+                        onVolver: _goBack,
                         onFacturasGuardadas: _actualizarDesdeSupabase,
                         vendedores: _vendedores.vendedores,
                       )

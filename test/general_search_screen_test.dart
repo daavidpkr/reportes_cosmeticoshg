@@ -37,9 +37,17 @@ Widget app({
   GlobalPaymentEditor? edit,
   GlobalAdditionalPayments? additional,
   bool mobileCards = false,
+  Brightness brightness = Brightness.light,
 }) =>
     MaterialApp(
-      theme: ThemeData(extensions: const [HgThemeColors.light]),
+      theme: ThemeData(
+        brightness: brightness,
+        extensions: [
+          brightness == Brightness.dark
+              ? HgThemeColors.dark
+              : HgThemeColors.light,
+        ],
+      ),
       home: Scaffold(
         body: GeneralSearchScreen(
           search: search,
@@ -288,4 +296,30 @@ void main() {
       findsOneWidget,
     );
   });
+
+  for (final brightness in Brightness.values) {
+    testWidgets(
+        'pending cards use a stronger warning background in ${brightness.name}',
+        (tester) async {
+      await tester.pumpWidget(app(
+        brightness: brightness,
+        mobileCards: true,
+        search: (_, {required offset, required limit}) async => [invoice()],
+      ));
+      await runSearch(tester, 'pendiente');
+
+      final card = tester.widget<Card>(find.byKey(
+        const ValueKey('global-card-Julio 2026-7-0002'),
+      ));
+      final warning = brightness == Brightness.dark
+          ? HgThemeColors.dark.warning
+          : HgThemeColors.light.warning;
+      expect(
+          card.color,
+          warning.withValues(
+            alpha: brightness == Brightness.dark ? .28 : .22,
+          ));
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
