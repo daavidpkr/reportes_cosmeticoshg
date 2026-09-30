@@ -182,50 +182,57 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
         child: Text(value, maxLines: 1, style: style),
       );
 
-  DataRow _row(BuildContext context, GlobalInvoiceRow invoice,
+  ReportInvoiceRow _row(BuildContext context, GlobalInvoiceRow invoice,
       ReportTableGeometry geometry, double scale) {
     final row = invoice.row;
-    return DataRow(
-      key: ValueKey(
-          'global-${invoice.reportMonth}-${row.numero}-${row.referencia}'),
-      color: row.anulada
-          ? WidgetStatePropertyAll(context.hg.danger.withValues(alpha: .18))
+    return ReportInvoiceRow(
+      status: row.anulada
+          ? ReportInvoiceRowStatus.cancelled
           : row.pagada
-              ? WidgetStatePropertyAll(
-                  context.hg.positive.withValues(alpha: .18))
-              : null,
-      cells: [
-        DataCell(SizedBox(
-            width: 24 * scale,
-            child: Text('${row.numero}', textAlign: TextAlign.center))),
-        DataCell(Tooltip(
-          message: 'Mes original: ${invoice.reportMonth}',
-          child: SizedBox(
+              ? ReportInvoiceRowStatus.paid
+              : ReportInvoiceRowStatus.normal,
+      data: DataRow(
+        key: ValueKey(
+            'global-${invoice.reportMonth}-${row.numero}-${row.referencia}'),
+        cells: [
+          DataCell(SizedBox(
+              width: 24 * scale,
+              child: Text('${row.numero}', textAlign: TextAlign.center))),
+          DataCell(Tooltip(
+            message: 'Mes original: ${invoice.reportMonth}',
+            child: SizedBox(
               width: 72 * scale,
-              child: Text(visibleTableReference(row.referencia))),
-        )),
-        DataCell(_longText(row.cliente, geometry.clientWidth)),
-        DataCell(_longText(row.nombreComercial, geometry.businessNameWidth)),
-        DataCell(_fitText(row.fecha)),
-        DataCell(_fitText(row.numeroFactura)),
-        DataCell(ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: geometry.sellerWidth),
-          child: Text(row.vendedor, overflow: TextOverflow.ellipsis),
-        )),
-        DataCell(_fitText('${row.esmalte}')),
-        DataCell(_fitText(
-            row.anulada ? 'ANULADA' : '\$${row.venta.toStringAsFixed(2)}')),
-        DataCell(_paymentButton(invoice, 0, scale)),
-        DataCell(_paymentButton(invoice, 1, scale)),
-        DataCell(_additionalButton(invoice, scale: scale)),
-        DataCell(_fitText(row.anulada
-            ? 'ANULADA'
-            : '\$${row.totalAbonos.toStringAsFixed(2)}')),
-        DataCell(_fitText(
-          row.anulada ? 'ANULADA' : '\$${row.saldo.toStringAsFixed(2)}',
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        )),
-      ],
+              child: Center(
+                child: Text(
+                  visibleTableReference(row.referencia),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          )),
+          DataCell(_longText(row.cliente, geometry.clientWidth)),
+          DataCell(_longText(row.nombreComercial, geometry.businessNameWidth)),
+          DataCell(_fitText(row.fecha)),
+          DataCell(_fitText(row.numeroFactura)),
+          DataCell(ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: geometry.sellerWidth),
+            child: Text(row.vendedor, overflow: TextOverflow.ellipsis),
+          )),
+          DataCell(_fitText('${row.esmalte}')),
+          DataCell(_fitText(
+              row.anulada ? 'ANULADA' : '\$${row.venta.toStringAsFixed(2)}')),
+          DataCell(_paymentButton(invoice, 0, scale)),
+          DataCell(_paymentButton(invoice, 1, scale)),
+          DataCell(_additionalButton(invoice, scale: scale)),
+          DataCell(_fitText(row.anulada
+              ? 'ANULADA'
+              : '\$${row.totalAbonos.toStringAsFixed(2)}')),
+          DataCell(_fitText(
+            row.anulada ? 'ANULADA' : '\$${row.saldo.toStringAsFixed(2)}',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          )),
+        ],
+      ),
     );
   }
 

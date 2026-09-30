@@ -6,6 +6,19 @@ import 'report_responsive_layout.dart';
 
 enum ReportInvoiceTableMode { editable, readOnly, globalSearch }
 
+enum ReportInvoiceRowStatus { normal, cancelled, paid }
+
+@immutable
+class ReportInvoiceRow {
+  const ReportInvoiceRow({
+    required this.data,
+    required this.status,
+  });
+
+  final DataRow data;
+  final ReportInvoiceRowStatus status;
+}
+
 typedef ReportInvoiceHeaderBuilder = Widget Function(
   String label,
   String? filterKey,
@@ -112,58 +125,151 @@ class ReportInvoiceTable extends StatelessWidget {
   final double scale;
   final double headingFontSize;
   final double dataFontSize;
-  final List<DataRow> rows;
+  final List<ReportInvoiceRow> rows;
   final ReportInvoiceHeaderBuilder headerBuilder;
 
-  Widget _header(String label, String? filterKey, double width) => SizedBox(
+  static const double _headingRowHeight = 48;
+  static const double _dataRowHeight = 62;
+
+  Widget _header(
+    String label,
+    String? filterKey,
+    double width, {
+    Alignment alignment = Alignment.centerLeft,
+  }) =>
+      SizedBox(
         width: width,
         child: FittedBox(
           fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
+          alignment: alignment,
           child: headerBuilder(label, filterKey),
         ),
       );
 
+  Color? _rowBackground(BuildContext context, ReportInvoiceRowStatus status) {
+    final alpha = Theme.of(context).brightness == Brightness.dark ? .28 : .24;
+    return switch (status) {
+      ReportInvoiceRowStatus.cancelled =>
+        context.hg.danger.withValues(alpha: alpha),
+      ReportInvoiceRowStatus.paid =>
+        context.hg.positive.withValues(alpha: alpha),
+      ReportInvoiceRowStatus.normal => null,
+    };
+  }
+
+  DataRow _styledRow(BuildContext context, ReportInvoiceRow item) {
+    final row = item.data;
+    final background = _rowBackground(context, item.status);
+    return DataRow(
+      key: row.key,
+      selected: row.selected,
+      onSelectChanged: row.onSelectChanged,
+      onLongPress: row.onLongPress,
+      onHover: row.onHover,
+      color:
+          background == null ? row.color : WidgetStatePropertyAll(background),
+      mouseCursor: row.mouseCursor,
+      cells: row.cells,
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => DataTable(
-        key: ValueKey('report-data-table-${mode.name}'),
-        horizontalMargin: 7 * scale,
-        columnSpacing: 10 * scale,
-        dataRowMinHeight: 54,
-        dataRowMaxHeight: 62,
-        headingRowHeight: 48,
-        headingRowColor: WidgetStatePropertyAll(context.hg.tableHeader),
-        headingTextStyle: TextStyle(
-          color: context.hg.mutedText,
-          fontWeight: FontWeight.w600,
-          letterSpacing: .7,
-          fontSize: headingFontSize,
+  Widget build(BuildContext context) => CustomPaint(
+        foregroundPainter: _ReportRowBorderPainter(
+          statuses: rows.map((row) => row.status).toList(growable: false),
         ),
-        dataTextStyle: TextStyle(fontSize: dataFontSize),
-        columns: [
-          DataColumn(label: _header(columnLabels[0], null, 24 * scale)),
-          DataColumn(label: _header(columnLabels[1], 'referencia', 72 * scale)),
-          DataColumn(
-              label: _header(columnLabels[2], 'cliente', geometry.clientWidth)),
-          DataColumn(
+        child: DataTable(
+          key: ValueKey('report-data-table-${mode.name}'),
+          horizontalMargin: 7 * scale,
+          columnSpacing: 10 * scale,
+          dataRowMinHeight: _dataRowHeight,
+          dataRowMaxHeight: _dataRowHeight,
+          headingRowHeight: _headingRowHeight,
+          headingRowColor: WidgetStatePropertyAll(context.hg.tableHeader),
+          headingTextStyle: TextStyle(
+            color: context.hg.mutedText,
+            fontWeight: FontWeight.w600,
+            letterSpacing: .7,
+            fontSize: headingFontSize,
+          ),
+          dataTextStyle: TextStyle(fontSize: dataFontSize),
+          columns: [
+            DataColumn(label: _header(columnLabels[0], null, 24 * scale)),
+            DataColumn(
               label: _header(
-                  columnLabels[3], 'nombre', geometry.businessNameWidth)),
-          DataColumn(label: _header(columnLabels[4], 'fecha', 72 * scale)),
-          DataColumn(label: _header(columnLabels[5], 'factura', 76 * scale)),
-          DataColumn(
-              label:
-                  _header(columnLabels[6], 'vendedor', geometry.sellerWidth)),
-          DataColumn(label: _header(columnLabels[7], null, 58 * scale)),
-          DataColumn(label: _header(columnLabels[8], 'venta', 64 * scale)),
-          DataColumn(
-              label: _header(columnLabels[9], null, ReportPaymentButton.width)),
-          DataColumn(
-              label:
-                  _header(columnLabels[10], null, ReportPaymentButton.width)),
-          const DataColumn(label: SizedBox.shrink()),
-          DataColumn(label: _header(columnLabels[12], null, 78 * scale)),
-          DataColumn(label: _header(columnLabels[13], 'saldo', 68 * scale)),
-        ],
-        rows: rows,
+                columnLabels[1],
+                'referencia',
+                72 * scale,
+                alignment: Alignment.center,
+              ),
+            ),
+            DataColumn(
+                label:
+                    _header(columnLabels[2], 'cliente', geometry.clientWidth)),
+            DataColumn(
+                label: _header(
+                    columnLabels[3], 'nombre', geometry.businessNameWidth)),
+            DataColumn(label: _header(columnLabels[4], 'fecha', 72 * scale)),
+            DataColumn(label: _header(columnLabels[5], 'factura', 76 * scale)),
+            DataColumn(
+                label:
+                    _header(columnLabels[6], 'vendedor', geometry.sellerWidth)),
+            DataColumn(label: _header(columnLabels[7], null, 58 * scale)),
+            DataColumn(label: _header(columnLabels[8], 'venta', 64 * scale)),
+            DataColumn(
+                label:
+                    _header(columnLabels[9], null, ReportPaymentButton.width)),
+            DataColumn(
+                label:
+                    _header(columnLabels[10], null, ReportPaymentButton.width)),
+            const DataColumn(label: SizedBox.shrink()),
+            DataColumn(label: _header(columnLabels[12], null, 78 * scale)),
+            DataColumn(label: _header(columnLabels[13], 'saldo', 68 * scale)),
+          ],
+          rows: rows.map((row) => _styledRow(context, row)).toList(),
+        ),
+      );
+}
+
+class _ReportRowBorderPainter extends CustomPainter {
+  const _ReportRowBorderPainter({required this.statuses});
+
+  final List<ReportInvoiceRowStatus> statuses;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const strokeWidth = 1.4;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth;
+
+    for (final (index, status) in statuses.indexed) {
+      paint.color = switch (status) {
+        ReportInvoiceRowStatus.cancelled => const Color(0xFFFF1744),
+        ReportInvoiceRowStatus.paid => const Color(0xFF00E676),
+        ReportInvoiceRowStatus.normal => Colors.transparent,
+      };
+      if (status == ReportInvoiceRowStatus.normal) continue;
+
+      final top = ReportInvoiceTable._headingRowHeight +
+          index * ReportInvoiceTable._dataRowHeight;
+      final rect = Rect.fromLTWH(
+        strokeWidth / 2,
+        top + strokeWidth / 2,
+        size.width - strokeWidth,
+        ReportInvoiceTable._dataRowHeight - strokeWidth,
+      );
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(rect, const Radius.circular(5)),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReportRowBorderPainter oldDelegate) =>
+      oldDelegate.statuses.length != statuses.length ||
+      !oldDelegate.statuses.indexed.every(
+        (item) => item.$2 == statuses[item.$1],
       );
 }

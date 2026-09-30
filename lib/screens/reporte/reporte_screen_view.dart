@@ -168,76 +168,83 @@ extension _ReporteScreenView on _ReporteScreenState {
         ),
       );
 
-  DataRow _crearFila(
+  ReportInvoiceRow _crearFila(
     int indice,
     FilaVenta fila,
     ReportTableGeometry geometry,
   ) =>
-      DataRow(
-        key: ValueKey(fila.numero),
-        color: fila.anulada
-            ? WidgetStatePropertyAll(context.hg.danger.withValues(alpha: 0.18))
+      ReportInvoiceRow(
+        status: fila.anulada
+            ? ReportInvoiceRowStatus.cancelled
             : fila.pagada
-                ? WidgetStatePropertyAll(
-                    context.hg.positive.withValues(alpha: 0.18))
-                : null,
-        cells: [
-          DataCell(
-            Container(
-              width: 24 * _escalaReporte,
-              height: 24 * _escalaReporte,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                '${fila.numero}',
-                style: TextStyle(
-                  color: context.hg.plum,
-                  fontWeight: FontWeight.w700,
+                ? ReportInvoiceRowStatus.paid
+                : ReportInvoiceRowStatus.normal,
+        data: DataRow(
+          key: ValueKey(fila.numero),
+          cells: [
+            DataCell(
+              Container(
+                width: 24 * _escalaReporte,
+                height: 24 * _escalaReporte,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '${fila.numero}',
+                  style: TextStyle(
+                    color: context.hg.plum,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ),
-          ),
-          DataCell(
-            SizedBox(
-              width: 72 * _escalaReporte,
-              child: Text(visibleTableReference(fila.referencia)),
+            DataCell(
+              SizedBox(
+                width: 72 * _escalaReporte,
+                child: Center(
+                  child: Text(
+                    visibleTableReference(fila.referencia),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
             ),
-          ),
-          DataCell(_textoTablaLargo(fila.cliente, geometry.clientWidth)),
-          DataCell(
-            _textoTablaLargo(
-              fila.nombreComercial,
-              geometry.businessNameWidth,
+            DataCell(_textoTablaLargo(fila.cliente, geometry.clientWidth)),
+            DataCell(
+              _textoTablaLargo(
+                fila.nombreComercial,
+                geometry.businessNameWidth,
+              ),
             ),
-          ),
-          DataCell(Text(fila.fecha)),
-          DataCell(Text(fila.numeroFactura)),
-          DataCell(_selectorVendedor(fila, geometry)),
-          DataCell(_entradaEntera(fila)),
-          DataCell(Text(
-              fila.anulada ? 'ANULADA' : '\$${fila.venta.toStringAsFixed(2)}')),
-          DataCell(_botonAbono(fila, 0)),
-          DataCell(_botonAbono(fila, 1)),
-          DataCell(_abonosAdicionales(fila)),
-          DataCell(Text(fila.anulada
-              ? 'ANULADA'
-              : '\$${fila.totalAbonos.toStringAsFixed(2)}')),
-          DataCell(
-            Text(
-              fila.anulada ? 'ANULADA' : '\$${fila.saldo.toStringAsFixed(2)}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            DataCell(Text(fila.fecha)),
+            DataCell(Text(fila.numeroFactura)),
+            DataCell(_selectorVendedor(fila, geometry)),
+            DataCell(_entradaEntera(fila)),
+            DataCell(Text(fila.anulada
+                ? 'ANULADA'
+                : '\$${fila.venta.toStringAsFixed(2)}')),
+            DataCell(_botonAbono(fila, 0)),
+            DataCell(_botonAbono(fila, 1)),
+            DataCell(_abonosAdicionales(fila)),
+            DataCell(Text(fila.anulada
+                ? 'ANULADA'
+                : '\$${fila.totalAbonos.toStringAsFixed(2)}')),
+            DataCell(
+              Text(
+                fila.anulada ? 'ANULADA' : '\$${fila.saldo.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       );
 
   Widget _tablaCompartida({
     required ReportInvoiceTableMode mode,
     required ReportTableGeometry geometry,
-    required List<DataRow> filas,
+    required List<ReportInvoiceRow> filas,
   }) =>
       ReportInvoiceTable(
         mode: mode,

@@ -1,5 +1,6 @@
 import 'package:cosmeticos_hg_reportes/screens/reporte_screen.dart';
 import 'package:cosmeticos_hg_reportes/screens/reporte/report_invoice_table.dart';
+import 'package:cosmeticos_hg_reportes/theme/hg_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -181,6 +182,103 @@ void main() {
       });
     }
   });
+
+  group('estilos de estado de la tabla', () {
+    for (final theme in const [
+      (Brightness.light, HgThemeColors.light),
+      (Brightness.dark, HgThemeColors.dark),
+    ]) {
+      testWidgets(
+        'centra referencias y no desborda en tema ${theme.$1.name}',
+        (tester) async {
+          await tester.binding.setSurfaceSize(const Size(1024, 768));
+          addTearDown(() => tester.binding.setSurfaceSize(null));
+          final layout = ReportResponsiveLayout.forWidth(1024);
+
+          await tester.pumpWidget(MaterialApp(
+            theme: ThemeData(
+              brightness: theme.$1,
+              extensions: [theme.$2],
+            ),
+            home: Scaffold(
+              body: ReportTableContentFrame(
+                minimumWidth: layout.table.tableWidth,
+                table: ReportInvoiceTable(
+                  mode: ReportInvoiceTableMode.readOnly,
+                  geometry: layout.table,
+                  scale: layout.tableScale,
+                  headingFontSize: layout.tableHeadingFontSize,
+                  dataFontSize: layout.tableFontSize,
+                  headerBuilder: (label, _) => Text(
+                    label,
+                    key: label == 'REF. (FACT)'
+                        ? const ValueKey('reference-heading')
+                        : null,
+                  ),
+                  rows: [
+                    _invoiceRow(
+                      status: ReportInvoiceRowStatus.cancelled,
+                      reference: '717',
+                      referenceKey: const ValueKey('cancelled-reference'),
+                    ),
+                    _invoiceRow(
+                      status: ReportInvoiceRowStatus.paid,
+                      reference: '42',
+                      referenceKey: const ValueKey('paid-reference'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ));
+
+          final dataTable = tester.widget<DataTable>(find.byType(DataTable));
+          expect(dataTable.rows[0].color?.resolve({}), isNotNull);
+          expect(dataTable.rows[1].color?.resolve({}), isNotNull);
+
+          final heading = tester.getCenter(
+            find.byKey(const ValueKey('reference-heading')),
+          );
+          for (final key in const [
+            ValueKey('cancelled-reference'),
+            ValueKey('paid-reference'),
+          ]) {
+            expect(
+                tester.getCenter(find.byKey(key)).dx, closeTo(heading.dx, 1));
+          }
+          expect(tester.takeException(), isNull);
+        },
+      );
+    }
+  });
+}
+
+ReportInvoiceRow _invoiceRow({
+  required ReportInvoiceRowStatus status,
+  required String reference,
+  required Key referenceKey,
+}) {
+  final cells = List<DataCell>.generate(
+    ReportInvoiceTable.columnLabels.length,
+    (index) => DataCell(
+      index == 1
+          ? SizedBox(
+              width: 72 * .78,
+              child: Center(
+                child: Text(
+                  reference,
+                  key: referenceKey,
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          : Text('$index'),
+    ),
+  );
+  return ReportInvoiceRow(
+    status: status,
+    data: DataRow(cells: cells),
+  );
 }
 
 class _MeasuredBlock extends StatelessWidget {
