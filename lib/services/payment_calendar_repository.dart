@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/payment_calendar_entry.dart';
 import '../models/billing_customer.dart';
+import '../models/fila_venta.dart';
 import 'request_id.dart';
 
 abstract interface class PaymentCalendarDataSource {
@@ -122,8 +123,7 @@ class PaymentCalendarRepository
       throw StateError('canonical invoice row was not confirmed');
     }
     final paid = reportRows
-        .where((row) =>
-            row['vendedor']?.toString().trim().toUpperCase() != 'ANULADA')
+        .where((row) => !esVendedorAnulado(row['vendedor']?.toString() ?? ''))
         .expand((row) => row['abonos'] as List? ?? const [])
         .fold<double>(0, (sum, value) => sum + (value as num).toDouble());
     final sale = (invoice['venta'] as num).toDouble();

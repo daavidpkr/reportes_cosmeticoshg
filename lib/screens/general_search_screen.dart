@@ -190,7 +190,9 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
           ? ReportInvoiceRowStatus.cancelled
           : row.pagada
               ? ReportInvoiceRowStatus.paid
-              : ReportInvoiceRowStatus.normal,
+              : row.abonoParcial
+                  ? ReportInvoiceRowStatus.partialPayment
+                  : ReportInvoiceRowStatus.normal,
       data: DataRow(
         key: ValueKey(
             'global-${invoice.reportMonth}-${row.numero}-${row.referencia}'),
@@ -266,14 +268,22 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
         : row.pagada
             ? context.hg.positive
             : context.hg.warning;
-    final cardColor = statusColor.withValues(
-      alpha: Theme.of(context).brightness == Brightness.dark ? .28 : .24,
-    );
+    final brightness = Theme.of(context).brightness;
+    final highlighted = row.anulada || row.pagada || row.abonoParcial;
+    final cardColor = highlighted
+        ? statusColor.withValues(
+            alpha: brightness == Brightness.dark ? .28 : .24,
+          )
+        : context.hg.panel;
     final borderColor = row.anulada
         ? const Color(0xFFFF1744)
         : row.pagada
             ? const Color(0xFF00E676)
-            : const Color(0xFFFFFF00);
+            : row.abonoParcial
+                ? brightness == Brightness.dark
+                    ? const Color(0xFFFFFF00)
+                    : const Color(0xFFFFC400)
+                : Theme.of(context).colorScheme.outlineVariant;
     return Card(
       key: ValueKey(
           'global-card-${invoice.reportMonth}-${row.numero}-${row.referencia}'),

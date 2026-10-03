@@ -1,3 +1,5 @@
+import 'fila_venta.dart';
+
 class CustomerHistorySummary {
   const CustomerHistorySummary({
     required this.totalSales,
@@ -64,23 +66,25 @@ class CustomerHistoryInvoice {
               ? 'Pagada'
               : 'Pendiente';
 
-  factory CustomerHistoryInvoice.fromJson(Map<String, dynamic> json) =>
-      CustomerHistoryInvoice(
-        reference: json['reference']?.toString() ?? '',
-        invoiceNumber: json['invoice_number']?.toString() ?? '',
-        date: DateTime.parse(json['invoice_date'].toString()),
-        seller: json['seller']?.toString() ?? '',
-        reportMonth: json['report_month']?.toString() ?? '',
-        sale: (json['sale'] as num?)?.toDouble() ?? 0,
-        paid: (json['paid'] as num?)?.toDouble() ?? 0,
-        balance: (json['balance'] as num?)?.toDouble() ?? 0,
-        cancelled: json['cancelled'] == true,
-        overdue: json['overdue'] == true,
-        reminderDate: _date(json['reminder_date']),
-        calendarComment: json['calendar_comment']?.toString() ?? '',
-        scheduleSource: json['schedule_source']?.toString(),
-        payments: _payments(json['payments']),
-      );
+  factory CustomerHistoryInvoice.fromJson(Map<String, dynamic> json) {
+    final seller = json['seller']?.toString() ?? '';
+    return CustomerHistoryInvoice(
+      reference: json['reference']?.toString() ?? '',
+      invoiceNumber: json['invoice_number']?.toString() ?? '',
+      date: DateTime.parse(json['invoice_date'].toString()),
+      seller: seller,
+      reportMonth: json['report_month']?.toString() ?? '',
+      sale: (json['sale'] as num?)?.toDouble() ?? 0,
+      paid: (json['paid'] as num?)?.toDouble() ?? 0,
+      balance: (json['balance'] as num?)?.toDouble() ?? 0,
+      cancelled: json['cancelled'] == true || esVendedorAnulado(seller),
+      overdue: json['overdue'] == true,
+      reminderDate: _date(json['reminder_date']),
+      calendarComment: json['calendar_comment']?.toString() ?? '',
+      scheduleSource: json['schedule_source']?.toString(),
+      payments: _payments(json['payments']),
+    );
+  }
 }
 
 class InvoiceTermRecalculation {

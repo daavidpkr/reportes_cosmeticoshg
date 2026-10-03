@@ -470,6 +470,7 @@ void main() {
     expect(find.text('Días de pago obligatorios'), findsNothing);
     await tester.tap(find.byKey(const ValueKey('assign-all-seller')));
     await tester.pumpAndSettle();
+    expect(find.text('ANUL'), findsOneWidget);
     await tester.tap(find.text('01 - Ana').last);
     await tester.pumpAndSettle();
     expect(
@@ -552,10 +553,10 @@ void main() {
     tester
         .widget<DropdownButtonFormField<String>>(
             find.byKey(const ValueKey('seller-022')))
-        .onChanged!('02 - Luz');
+        .onChanged!('ANUL');
     await tester.pumpAndSettle();
     expect(review.invoices.first.vendedor, '01 - Ana');
-    expect(review.invoices.last.vendedor, '02 - Luz');
+    expect(review.invoices.last.vendedor, 'ANUL');
     expect(store.cantidad, 0);
   });
 }

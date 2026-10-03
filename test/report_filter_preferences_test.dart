@@ -43,6 +43,17 @@ void main() {
     );
   });
 
+  test('acepta el filtro de facturas anuladas', () {
+    final value = ReportFilterPreferences.fromJson({
+      'version': 1,
+      'status': 'anuladas',
+      'paymentTerm': '',
+      'columnFilters': <String, String>{},
+    });
+
+    expect(value?.status, 'anuladas');
+  });
+
   test('aísla la configuración por usuario y organización', () async {
     SharedPreferences.setMockInitialValues({});
     final store = ReportFilterPreferencesStore();

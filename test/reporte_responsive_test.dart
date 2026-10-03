@@ -226,6 +226,11 @@ void main() {
                       reference: '42',
                       referenceKey: const ValueKey('paid-reference'),
                     ),
+                    _invoiceRow(
+                      status: ReportInvoiceRowStatus.partialPayment,
+                      reference: '18',
+                      referenceKey: const ValueKey('partial-reference'),
+                    ),
                   ],
                 ),
               ),
@@ -235,6 +240,7 @@ void main() {
           final dataTable = tester.widget<DataTable>(find.byType(DataTable));
           expect(dataTable.rows[0].color?.resolve({}), isNotNull);
           expect(dataTable.rows[1].color?.resolve({}), isNotNull);
+          expect(dataTable.rows[2].color?.resolve({}), isNotNull);
 
           final heading = tester.getCenter(
             find.byKey(const ValueKey('reference-heading')),
@@ -242,6 +248,7 @@ void main() {
           for (final key in const [
             ValueKey('cancelled-reference'),
             ValueKey('paid-reference'),
+            ValueKey('partial-reference'),
           ]) {
             expect(
                 tester.getCenter(find.byKey(key)).dx, closeTo(heading.dx, 1));

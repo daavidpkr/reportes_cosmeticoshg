@@ -191,7 +191,7 @@ List<CobroMensual> calcularCobrosMensuales({
     final key = '$nombreReporte::$referencia';
     final anterior = filasUnicas[key];
     if (anterior == null ||
-        dato['vendedor']?.toString().trim().toUpperCase() == 'ANULADA') {
+        esVendedorAnulado(dato['vendedor']?.toString() ?? '')) {
       filasUnicas[key] = dato;
     }
   }
@@ -199,7 +199,7 @@ List<CobroMensual> calcularCobrosMensuales({
   for (final dato in filasUnicas.values) {
     final nombreReporte = dato['mes_reporte']?.toString() ?? '';
     final referencia = dato['ref_fact']?.toString().trim() ?? '';
-    if (dato['vendedor']?.toString().trim().toUpperCase() == 'ANULADA') {
+    if (esVendedorAnulado(dato['vendedor']?.toString() ?? '')) {
       continue;
     }
     final abonos = dato['abonos'];

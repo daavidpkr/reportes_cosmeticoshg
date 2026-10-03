@@ -6,6 +6,7 @@ import '../models/billing_customer.dart';
 import '../models/customer_history.dart';
 import '../services/customer_history_repository.dart';
 import '../services/payment_calendar_refresh.dart';
+import '../theme/hg_theme.dart';
 
 class CustomerHistoryScreen extends StatefulWidget {
   const CustomerHistoryScreen(
@@ -737,63 +738,88 @@ class _InvoiceCard extends StatelessWidget {
   String date(DateTime v) =>
       '${v.day.toString().padLeft(2, '0')}/${v.month.toString().padLeft(2, '0')}/${v.year}';
   @override
-  Widget build(BuildContext context) => Card(
-          child: ExpansionTile(
-              key: PageStorageKey(invoice.reference),
-              title: Text('Factura ${invoice.invoiceNumber}'),
-              subtitle: Text('${date(invoice.date)} · ${invoice.status}'),
-              trailing: Text(money(invoice.balance),
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              children: [
-            Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                          'REF. ${invoice.reference} · ${invoice.reportMonth}'),
-                      Text(
-                          'Vendedor: ${invoice.seller.isEmpty ? 'Sin registrar' : invoice.seller}'),
-                      Text(
-                          'Venta: ${money(invoice.sale)} · Abonado: ${money(invoice.paid)} · Saldo: ${money(invoice.balance)}'),
-                      if (invoice.reminderDate != null)
-                        Text('Fecha de cobro: ${date(invoice.reminderDate!)}'),
-                      if (invoice.calendarComment.isNotEmpty)
+  Widget build(BuildContext context) {
+    final partialPayment =
+        !invoice.cancelled && invoice.paid > 0 && invoice.balance > 0;
+    final brightness = Theme.of(context).brightness;
+    final warning = Theme.of(context).extension<HgThemeColors>()?.warning ??
+        (brightness == Brightness.dark ? Colors.amberAccent : Colors.amber);
+    return Card(
+        color: partialPayment
+            ? warning.withValues(
+                alpha: brightness == Brightness.dark ? .28 : .24,
+              )
+            : null,
+        shape: partialPayment
+            ? RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: brightness == Brightness.dark
+                      ? const Color(0xFFFFFF00)
+                      : const Color(0xFFFFC400),
+                  width: 1.4,
+                ),
+              )
+            : null,
+        child: ExpansionTile(
+            key: PageStorageKey(invoice.reference),
+            title: Text('Factura ${invoice.invoiceNumber}'),
+            subtitle: Text('${date(invoice.date)} · ${invoice.status}'),
+            trailing: Text(money(invoice.balance),
+                style: const TextStyle(fontWeight: FontWeight.bold)),
+            children: [
+              Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                         Text(
-                            'Comentario del calendario: ${invoice.calendarComment}'),
-                      const SizedBox(height: 8),
-                      Tooltip(
-                          message: termDays == null
-                              ? 'Configura primero el plazo de pago del cliente'
-                              : 'Recalcular esta factura con el plazo actual del cliente',
-                          child: Semantics(
-                              button: true,
-                              label: termDays == null
-                                  ? 'Configura primero el plazo de pago del cliente'
-                                  : 'Reprogramar factura ${invoice.reference} con el plazo actual de $termDays ${termDays == 1 ? 'día' : 'días'}',
-                              child: FilledButton.tonalIcon(
-                                  key: ValueKey(
-                                      'reprogram-${invoice.reference}'),
-                                  onPressed: termDays == null ||
-                                          invoice.cancelled ||
-                                          invoice.isPaid ||
-                                          invoice.reference.isEmpty ||
-                                          busy
-                                      ? null
-                                      : onReprogram,
-                                  icon: busy
-                                      ? const SizedBox.square(
-                                          dimension: 16,
-                                          child: CircularProgressIndicator(
-                                              strokeWidth: 2))
-                                      : const Icon(Icons.event_repeat_outlined),
-                                  label: const Text(
-                                      'Reprogramar con plazo actual')))),
-                      for (var i = 0; i < invoice.payments.length; i++)
+                            'REF. ${invoice.reference} · ${invoice.reportMonth}'),
                         Text(
-                            'Abono ${i + 1}: ${money(invoice.payments[i].amount)} · Recibo: ${invoice.payments[i].receiptNumber ?? 'Sin recibo'}${invoice.payments[i].comment.isEmpty ? '' : ' · ${invoice.payments[i].comment}'}')
-                    ]))
-          ]));
+                            'Vendedor: ${invoice.seller.isEmpty ? 'Sin registrar' : invoice.seller}'),
+                        Text(
+                            'Venta: ${money(invoice.sale)} · Abonado: ${money(invoice.paid)} · Saldo: ${money(invoice.balance)}'),
+                        if (invoice.reminderDate != null)
+                          Text(
+                              'Fecha de cobro: ${date(invoice.reminderDate!)}'),
+                        if (invoice.calendarComment.isNotEmpty)
+                          Text(
+                              'Comentario del calendario: ${invoice.calendarComment}'),
+                        const SizedBox(height: 8),
+                        Tooltip(
+                            message: termDays == null
+                                ? 'Configura primero el plazo de pago del cliente'
+                                : 'Recalcular esta factura con el plazo actual del cliente',
+                            child: Semantics(
+                                button: true,
+                                label: termDays == null
+                                    ? 'Configura primero el plazo de pago del cliente'
+                                    : 'Reprogramar factura ${invoice.reference} con el plazo actual de $termDays ${termDays == 1 ? 'día' : 'días'}',
+                                child: FilledButton.tonalIcon(
+                                    key: ValueKey(
+                                        'reprogram-${invoice.reference}'),
+                                    onPressed: termDays == null ||
+                                            invoice.cancelled ||
+                                            invoice.isPaid ||
+                                            invoice.reference.isEmpty ||
+                                            busy
+                                        ? null
+                                        : onReprogram,
+                                    icon: busy
+                                        ? const SizedBox.square(
+                                            dimension: 16,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 2))
+                                        : const Icon(
+                                            Icons.event_repeat_outlined),
+                                    label: const Text(
+                                        'Reprogramar con plazo actual')))),
+                        for (var i = 0; i < invoice.payments.length; i++)
+                          Text(
+                              'Abono ${i + 1}: ${money(invoice.payments[i].amount)} · Recibo: ${invoice.payments[i].receiptNumber ?? 'Sin recibo'}${invoice.payments[i].comment.isEmpty ? '' : ' · ${invoice.payments[i].comment}'}')
+                      ]))
+            ]));
+  }
 }
 
 class _ErrorState extends StatelessWidget {

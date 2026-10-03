@@ -110,6 +110,7 @@ class ReporteScreen extends StatefulWidget {
 }
 
 class _ReporteScreenState extends State<ReporteScreen> {
+  static const _opcionAnul = 'ANUL';
   static const _opcionAnulada = 'ANULADA';
   final _facturas = FacturasStore.instance;
   final _exporter = ReporteExporter();
@@ -1391,6 +1392,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
                       value: 'pendientes',
                       child: Text('No pagados / pendientes'),
                     ),
+                    DropdownMenuItem(
+                      value: 'anuladas',
+                      child: Text('Anuladas'),
+                    ),
                   ],
                   onChanged: (valor) =>
                       actualizar(() => estado = valor ?? 'todos'),
@@ -1641,6 +1646,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
           item.value.vendedor.toLowerCase().contains(texto);
     }).where((item) {
       if (_filtroVendedor.isNotEmpty &&
+          !(_filtroVendedor == _opcionAnulada && item.value.anulada) &&
           item.value.vendedor != _filtroVendedor) {
         return false;
       }
@@ -1655,7 +1661,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
       }
       return switch (_filtroEstado) {
         'pagados' => item.value.pagada,
-        'pendientes' => item.value.tieneDatos && !item.value.pagada,
+        'pendientes' =>
+          item.value.tieneDatos && !item.value.pagada && !item.value.anulada,
+        'anuladas' => item.value.anulada,
         _ => true,
       };
     }).where((item) {
@@ -1848,6 +1856,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
     }
     if (_filtroEstado == 'pagados') partes.add('Pagados al 100%');
     if (_filtroEstado == 'pendientes') partes.add('Pendientes');
+    if (_filtroEstado == 'anuladas') partes.add('Anuladas');
     if (_filtrosColumnas.isNotEmpty) {
       partes.add('${_filtrosColumnas.length} filtro(s) de columna');
     }

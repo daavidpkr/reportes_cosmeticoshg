@@ -2,6 +2,11 @@
 // PostgreSQL bigint y no pierde precisión cuando Flutter se ejecuta en web.
 const int maxNumeroReciboSeguro = 9007199254740991;
 
+bool esVendedorAnulado(String vendedor) {
+  final normalizado = vendedor.trim().toUpperCase();
+  return normalizado == 'ANUL' || normalizado == 'ANULADA';
+}
+
 String? validarNumeroRecibo(String valor) {
   final limpio = valor.trim();
   if (limpio.isEmpty) return null;
@@ -76,8 +81,9 @@ class FilaVenta {
 
   double get totalAbonos => abonos.fold(0, (suma, abono) => suma + abono.valor);
   double get saldo => venta - totalAbonos;
-  bool get anulada => vendedor.trim().toUpperCase() == 'ANULADA';
+  bool get anulada => esVendedorAnulado(vendedor);
   bool get pagada => !anulada && venta > 0 && saldo <= 0.005;
+  bool get abonoParcial => !anulada && totalAbonos > 0 && saldo > 0;
   bool get tieneDatos =>
       referencia.trim().isNotEmpty ||
       cliente.trim().isNotEmpty ||

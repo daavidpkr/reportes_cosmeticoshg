@@ -50,7 +50,8 @@ class ReportFilterPreferences {
     final rawFilters = value['columnFilters'];
     final sortColumn = value['sortColumn'];
     if (status is! String ||
-        !const {'todos', 'pagados', 'pendientes'}.contains(status) ||
+        !const {'todos', 'pagados', 'pendientes', 'anuladas'}
+            .contains(status) ||
         paymentTerm is! String ||
         !_validPaymentTerm(paymentTerm) ||
         rawFilters is! Map ||

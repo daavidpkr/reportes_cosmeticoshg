@@ -6,7 +6,7 @@ import 'report_responsive_layout.dart';
 
 enum ReportInvoiceTableMode { editable, readOnly, globalSearch }
 
-enum ReportInvoiceRowStatus { normal, cancelled, paid }
+enum ReportInvoiceRowStatus { normal, cancelled, paid, partialPayment }
 
 @immutable
 class ReportInvoiceRow {
@@ -153,6 +153,8 @@ class ReportInvoiceTable extends StatelessWidget {
         context.hg.danger.withValues(alpha: alpha),
       ReportInvoiceRowStatus.paid =>
         context.hg.positive.withValues(alpha: alpha),
+      ReportInvoiceRowStatus.partialPayment =>
+        context.hg.warning.withValues(alpha: alpha),
       ReportInvoiceRowStatus.normal => null,
     };
   }
@@ -177,6 +179,7 @@ class ReportInvoiceTable extends StatelessWidget {
   Widget build(BuildContext context) => CustomPaint(
         foregroundPainter: _ReportRowBorderPainter(
           statuses: rows.map((row) => row.status).toList(growable: false),
+          brightness: Theme.of(context).brightness,
         ),
         child: DataTable(
           key: ValueKey('report-data-table-${mode.name}'),
@@ -232,9 +235,13 @@ class ReportInvoiceTable extends StatelessWidget {
 }
 
 class _ReportRowBorderPainter extends CustomPainter {
-  const _ReportRowBorderPainter({required this.statuses});
+  const _ReportRowBorderPainter({
+    required this.statuses,
+    required this.brightness,
+  });
 
   final List<ReportInvoiceRowStatus> statuses;
+  final Brightness brightness;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -247,6 +254,9 @@ class _ReportRowBorderPainter extends CustomPainter {
       paint.color = switch (status) {
         ReportInvoiceRowStatus.cancelled => const Color(0xFFFF1744),
         ReportInvoiceRowStatus.paid => const Color(0xFF00E676),
+        ReportInvoiceRowStatus.partialPayment => brightness == Brightness.dark
+            ? const Color(0xFFFFFF00)
+            : const Color(0xFFFFC400),
         ReportInvoiceRowStatus.normal => Colors.transparent,
       };
       if (status == ReportInvoiceRowStatus.normal) continue;
@@ -268,6 +278,7 @@ class _ReportRowBorderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ReportRowBorderPainter oldDelegate) =>
+      oldDelegate.brightness != brightness ||
       oldDelegate.statuses.length != statuses.length ||
       !oldDelegate.statuses.indexed.every(
         (item) => item.$2 == statuses[item.$1],

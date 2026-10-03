@@ -15,6 +15,7 @@ import '../services/vendedores_store.dart';
 import '../theme/hg_theme.dart';
 
 const _maxPaymentTermDays = 3650;
+const _vendedorAnulacion = 'ANUL';
 
 class CargaFacturasScreen extends StatefulWidget {
   const CargaFacturasScreen({super.key, required this.mes, required this.anio});
@@ -213,17 +214,19 @@ class _InvoiceReviewDialogState extends State<InvoiceReviewDialog> {
                             isExpanded: true,
                             decoration: const InputDecoration(
                                 labelText: 'Asignar vendedor a todas'),
-                            items: widget.vendedores
-                                .map((v) => DropdownMenuItem(
-                                    value: v.etiqueta,
-                                    child: Text(v.etiqueta,
-                                        overflow: TextOverflow.ellipsis)))
-                                .toList(),
-                            onChanged: widget.vendedores.isEmpty
-                                ? null
-                                : (value) {
-                                    if (value != null) _aplicarATodas(value);
-                                  },
+                            items: [
+                              const DropdownMenuItem(
+                                value: _vendedorAnulacion,
+                                child: Text(_vendedorAnulacion),
+                              ),
+                              ...widget.vendedores.map((v) => DropdownMenuItem(
+                                  value: v.etiqueta,
+                                  child: Text(v.etiqueta,
+                                      overflow: TextOverflow.ellipsis))),
+                            ],
+                            onChanged: (value) {
+                              if (value != null) _aplicarATodas(value);
+                            },
                           )),
                       SizedBox(
                           width: 190,
@@ -267,7 +270,7 @@ class _InvoiceReviewDialogState extends State<InvoiceReviewDialog> {
                 const Padding(
                     padding: EdgeInsets.all(12),
                     child: Text(
-                        'No hay vendedores disponibles en el catálogo sincronizado.')),
+                        'No hay vendedores disponibles en el catálogo sincronizado; ANUL sigue disponible.')),
               if (widget.review.invoices.any((item) => item.customerAmbiguous))
                 Padding(
                     padding: const EdgeInsets.all(12),
@@ -423,12 +426,16 @@ class _InvoiceReviewCard extends StatelessWidget {
                               onChanged();
                             },
                             icon: const Icon(Icons.clear))),
-                items: vendedores
-                    .map((v) => DropdownMenuItem(
-                        value: v.etiqueta,
-                        child:
-                            Text(v.etiqueta, overflow: TextOverflow.ellipsis)))
-                    .toList(),
+                items: [
+                  const DropdownMenuItem(
+                    value: _vendedorAnulacion,
+                    child: Text(_vendedorAnulacion),
+                  ),
+                  ...vendedores.map((v) => DropdownMenuItem(
+                      value: v.etiqueta,
+                      child:
+                          Text(v.etiqueta, overflow: TextOverflow.ellipsis))),
+                ],
                 onChanged: (value) {
                   invoice.vendedor = value;
                   onChanged();

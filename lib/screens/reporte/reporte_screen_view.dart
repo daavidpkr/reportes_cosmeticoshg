@@ -111,6 +111,10 @@ extension _ReporteScreenView on _ReporteScreenState {
           )
               .followedBy(const [
             DropdownMenuItem<String>(
+              value: _ReporteScreenState._opcionAnul,
+              child: Text(_ReporteScreenState._opcionAnul),
+            ),
+            DropdownMenuItem<String>(
               value: _ReporteScreenState._opcionAnulada,
               child: Text(_ReporteScreenState._opcionAnulada),
             ),
@@ -130,6 +134,10 @@ extension _ReporteScreenView on _ReporteScreenState {
             ),
           )
               .followedBy(const [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(_ReporteScreenState._opcionAnul),
+            ),
             Align(
               alignment: Alignment.centerLeft,
               child: Text(_ReporteScreenState._opcionAnulada),
@@ -178,7 +186,9 @@ extension _ReporteScreenView on _ReporteScreenState {
             ? ReportInvoiceRowStatus.cancelled
             : fila.pagada
                 ? ReportInvoiceRowStatus.paid
-                : ReportInvoiceRowStatus.normal,
+                : fila.abonoParcial
+                    ? ReportInvoiceRowStatus.partialPayment
+                    : ReportInvoiceRowStatus.normal,
         data: DataRow(
           key: ValueKey(fila.numero),
           cells: [
@@ -334,6 +344,7 @@ extension _ReporteScreenView on _ReporteScreenState {
             DropdownMenuItem(value: 'todos', child: Text('Estado: Todos')),
             DropdownMenuItem(value: 'pagados', child: Text('Pagados')),
             DropdownMenuItem(value: 'pendientes', child: Text('Pendientes')),
+            DropdownMenuItem(value: 'anuladas', child: Text('Anuladas')),
           ],
           onChanged: (v) =>
               _actualizarFiltros(() => _filtroEstado = v ?? 'todos'),
@@ -1031,12 +1042,18 @@ extension _ReporteScreenView on _ReporteScreenState {
         ? context.hg.danger
         : fila.pagada
             ? context.hg.positive
-            : null;
+            : fila.abonoParcial
+                ? context.hg.warning
+                : null;
     final statusBorderColor = fila.anulada
         ? const Color(0xFFFF1744)
         : fila.pagada
             ? const Color(0xFF00E676)
-            : Theme.of(context).colorScheme.outlineVariant;
+            : fila.abonoParcial
+                ? brightness == Brightness.dark
+                    ? const Color(0xFFFFFF00)
+                    : const Color(0xFFFFC400)
+                : Theme.of(context).colorScheme.outlineVariant;
     return Container(
       decoration: BoxDecoration(
         color: statusColor?.withValues(
@@ -1387,6 +1404,7 @@ extension _ReporteScreenView on _ReporteScreenState {
           DropdownMenuItem(value: 'todos', child: Text('Todos')),
           DropdownMenuItem(value: 'pagados', child: Text('Pagados')),
           DropdownMenuItem(value: 'pendientes', child: Text('Pendientes')),
+          DropdownMenuItem(value: 'anuladas', child: Text('Anuladas')),
         ],
         onChanged: (v) =>
             _actualizarFiltros(() => _filtroEstado = v ?? 'todos'),

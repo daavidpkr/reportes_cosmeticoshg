@@ -299,7 +299,7 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets(
-        'pending cards use a stronger warning background in ${brightness.name}',
+        'partial-payment cards use warning colors in ${brightness.name}',
         (tester) async {
       await tester.pumpWidget(app(
         brightness: brightness,
@@ -320,7 +320,12 @@ void main() {
             alpha: brightness == Brightness.dark ? .28 : .24,
           ));
       final shape = card.shape! as RoundedRectangleBorder;
-      expect(shape.side.color, const Color(0xFFFFFF00));
+      expect(
+        shape.side.color,
+        brightness == Brightness.dark
+            ? const Color(0xFFFFFF00)
+            : const Color(0xFFFFC400),
+      );
       expect(shape.side.width, 1.4);
       expect(tester.takeException(), isNull);
     });

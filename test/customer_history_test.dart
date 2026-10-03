@@ -103,6 +103,21 @@ void main() {
     expect(page.invoices.single.reminderDate, isNull);
   });
 
+  test('un vendedor ANUL prevalece como estado anulado', () {
+    final invoice = CustomerHistoryInvoice.fromJson({
+      'reference': 'A',
+      'invoice_date': '2026-01-01',
+      'seller': 'ANUL',
+      'sale': 100,
+      'paid': 20,
+      'balance': 80,
+      'cancelled': false,
+    });
+
+    expect(invoice.cancelled, isTrue);
+    expect(invoice.status, 'Anulada');
+  });
+
   test('tolera y aplana la respuesta histórica de abonos', () {
     final page = CustomerHistoryPage.fromJson({
       'summary': const {},
