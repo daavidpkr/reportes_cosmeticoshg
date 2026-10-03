@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
+import 'package:cosmeticos_hg_reportes/models/factura.dart';
 import 'package:cosmeticos_hg_reportes/services/facturas_store.dart';
 import 'package:cosmeticos_hg_reportes/services/invoice_batch_importer.dart';
 import 'package:cosmeticos_hg_reportes/services/invoice_file_preparer.dart';
@@ -53,6 +54,44 @@ Future<InvoiceBatchImportResult> _import(
 }
 
 void main() {
+  group('identidad canónica de clientes', () {
+    test('normaliza prefijos N numéricos solo para comparar clientes', () {
+      expect(
+        normalizeInvoiceCustomerComparison(
+            '  N24   GETY SALUD Y DIAGNÓSTICO S.A.S. '),
+        'gety salud y diagnóstico s.a.s.',
+      );
+      expect(
+        normalizeInvoiceCustomerComparison('N100 FARMACIA CENTRAL'),
+        'farmacia central',
+      );
+      expect(
+        normalizeInvoiceCustomerComparison('NORTE FARMACIA'),
+        'norte farmacia',
+      );
+    });
+
+    test('reutiliza una sola clave para alias con y sin prefijo N', () {
+      const prefixed = Factura(
+        cliente: 'N24 GETY SALUD Y DIAGNÓSTICO S.A.S.',
+        nombreComercial: 'FARMACITY',
+        fecha: '03/10/2026',
+        secuencial: '900',
+        total: 10,
+      );
+      const plain = Factura(
+        cliente: 'GETY SALUD Y DIAGNÓSTICO S.A.S.',
+        nombreComercial: 'FARMACITY',
+        fecha: '03/10/2026',
+        secuencial: '901',
+        total: 20,
+      );
+
+      expect(invoiceCustomerKey(prefixed), invoiceCustomerKey(plain));
+      expect(prefixed.cliente, startsWith('N24'));
+    });
+  });
+
   group('preparación XML y ZIP', () {
     test('conserva uno y varios XML directos sin cambiar bytes ni nombres',
         () async {

@@ -38,9 +38,15 @@ String invoiceCustomerKey(Factura factura) {
       .replaceAll(RegExp(r'[^A-Za-z0-9]'), '')
       .toUpperCase();
   if (identification.isNotEmpty) return 'id:$identification';
-  String normalize(String value) =>
-      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-  return 'legacy:${normalize(factura.cliente)}|${normalize(factura.nombreComercial)}';
+  return 'legacy:${normalizeInvoiceCustomerComparison(factura.cliente)}|'
+      '${normalizeInvoiceCustomerComparison(factura.nombreComercial)}';
+}
+
+/// Normalizes only the comparison key. The original XML and visible customer
+/// name keep their initial sequence prefix (for example, `N24`).
+String normalizeInvoiceCustomerComparison(String value) {
+  final normalized = value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  return normalized.replaceFirst(RegExp(r'^n\d+\s+'), '');
 }
 
 class CustomerImportResolution {
