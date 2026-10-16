@@ -6,8 +6,11 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/fila_venta.dart';
+import '../models/payment_calendar_entry.dart';
 import '../services/facturas_store.dart';
 import '../services/invoice_batch_importer.dart';
+import '../services/payment_calendar_refresh.dart';
+import '../services/payment_calendar_repository.dart';
 import '../services/report_filter_preferences.dart';
 import '../services/reporte_exporter.dart';
 import '../services/reportes_store.dart';
@@ -19,7 +22,9 @@ import 'cobros_mensuales_view.dart';
 import 'clientes_screen.dart';
 import 'estadisticas_screen.dart';
 import 'general_search_screen.dart';
+import 'invoice_detail_dialog.dart';
 import 'payment_calendar/payment_calendar_screen.dart';
+import 'payment_calendar/dialogs/reschedule_reminder_dialog.dart';
 import 'reporte/report_invoice_table.dart';
 import 'payment_reminders_screen.dart';
 import 'reporte/report_responsive_layout.dart';
@@ -643,6 +648,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
     bool nuevo = false,
     Abono? borrador,
     String? mesReporte,
+    bool pagoCompletoInicial = false,
   }) async {
     if (fila.anulada) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -665,6 +671,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
     var pagoCompleto = false;
     var valorManual = montoController.text;
     final saldoInicial = fila.saldo + (nuevo ? 0 : abono.valor);
+    if (pagoCompletoInicial && nuevo && saldoInicial > .005) {
+      pagoCompleto = true;
+      montoController.text = saldoInicial.toStringAsFixed(2);
+    }
     final resultado = await showDialog<(double, int?, String)>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -894,7 +904,96 @@ class _ReporteScreenState extends State<ReporteScreen> {
       await _cargarReportes();
       if (mounted) setState(() => _versionCobrosMensuales++);
     }
+    paymentCalendarRefresh.refresh();
     return true;
+  }
+
+  Future<void> _abrirDetalleFactura(
+    FilaVenta fila, {
+    String? mesReporte,
+  }) async {
+    DateTime? scheduledDate;
+    try {
+      scheduledDate =
+          await _supabaseReportes.obtenerFechaCobro(fila.referencia);
+    } catch (_) {}
+    if (!mounted) return;
+    await showInvoiceDetailDialog(
+      context,
+      invoice: fila,
+      scheduledDate: scheduledDate,
+      reportMonth: mesReporte ?? _reportes.activo.nombre,
+      onPayment: () async {
+        await _editarAbono(
+          fila,
+          fila.abonos.length,
+          nuevo: true,
+          mesReporte: mesReporte,
+        );
+      },
+      onPayInFull: () async {
+        await _editarAbono(
+          fila,
+          fila.abonos.length,
+          nuevo: true,
+          mesReporte: mesReporte,
+          pagoCompletoInicial: true,
+        );
+      },
+      onReschedule: () => _reprogramarDesdeDetalle(fila),
+      onClosed: () async {
+        if (mesReporte != null) await _cargarReportes();
+        if (mounted) setState(() {});
+      },
+    );
+  }
+
+  Future<void> _reprogramarDesdeDetalle(FilaVenta fila) async {
+    final repository = PaymentCalendarRepository();
+    try {
+      final matches =
+          await repository.searchSchedulableInvoices(fila.referencia);
+      SchedulableInvoice? invoice;
+      for (final item in matches) {
+        if (item.facturaId == fila.referencia.trim()) {
+          invoice = item;
+          break;
+        }
+      }
+      if (invoice == null) {
+        _mostrarErrorNube(
+          'La factura no está pendiente o no tiene cliente y plazo configurados.',
+        );
+        return;
+      }
+      if (!mounted) return;
+      final entry = PaymentCalendarEntry(
+        reminderId: '',
+        facturaId: invoice.facturaId,
+        invoiceNumber: invoice.invoiceNumber,
+        cliente: invoice.cliente,
+        nombreComercial: invoice.nombreComercial,
+        invoiceDate: invoice.invoiceDate,
+        reminderDate: invoice.reminderDate ?? invoice.invoiceDate,
+        balance: invoice.balance,
+      );
+      final edit = await showRescheduleReminderDialog(context, entry);
+      if (edit == null || !mounted) return;
+      await repository.scheduleInvoice(
+        facturaId: fila.referencia,
+        date: edit.date,
+        comment: edit.comment,
+      );
+      paymentCalendarRefresh.refresh();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Factura reprogramada correctamente.')),
+      );
+    } catch (_) {
+      _mostrarErrorNube(
+        'No fue posible reprogramar la factura. Actualiza e inténtalo nuevamente.',
+      );
+    }
   }
 
   Future<void> _eliminarAbono(
@@ -1864,6 +1963,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   Widget _busquedaGeneral() => GeneralSearchScreen(
+        onOpenDetail: (invoice) => _abrirDetalleFactura(
+          invoice.row,
+          mesReporte: invoice.reportMonth,
+        ),
         onEditPayment: (invoice, index, {required isNew}) => _editarAbono(
           invoice.row,
           index,

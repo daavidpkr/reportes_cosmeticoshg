@@ -28,11 +28,21 @@ abstract interface class CalendarCustomerDataSource {
   Future<BillingCustomer?> resolveCustomer(String facturaId);
 }
 
+abstract interface class CalendarInvoiceSchedulingDataSource {
+  Future<List<SchedulableInvoice>> searchSchedulableInvoices(String query);
+  Future<PaymentCalendarEntry> scheduleInvoice({
+    required String facturaId,
+    required DateTime date,
+    String comment = '',
+  });
+}
+
 class PaymentCalendarRepository
     implements
         PaymentCalendarDataSource,
         CalendarPaymentDataSource,
-        CalendarCustomerDataSource {
+        CalendarCustomerDataSource,
+        CalendarInvoiceSchedulingDataSource {
   PaymentCalendarRepository({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
   final SupabaseClient _client;
@@ -63,6 +73,34 @@ class PaymentCalendarRepository
         .map(
             (row) => PaymentCalendarEntry.fromJson(row as Map<String, dynamic>))
         .toList();
+  }
+
+  @override
+  Future<List<SchedulableInvoice>> searchSchedulableInvoices(
+      String query) async {
+    final rows = await _client.rpc('search_schedulable_invoices', params: {
+      'p_search': query.trim(),
+      'p_limit': 30,
+    });
+    return (rows as List)
+        .map((row) => SchedulableInvoice.fromJson(row as Map<String, dynamic>))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<PaymentCalendarEntry> scheduleInvoice({
+    required String facturaId,
+    required DateTime date,
+    String comment = '',
+  }) async {
+    final rows = await _client.rpc('schedule_invoice_on_calendar', params: {
+      'p_request_id': newRequestId(),
+      'p_factura_id': facturaId.trim(),
+      'p_requested_payment_date': _date(date),
+      'p_comment': comment.trim(),
+    });
+    return PaymentCalendarEntry.fromJson(
+        (rows as List).single as Map<String, dynamic>);
   }
 
   @override

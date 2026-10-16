@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cosmeticos_hg_reportes/models/fila_venta.dart';
 import 'package:cosmeticos_hg_reportes/screens/general_search_screen.dart';
+import 'package:cosmeticos_hg_reportes/screens/invoice_detail_dialog.dart';
 import 'package:cosmeticos_hg_reportes/screens/reporte/report_invoice_table.dart';
 import 'package:cosmeticos_hg_reportes/services/supabase_reportes_service.dart';
 import 'package:cosmeticos_hg_reportes/theme/hg_theme.dart';
@@ -38,6 +39,7 @@ Widget app({
   GlobalAdditionalPayments? additional,
   bool mobileCards = false,
   Brightness brightness = Brightness.light,
+  GlobalInvoiceDetail? detail,
 }) =>
     MaterialApp(
       theme: ThemeData(
@@ -55,6 +57,7 @@ Widget app({
           onEditPayment:
               edit ?? (invoice, index, {required isNew}) async => false,
           onManageAdditionalPayments: additional ?? (invoice) async {},
+          onOpenDetail: detail,
         ),
       ),
     );
@@ -114,6 +117,41 @@ void main() {
     expect(find.text('Añadir'), findsOneWidget);
     expect(find.text(r'$20.00'), findsWidgets);
     expect(find.text(r'$80.00'), findsOneWidget);
+  });
+
+  testWidgets('la referencia abre el detalle completo y responsive',
+      (tester) async {
+    final value = invoice(
+      payments: [
+        Abono(valor: 20, numeroRecibo: 45, comentario: 'Transferencia'),
+        Abono(),
+      ],
+    );
+    await tester.binding.setSurfaceSize(const Size(700, 800));
+    await tester.pumpWidget(app(
+      search: (_, {required offset, required limit}) async => [value],
+      detail: (selected) => showInvoiceDetailDialog(
+        tester.element(find.byType(GeneralSearchScreen)),
+        invoice: selected.row,
+        reportMonth: selected.reportMonth,
+        scheduledDate: DateTime(2026, 8, 17),
+      ),
+    ));
+    await runSearch(tester, 'cliente');
+    await tester.tap(find.descendant(
+      of: find.byTooltip('Mes original: Julio 2026'),
+      matching: find.text('2'),
+    ));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Detalle de factura'), findsOneWidget);
+    expect(find.text('REF. (FACT)'), findsWidgets);
+    expect(find.text('Número de factura'), findsOneWidget);
+    expect(find.text('17/08/2026'), findsOneWidget);
+    expect(find.textContaining('Recibo: 45'), findsOneWidget);
+    expect(find.textContaining('Transferencia'), findsOneWidget);
+    expect(find.text('Pago completo'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('debounces searches and ignores obsolete responses',

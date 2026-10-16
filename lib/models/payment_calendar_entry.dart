@@ -47,3 +47,35 @@ class PaymentCalendarEntry {
         comment: json['comment']?.toString() ?? '',
       );
 }
+
+class SchedulableInvoice {
+  const SchedulableInvoice({
+    required this.facturaId,
+    required this.invoiceNumber,
+    required this.cliente,
+    required this.nombreComercial,
+    required this.invoiceDate,
+    required this.balance,
+    this.reminderDate,
+  });
+
+  final String facturaId;
+  final String invoiceNumber;
+  final String cliente;
+  final String nombreComercial;
+  final DateTime invoiceDate;
+  final DateTime? reminderDate;
+  final double balance;
+
+  factory SchedulableInvoice.fromJson(Map<String, dynamic> json) =>
+      SchedulableInvoice(
+        facturaId: json['factura_id'].toString(),
+        invoiceNumber: json['invoice_number']?.toString() ?? '',
+        cliente: json['cliente']?.toString() ?? '',
+        nombreComercial: json['nombre_comercial']?.toString() ?? '',
+        invoiceDate: DateTime.parse(json['invoice_date'].toString()),
+        reminderDate:
+            DateTime.tryParse(json['reminder_date']?.toString() ?? ''),
+        balance: (json['balance'] as num?)?.toDouble() ?? 0,
+      );
+}

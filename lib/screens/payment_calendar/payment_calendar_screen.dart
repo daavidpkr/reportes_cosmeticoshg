@@ -13,6 +13,7 @@ import '../../services/payment_calendar_refresh.dart';
 import '../customer_history_screen.dart';
 import 'dialogs/day_invoices_dialog.dart';
 import 'dialogs/reschedule_reminder_dialog.dart';
+import 'dialogs/schedule_invoice_dialog.dart';
 import 'payment_calendar_controller.dart';
 import 'widgets/calendar_grid.dart';
 import 'widgets/calendar_header.dart';
@@ -171,6 +172,7 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
       grouped: controller.grouped,
       selected: controller.selectedDay,
       onSelect: _transforming ? (_) {} : _select,
+      onAdd: _transforming ? (_) {} : _scheduleOnDay,
       showEntryText: kIsWeb || defaultTargetPlatform != TargetPlatform.android,
     );
     if (!mobile) return grid;
@@ -197,6 +199,33 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
     final entries =
         controller.grouped[dateOnly(day)] ?? const <PaymentCalendarEntry>[];
     await showDayInvoicesDialog(context, day, entries, _edit, _payment, _paid,
+        (entry) => _history(entry, day));
+  }
+
+  Future<void> _scheduleOnDay(DateTime day) async {
+    if (day.weekday >= DateTime.saturday ||
+        controller.repository is! CalendarInvoiceSchedulingDataSource) {
+      return;
+    }
+    controller.select(day);
+    final source = controller.repository as CalendarInvoiceSchedulingDataSource;
+    final facturaId = await showScheduleInvoiceDialog(
+      context,
+      day: day,
+      repository: source,
+    );
+    if (facturaId == null || !mounted) return;
+    final saved = await controller.scheduleInvoice(facturaId, day);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(saved
+          ? 'Factura programada correctamente.'
+          : 'No fue posible programar la factura. Verifica que siga pendiente y tenga un plazo configurado.'),
+    ));
+    if (!saved) return;
+    final refreshed =
+        controller.grouped[dateOnly(day)] ?? const <PaymentCalendarEntry>[];
+    await showDayInvoicesDialog(context, day, refreshed, _edit, _payment, _paid,
         (entry) => _history(entry, day));
   }
 

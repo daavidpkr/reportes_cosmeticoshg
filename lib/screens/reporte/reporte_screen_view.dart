@@ -220,6 +220,9 @@ extension _ReporteScreenView on _ReporteScreenState {
                   ),
                 ),
               ),
+              onTap: fila.referencia.trim().isEmpty
+                  ? null
+                  : () => _abrirDetalleFactura(fila),
             ),
             DataCell(_textoTablaLargo(fila.cliente, geometry.clientWidth)),
             DataCell(

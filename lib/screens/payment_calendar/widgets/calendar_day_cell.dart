@@ -13,6 +13,7 @@ class CalendarDayCell extends StatelessWidget {
     required this.compact,
     this.showEntryText = true,
     required this.onTap,
+    this.onAdd,
     super.key,
   });
   final DateTime day;
@@ -23,6 +24,7 @@ class CalendarDayCell extends StatelessWidget {
   final bool compact;
   final bool showEntryText;
   final VoidCallback onTap;
+  final VoidCallback? onAdd;
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +65,23 @@ class CalendarDayCell extends StatelessWidget {
                               ? colors.onSurface
                               : colors.onSurfaceVariant.withValues(alpha: .5))),
                 ),
-                if (entries.isNotEmpty)
+                if (onAdd != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      key: ValueKey('calendar-add-${day.toIso8601String()}'),
+                      tooltip: 'Programar factura el ${day.day}',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints.tightFor(
+                        width: 28,
+                        height: 28,
+                      ),
+                      onPressed: onAdd,
+                      icon: const Icon(Icons.add, size: 18),
+                    ),
+                  )
+                else if (entries.isNotEmpty)
                   Align(
                     alignment: Alignment.centerRight,
                     child: Container(
@@ -83,6 +101,18 @@ class CalendarDayCell extends StatelessWidget {
                   ),
               ]),
             ),
+            if (entries.isNotEmpty && onAdd != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  '${entries.length}',
+                  style: TextStyle(
+                    color: colors.primary,
+                    fontSize: compact ? 10 : 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
             if (entries.isNotEmpty && showEntryText)
               Expanded(
                 child: ClipRect(

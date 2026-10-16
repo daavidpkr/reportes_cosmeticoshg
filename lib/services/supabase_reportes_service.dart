@@ -547,6 +547,17 @@ class SupabaseReportesService {
     );
   }
 
+  Future<DateTime?> obtenerFechaCobro(String referencia) async {
+    final ref = referencia.trim();
+    if (ref.isEmpty) return null;
+    final response = await _client
+        .from('payment_reminders')
+        .select('payment_date')
+        .eq('factura_id', ref)
+        .maybeSingle();
+    return DateTime.tryParse(response?['payment_date']?.toString() ?? '');
+  }
+
   Future<void> guardarFactura(Factura factura) => _guardarFacturaRpc(factura);
 
   Future<void> guardarFacturas(Iterable<Factura> facturas) async {

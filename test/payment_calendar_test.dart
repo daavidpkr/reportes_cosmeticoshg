@@ -104,6 +104,36 @@ class FakeCalendarRepository
   }
 }
 
+class SchedulingCalendarRepository extends FakeCalendarRepository
+    implements CalendarInvoiceSchedulingDataSource {
+  SchedulingCalendarRepository(super.values);
+
+  @override
+  Future<List<SchedulableInvoice>> searchSchedulableInvoices(
+          String query) async =>
+      [
+        SchedulableInvoice(
+          facturaId: '000000700',
+          invoiceNumber: '000000700',
+          cliente: 'Cliente programable',
+          nombreComercial: 'Comercial programable',
+          invoiceDate: DateTime(2026, 8, 3),
+          balance: 125,
+        ),
+      ];
+
+  @override
+  Future<PaymentCalendarEntry> scheduleInvoice({
+    required String facturaId,
+    required DateTime date,
+    String comment = '',
+  }) async {
+    final saved = entry(facturaId, adjustedReminderDate(date));
+    values = [...values.where((item) => item.facturaId != facturaId), saved];
+    return saved;
+  }
+}
+
 class FakeCalendarHistory implements CustomerHistoryDataSource {
   String? customerId;
 
@@ -298,6 +328,39 @@ void main() {
           tester, const Size(1200, 900), [entry('684', DateTime(2026, 8, 17))]);
       expect(find.text('Agosto 2026'), findsOneWidget);
       expect(find.text('Hoy'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets(
+        'solo los laborables muestran + y programar conserva mes, día y zoom',
+        (tester) async {
+      final repository = SchedulingCalendarRepository([]);
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(MaterialApp(
+          home: PaymentCalendarScreen(
+              repository: repository, initialMonth: DateTime(2026, 8))));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('calendar-add-2026-08-17T00:00:00.000')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('calendar-add-2026-08-15T00:00:00.000')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('calendar-add-2026-08-16T00:00:00.000')),
+          findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('calendar-zoom-in')));
+      await tester.pump();
+      await tester.tap(
+          find.byKey(const ValueKey('calendar-add-2026-08-17T00:00:00.000')));
+      await tester.pumpAndSettle();
+      expect(find.text('Programar factura'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('schedulable-000000700')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Agosto 2026'), findsOneWidget);
+      expect(find.text('125%'), findsOneWidget);
+      expect(find.text('Facturas pendientes'), findsOneWidget);
+      expect(find.text('REF. 700'), findsOneWidget);
+      expect(repository.values.single.reminderDate, DateTime(2026, 8, 17));
       expect(tester.takeException(), isNull);
     });
     testWidgets('móvil abre día vacío y popup con una factura', (tester) async {

@@ -83,6 +83,19 @@ class PaymentCalendarController extends ChangeNotifier {
     }
   }
 
+  Future<bool> scheduleInvoice(String facturaId, DateTime day) async {
+    if (repository is! CalendarInvoiceSchedulingDataSource) return false;
+    try {
+      await (repository as CalendarInvoiceSchedulingDataSource)
+          .scheduleInvoice(facturaId: facturaId, date: day);
+      _cache.clear();
+      await load(refresh: true);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> recordPayment(PaymentCalendarEntry entry, double amount,
       {String comment = '', int? receiptNumber}) async {
     if (repository is! CalendarPaymentDataSource) return false;

@@ -20,11 +20,13 @@ typedef GlobalPaymentEditor = Future<bool> Function(
 });
 typedef GlobalAdditionalPayments = Future<void> Function(
     GlobalInvoiceRow invoice);
+typedef GlobalInvoiceDetail = Future<void> Function(GlobalInvoiceRow invoice);
 
 class GeneralSearchScreen extends StatefulWidget {
   const GeneralSearchScreen({
     required this.onEditPayment,
     required this.onManageAdditionalPayments,
+    this.onOpenDetail,
     this.search,
     this.useMobileCards,
     super.key,
@@ -33,6 +35,7 @@ class GeneralSearchScreen extends StatefulWidget {
   final GlobalInvoiceSearch? search;
   final GlobalPaymentEditor onEditPayment;
   final GlobalAdditionalPayments onManageAdditionalPayments;
+  final GlobalInvoiceDetail? onOpenDetail;
   final bool? useMobileCards;
 
   @override
@@ -200,18 +203,22 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
           DataCell(SizedBox(
               width: 24 * scale,
               child: Text('${row.numero}', textAlign: TextAlign.center))),
-          DataCell(Tooltip(
-            message: 'Mes original: ${invoice.reportMonth}',
-            child: SizedBox(
-              width: 72 * scale,
-              child: Center(
-                child: Text(
-                  visibleTableReference(row.referencia),
-                  textAlign: TextAlign.center,
+          DataCell(
+              Tooltip(
+                message: 'Mes original: ${invoice.reportMonth}',
+                child: SizedBox(
+                  width: 72 * scale,
+                  child: Center(
+                    child: Text(
+                      visibleTableReference(row.referencia),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          )),
+              onTap: widget.onOpenDetail == null
+                  ? null
+                  : () => widget.onOpenDetail!(invoice)),
           DataCell(_longText(row.cliente, geometry.clientWidth)),
           DataCell(_longText(row.nombreComercial, geometry.businessNameWidth)),
           DataCell(_fitText(row.fecha)),
@@ -298,11 +305,16 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Expanded(
-              child: Text('Ref. ${visibleTableReference(row.referencia)}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.bold)),
+              child: InkWell(
+                onTap: widget.onOpenDetail == null
+                    ? null
+                    : () => widget.onOpenDetail!(invoice),
+                child: Text('Ref. ${visibleTableReference(row.referencia)}',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+              ),
             ),
             Chip(
               visualDensity: VisualDensity.compact,
