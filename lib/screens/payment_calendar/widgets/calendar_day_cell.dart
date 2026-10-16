@@ -50,57 +50,54 @@ class CalendarDayCell extends StatelessWidget {
                 color: today ? colors.primary : colors.outlineVariant,
                 width: today ? 2 : 1),
           ),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(
-              height: 22,
-              child: Stack(children: [
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text('${day.day}',
-                      style: TextStyle(
-                          fontSize: compact ? 12 : null,
-                          fontWeight: today ? FontWeight.w800 : FontWeight.w600,
-                          color: currentMonth
-                              ? colors.onSurface
-                              : colors.onSurfaceVariant.withValues(alpha: .5))),
-                ),
-                if (onAdd != null)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: IconButton(
-                      key: ValueKey('calendar-add-${day.toIso8601String()}'),
-                      tooltip: 'Programar factura el ${day.day}',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 28,
-                        height: 28,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Expanded(
+                child: Text('${day.day}',
+                    style: TextStyle(
+                        fontSize: compact ? 12 : null,
+                        fontWeight: today ? FontWeight.w800 : FontWeight.w600,
+                        color: currentMonth
+                            ? colors.onSurface
+                            : colors.onSurfaceVariant.withValues(alpha: .5))),
+              ),
+              if (onAdd != null)
+                Material(
+                  color: colors.primaryContainer,
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    key: ValueKey('calendar-add-${day.toIso8601String()}'),
+                    customBorder: const CircleBorder(),
+                    onTap: onAdd,
+                    child: Tooltip(
+                      message: 'Programar factura el ${day.day}',
+                      child: SizedBox.square(
+                        dimension: compact ? 24 : 28,
+                        child: Icon(
+                          Icons.add,
+                          size: compact ? 16 : 18,
+                          color: colors.onPrimaryContainer,
+                        ),
                       ),
-                      onPressed: onAdd,
-                      icon: const Icon(Icons.add, size: 18),
-                    ),
-                  )
-                else if (entries.isNotEmpty)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      constraints: BoxConstraints(minWidth: compact ? 18 : 22),
-                      padding: EdgeInsets.symmetric(
-                          horizontal: compact ? 4 : 6, vertical: 2),
-                      decoration: BoxDecoration(
-                          color: colors.primary,
-                          borderRadius: BorderRadius.circular(20)),
-                      child: Text('${entries.length}',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: colors.onPrimary,
-                              fontSize: compact ? 10 : 11,
-                              fontWeight: FontWeight.bold)),
                     ),
                   ),
-              ]),
-            ),
+                )
+              else if (entries.isNotEmpty)
+                Container(
+                  constraints: BoxConstraints(minWidth: compact ? 18 : 22),
+                  padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 4 : 6, vertical: 2),
+                  decoration: BoxDecoration(
+                      color: colors.primary,
+                      borderRadius: BorderRadius.circular(20)),
+                  child: Text('${entries.length}',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          color: colors.onPrimary,
+                          fontSize: compact ? 10 : 11,
+                          fontWeight: FontWeight.bold)),
+                ),
+            ]),
             if (entries.isNotEmpty && onAdd != null)
               Align(
                 alignment: Alignment.centerRight,

@@ -1019,24 +1019,58 @@ extension _ReporteScreenView on _ReporteScreenState {
     );
   }
 
-  Widget _textoCampoMovil(String etiqueta, String valor) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              etiqueta.toUpperCase(),
-              style: TextStyle(
-                color: context.hg.mutedText,
-                fontSize: 10,
-                letterSpacing: .6,
+  Widget _textoCampoMovil(
+    String etiqueta,
+    String valor, {
+    VoidCallback? onTap,
+    Key? key,
+  }) {
+    final content = Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            etiqueta.toUpperCase(),
+            style: TextStyle(
+              color: context.hg.mutedText,
+              fontSize: 10,
+              letterSpacing: .6,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Row(children: [
+            Expanded(
+              child: Text(
+                valor,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            const SizedBox(height: 3),
-            Text(valor, maxLines: 2, overflow: TextOverflow.ellipsis),
-          ],
-        ),
-      );
+            if (onTap != null) ...[
+              const SizedBox(width: 4),
+              Icon(
+                Icons.open_in_new,
+                size: 15,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+            ],
+          ]),
+        ],
+      ),
+    );
+    if (onTap == null) return content;
+    return Semantics(
+      button: true,
+      label: 'Abrir detalle de la factura $valor',
+      child: InkWell(
+        key: key,
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: content,
+      ),
+    );
+  }
 
   Widget _tarjetaFilaMovil(FilaVenta fila) {
     final expandida = _filasExpandidas.contains(fila.numero);
@@ -1241,6 +1275,12 @@ extension _ReporteScreenView on _ReporteScreenState {
                           fila.referencia.isEmpty
                               ? '—'
                               : visibleTableReference(fila.referencia),
+                          key: ValueKey(
+                            'mobile-invoice-detail-${fila.referencia}',
+                          ),
+                          onTap: fila.referencia.trim().isEmpty
+                              ? null
+                              : () => _abrirDetalleFactura(fila),
                         ),
                       ),
                     ],
