@@ -16,6 +16,7 @@ class CalendarDayCell extends StatelessWidget {
     this.onAdd,
     super.key,
   });
+
   final DateTime day;
   final List<PaymentCalendarEntry> entries;
   final bool currentMonth;
@@ -37,8 +38,10 @@ class CalendarDayCell extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: AnimatedContainer(
+          key: ValueKey('calendar-day-${day.toIso8601String()}'),
           duration: const Duration(milliseconds: 140),
           padding: EdgeInsets.all(compact ? 4 : 8),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: selected
                 ? colors.primaryContainer
@@ -47,99 +50,128 @@ class CalendarDayCell extends StatelessWidget {
                     : colors.surface,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-                color: today ? colors.primary : colors.outlineVariant,
-                width: today ? 2 : 1),
+              color: today ? colors.primary : colors.outlineVariant,
+              width: today ? 2 : 1,
+            ),
           ),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Expanded(
-                child: Text('${day.day}',
-                    style: TextStyle(
-                        fontSize: compact ? 12 : null,
-                        fontWeight: today ? FontWeight.w800 : FontWeight.w600,
-                        color: currentMonth
-                            ? colors.onSurface
-                            : colors.onSurfaceVariant.withValues(alpha: .5))),
-              ),
-              if (onAdd != null)
-                Material(
-                  color: colors.primaryContainer,
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    key: ValueKey('calendar-add-${day.toIso8601String()}'),
-                    customBorder: const CircleBorder(),
-                    onTap: onAdd,
-                    child: Tooltip(
-                      message: 'Programar factura el ${day.day}',
-                      child: SizedBox.square(
-                        dimension: compact ? 24 : 28,
-                        child: Icon(
-                          Icons.add,
-                          size: compact ? 16 : 18,
-                          color: colors.onPrimaryContainer,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                height: 36,
+                child: Stack(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${day.day}',
+                        style: TextStyle(
+                          fontSize: compact ? 12 : null,
+                          fontWeight: today ? FontWeight.w800 : FontWeight.w600,
+                          color: currentMonth
+                              ? colors.onSurface
+                              : colors.onSurfaceVariant.withValues(alpha: .5),
                         ),
                       ),
                     ),
-                  ),
-                )
-              else if (entries.isNotEmpty)
-                Container(
-                  constraints: BoxConstraints(minWidth: compact ? 18 : 22),
-                  padding: EdgeInsets.symmetric(
-                      horizontal: compact ? 4 : 6, vertical: 2),
-                  decoration: BoxDecoration(
-                      color: colors.primary,
-                      borderRadius: BorderRadius.circular(20)),
-                  child: Text('${entries.length}',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          color: colors.onPrimary,
-                          fontSize: compact ? 10 : 11,
-                          fontWeight: FontWeight.bold)),
-                ),
-            ]),
-            if (entries.isNotEmpty && onAdd != null)
-              Align(
-                alignment: Alignment.centerRight,
-                child: Text(
-                  '${entries.length}',
-                  style: TextStyle(
-                    color: colors.primary,
-                    fontSize: compact ? 10 : 11,
-                    fontWeight: FontWeight.bold,
-                  ),
+                    if (onAdd != null)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: IconButton(
+                          key: ValueKey(
+                            'calendar-add-${day.toIso8601String()}',
+                          ),
+                          tooltip: 'Programar factura el ${day.day}',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          style: IconButton.styleFrom(
+                            backgroundColor: colors.primaryContainer,
+                            foregroundColor: colors.onPrimaryContainer,
+                          ),
+                          constraints: const BoxConstraints.tightFor(
+                            width: 36,
+                            height: 36,
+                          ),
+                          onPressed: onAdd,
+                          icon: const Icon(Icons.add, size: 18),
+                        ),
+                      )
+                    else if (entries.isNotEmpty)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: Container(
+                          constraints:
+                              BoxConstraints(minWidth: compact ? 18 : 22),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: compact ? 4 : 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colors.primary,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${entries.length}',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: colors.onPrimary,
+                              fontSize: compact ? 10 : 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-            if (entries.isNotEmpty && showEntryText)
-              Expanded(
-                child: ClipRect(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(height: compact ? 2 : 5),
-                      if (!compact)
-                        Text(
+              if (entries.isNotEmpty && onAdd != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    '${entries.length}',
+                    style: TextStyle(
+                      color: colors.primary,
+                      fontSize: compact ? 10 : 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              if (entries.isNotEmpty && showEntryText)
+                Expanded(
+                  child: ClipRect(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(height: compact ? 2 : 5),
+                        if (!compact)
+                          Text(
                             '${entries.length} ${entries.length == 1 ? 'factura' : 'facturas'}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelSmall),
-                      for (final entry in entries.take(compact ? 1 : 2))
-                        Text(
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
+                        for (final entry in entries.take(compact ? 1 : 2))
+                          Text(
                             '${visibleInvoiceReference(entry.facturaId)} · ${entry.cliente}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall),
-                      if (entries.length > (compact ? 1 : 2))
-                        Text('+${entries.length - (compact ? 1 : 2)}',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        if (entries.length > (compact ? 1 : 2))
+                          Text(
+                            '+${entries.length - (compact ? 1 : 2)}',
                             maxLines: 1,
                             style: TextStyle(
-                                color: colors.primary,
-                                fontWeight: FontWeight.bold)),
-                    ],
+                              color: colors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-          ]),
+            ],
+          ),
         ),
       ),
     );

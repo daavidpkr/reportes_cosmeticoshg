@@ -303,13 +303,20 @@ void main() {
 
   testWidgets('Android renders responsive cards with all financial actions',
       (tester) async {
+    late BuildContext mobileContext;
     await tester.pumpWidget(app(
       mobileCards: true,
       search: (_, {required offset, required limit}) async => [
         invoice(payments: [Abono(valor: 20), Abono(), Abono(valor: 5)]),
       ],
+      detail: (selected) => showInvoiceDetailDialog(
+        mobileContext,
+        invoice: selected.row,
+        reportMonth: selected.reportMonth,
+      ),
     ));
     await runSearch(tester, 'cliente');
+    mobileContext = tester.element(find.byType(GeneralSearchScreen));
 
     expect(find.byKey(const ValueKey('global-search-cards')), findsOneWidget);
     expect(find.byType(ReportInvoiceTable), findsNothing);
@@ -333,6 +340,12 @@ void main() {
       find.byKey(const ValueKey('global-additional-Julio 2026-7')),
       findsOneWidget,
     );
+    await tester.tap(find.text('Ref. 2'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detalle de factura'), findsOneWidget);
+    expect(find.text('Registrar abono'), findsOneWidget);
+    expect(find.text('Pago completo'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   for (final brightness in Brightness.values) {

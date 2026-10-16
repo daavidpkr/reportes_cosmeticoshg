@@ -342,6 +342,16 @@ void main() {
 
       expect(find.byKey(const ValueKey('calendar-add-2026-08-17T00:00:00.000')),
           findsOneWidget);
+      final addRect = tester.getRect(
+          find.byKey(const ValueKey('calendar-add-2026-08-17T00:00:00.000')));
+      final cellRect = tester.getRect(
+          find.byKey(const ValueKey('calendar-day-2026-08-17T00:00:00.000')));
+      expect(addRect.width, greaterThanOrEqualTo(36));
+      expect(addRect.height, greaterThanOrEqualTo(36));
+      expect(addRect.left, greaterThanOrEqualTo(cellRect.left));
+      expect(addRect.top, greaterThanOrEqualTo(cellRect.top));
+      expect(addRect.right, lessThanOrEqualTo(cellRect.right));
+      expect(addRect.bottom, lessThanOrEqualTo(cellRect.bottom));
       expect(find.byKey(const ValueKey('calendar-add-2026-08-15T00:00:00.000')),
           findsNothing);
       expect(find.byKey(const ValueKey('calendar-add-2026-08-16T00:00:00.000')),

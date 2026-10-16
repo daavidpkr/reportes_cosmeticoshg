@@ -1067,7 +1067,10 @@ extension _ReporteScreenView on _ReporteScreenState {
         key: key,
         borderRadius: BorderRadius.circular(8),
         onTap: onTap,
-        child: content,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48),
+          child: content,
+        ),
       ),
     );
   }
@@ -1148,18 +1151,40 @@ extension _ReporteScreenView on _ReporteScreenState {
                           ),
                         ),
                         const SizedBox(height: 1),
-                        Text(
-                          [
-                            if (fila.referencia.isNotEmpty)
-                              'Ref. ${visibleTableReference(fila.referencia)}',
-                            if (fila.numeroFactura.isNotEmpty)
-                              fila.numeroFactura,
-                          ].join(' · '),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: context.hg.mutedText,
-                            fontSize: 11,
+                        Semantics(
+                          button: true,
+                          label: 'Abrir detalle de factura',
+                          child: InkWell(
+                            key: ValueKey(
+                              'mobile-invoice-reference-${fila.numero}',
+                            ),
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: fila.referencia.trim().isEmpty
+                                ? null
+                                : () => _abrirDetalleFactura(fila),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 40),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  [
+                                    if (fila.referencia.isNotEmpty)
+                                      'Ref. ${visibleTableReference(fila.referencia)}',
+                                    if (fila.numeroFactura.isNotEmpty)
+                                      fila.numeroFactura,
+                                  ].join(' · '),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: context.hg.mutedText,
+                                    fontSize: 11,
+                                    decoration: fila.referencia.trim().isEmpty
+                                        ? null
+                                        : TextDecoration.underline,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
                       ],
