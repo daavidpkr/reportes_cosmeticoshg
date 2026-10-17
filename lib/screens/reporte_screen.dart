@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/fila_venta.dart';
 import '../models/billing_customer.dart';
+import '../models/customer_history.dart';
 import '../models/payment_calendar_entry.dart';
 import '../services/customer_terms_repository.dart';
 import '../services/facturas_store.dart';
@@ -920,6 +921,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   Future<void> _abrirDetalleFactura(
     FilaVenta fila, {
     String? mesReporte,
+    bool desdePerfilCliente = false,
   }) async {
     DateTime? scheduledDate;
     try {
@@ -950,11 +952,57 @@ class _ReporteScreenState extends State<ReporteScreen> {
         );
       },
       onReschedule: () => _reprogramarDesdeDetalle(fila),
-      onViewCustomerProfile: () => _openCustomerProfile(fila),
+      onViewCustomerProfile:
+          desdePerfilCliente ? null : () => _openCustomerProfile(fila),
       onClosed: () async {
         if (mesReporte != null) await _cargarReportes();
+        paymentCalendarRefresh.refresh();
         if (mounted) setState(() {});
       },
+    );
+  }
+
+  Future<void> _abrirDetalleDesdePerfil(
+    CustomerHistoryInvoice invoice,
+    BillingCustomer customer,
+  ) async {
+    List<GlobalInvoiceRow> matches;
+    try {
+      matches = await _supabaseReportes.buscarFilasGlobales(
+        invoice.reference,
+        offset: 0,
+        limit: 50,
+      );
+    } catch (_) {
+      if (mounted) {
+        _mostrarErrorNube('No se pudo cargar el detalle de la factura.');
+      }
+      return;
+    }
+    if (!mounted) return;
+    final exact = matches.where(
+      (item) =>
+          item.row.referencia.trim() == invoice.reference.trim() &&
+          item.reportMonth == invoice.reportMonth,
+    );
+    final fallback = matches.where(
+      (item) => item.row.referencia.trim() == invoice.reference.trim(),
+    );
+    final match = exact.firstOrNull ?? fallback.firstOrNull;
+    if (match == null) {
+      _mostrarErrorNube('No se encontró la fila original de esta factura.');
+      return;
+    }
+    if (match.row.cliente.trim().isEmpty) {
+      match.row.cliente = customer.name;
+    }
+    if (match.row.nombreComercial.trim().isEmpty) {
+      match.row.nombreComercial = customer.commercialName;
+    }
+    await _abrirDetalleFactura(
+      match.row,
+      mesReporte: match.reportMonth,
+      desdePerfilCliente: true,
     );
   }
 
@@ -982,6 +1030,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
         },
         onSchedule: _scheduleProfileCustomer,
         onDelete: _deleteProfileCustomer,
+        onOpenInvoiceDetail: _abrirDetalleDesdePerfil,
       ),
     );
     if (!mounted) return true;
@@ -2152,7 +2201,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
                     key: ValueKey(widget.calendarRequestId),
                     initialMonth: widget.initialCalendarDate,
                     initialDate: widget.initialCalendarDate,
-                    onPaymentPersisted: _actualizarConsumidoresDeAbonos)
+                    onPaymentPersisted: _actualizarConsumidoresDeAbonos,
+                    onOpenInvoiceDetail: _abrirDetalleDesdePerfil)
                 : _vistaCargaFacturas
                     ? CargaFacturasView(
                         key: ValueKey(_reportes.activo.id),
@@ -2163,7 +2213,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
                         vendedores: _vendedores.vendedores,
                       )
                     : _vistaClientes
-                        ? const ClientesScreen()
+                        ? ClientesScreen(
+                            onOpenInvoiceDetail: _abrirDetalleDesdePerfil)
                         : _vistaBusquedaGeneral
                             ? _busquedaGeneral()
                             : _vistaVendedores

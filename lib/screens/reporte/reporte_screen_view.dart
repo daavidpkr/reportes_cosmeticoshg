@@ -1985,7 +1985,8 @@ extension _ReporteScreenView on _ReporteScreenState {
                 key: ValueKey(widget.calendarRequestId),
                 initialMonth: widget.initialCalendarDate,
                 initialDate: widget.initialCalendarDate,
-                onPaymentPersisted: _actualizarConsumidoresDeAbonos)
+                onPaymentPersisted: _actualizarConsumidoresDeAbonos,
+                onOpenInvoiceDetail: _abrirDetalleDesdePerfil)
             : _vistaCargaFacturas
                 ? CargaFacturasView(
                     key: ValueKey(_reportes.activo.id),
@@ -1998,7 +1999,11 @@ extension _ReporteScreenView on _ReporteScreenState {
                 : _vistaVendedores
                     ? SafeArea(child: VendedoresContent(store: _vendedores))
                     : _vistaClientes
-                        ? const SafeArea(child: ClientesScreen())
+                        ? SafeArea(
+                            child: ClientesScreen(
+                              onOpenInvoiceDetail: _abrirDetalleDesdePerfil,
+                            ),
+                          )
                         : _vistaBusquedaGeneral
                             ? SafeArea(child: _busquedaGeneral())
                             : _vistaEstadisticas

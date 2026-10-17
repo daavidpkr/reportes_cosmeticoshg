@@ -40,12 +40,14 @@ class PaymentCalendarScreen extends StatefulWidget {
       this.customerTermsRepository,
       this.initialMonth,
       this.initialDate,
+      this.onOpenInvoiceDetail,
       super.key});
   final PaymentCalendarDataSource? repository;
   final CustomerHistoryDataSource? historyRepository;
   final CustomerTermsDataSource? customerTermsRepository;
   final DateTime? initialMonth;
   final DateTime? initialDate;
+  final CustomerInvoiceDetail? onOpenInvoiceDetail;
   @override
   State<PaymentCalendarScreen> createState() => _PaymentCalendarScreenState();
 }
@@ -60,6 +62,7 @@ class _PaymentCalendarScreenState extends State<PaymentCalendarScreen> {
           customerTermsRepository: widget.customerTermsRepository,
           initialMonth: widget.initialMonth,
           initialDate: widget.initialDate,
+          onOpenInvoiceDetail: widget.onOpenInvoiceDetail,
         ),
       );
 }
@@ -72,6 +75,7 @@ class PaymentCalendarView extends StatefulWidget {
       this.onPaymentPersisted,
       this.historyRepository,
       this.customerTermsRepository,
+      this.onOpenInvoiceDetail,
       super.key});
   final PaymentCalendarDataSource? repository;
   final DateTime? initialMonth;
@@ -79,6 +83,7 @@ class PaymentCalendarView extends StatefulWidget {
   final Future<void> Function()? onPaymentPersisted;
   final CustomerHistoryDataSource? historyRepository;
   final CustomerTermsDataSource? customerTermsRepository;
+  final CustomerInvoiceDetail? onOpenInvoiceDetail;
   @override
   State<PaymentCalendarView> createState() => _PaymentCalendarViewState();
 }
@@ -267,7 +272,8 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
               return updated;
             },
             onSchedule: _scheduleCustomer,
-            onDelete: _deleteCustomer));
+            onDelete: _deleteCustomer,
+            onOpenInvoiceDetail: widget.onOpenInvoiceDetail));
     if (!mounted) return;
     await controller.load(refresh: true);
     try {

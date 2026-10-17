@@ -604,9 +604,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('reprograma solo la referencia completa 601 con plazo 45',
+  testWidgets('la factura del perfil delega el detalle con referencia completa',
       (tester) async {
     final history = RosaHistory();
+    String? openedReference;
     await tester.pumpWidget(MaterialApp(
         home: Scaffold(
             body: CustomerHistoryScreen(
@@ -624,37 +625,18 @@ void main() {
                     paymentTermDays: customer.paymentTermDays,
                     businessHours: value),
                 onSchedule: (_) async {},
-                onDelete: (_) async => false))));
+                onDelete: (_) async => false,
+                onOpenInvoiceDetail: (invoice, customer) async {
+                  openedReference = invoice.reference;
+                }))));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Factura 601'), 300,
         scrollable: find.byType(Scrollable).first);
     await tester.tap(find.text('Factura 601'));
     await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('reprogram-000000601')), findsOneWidget);
-    await tester.drag(find.byType(Scrollable).first, const Offset(0, -300));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('reprogram-000000601')));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Fecha programada actual: 01/09/2026'), findsOneWidget);
-    expect(find.text('Nueva fecha calculada: 17/08/2026'), findsOneWidget);
-    expect(find.text('Plazo actual del cliente: 45 d\u00edas'), findsOneWidget);
-    expect(find.textContaining('Se modificará únicamente esta factura.'),
-        findsOneWidget);
-    expect(find.textContaining('Las demás facturas del cliente conservarán'),
-        findsOneWidget);
-    expect(find.textContaining('¿Deseas continuar?'), findsOneWidget);
-    final forbiddenEncodingMarkers =
-        String.fromCharCodes([0x00c3, 0x00c2, 0xfffd]);
-    for (final text in tester.widgetList<Text>(find.byType(Text))) {
-      expect(
-          text.data?.contains(RegExp('[$forbiddenEncodingMarkers]')) ?? false,
-          isFalse);
-    }
-    await tester.tap(find.widgetWithText(FilledButton, 'Reprogramar factura'));
-    await tester.pumpAndSettle();
-    expect(history.reprogrammed, 1);
-    expect(history.loads, 2); // initial load plus authoritative second read
-    expect(find.text('Comentario del calendario: Conservar'), findsOneWidget);
+    expect(openedReference, '000000601');
+    expect(history.loads, 2);
+    expect(find.byType(ExpansionTile), findsNothing);
     expect(find.text('Factura 664'), findsOneWidget);
   });
 

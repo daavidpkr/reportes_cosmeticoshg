@@ -8,6 +8,44 @@ enum ReportInvoiceTableMode { editable, readOnly, globalSearch }
 
 enum ReportInvoiceRowStatus { normal, cancelled, paid, partialPayment }
 
+Color? reportInvoiceRowBackground(
+  BuildContext context,
+  ReportInvoiceRowStatus status,
+) {
+  final theme = Theme.of(context);
+  final colors = theme.extension<HgThemeColors>() ??
+      (theme.brightness == Brightness.dark
+          ? HgThemeColors.dark
+          : HgThemeColors.light);
+  final alpha = theme.brightness == Brightness.dark ? .28 : .24;
+  return switch (status) {
+    ReportInvoiceRowStatus.cancelled => colors.danger.withValues(alpha: alpha),
+    ReportInvoiceRowStatus.paid => colors.positive.withValues(alpha: alpha),
+    ReportInvoiceRowStatus.partialPayment =>
+      colors.warning.withValues(alpha: alpha),
+    ReportInvoiceRowStatus.normal => null,
+  };
+}
+
+Color reportInvoiceRowBorder(
+  BuildContext context,
+  ReportInvoiceRowStatus status,
+) =>
+    reportInvoiceRowBorderForBrightness(Theme.of(context).brightness, status);
+
+Color reportInvoiceRowBorderForBrightness(
+  Brightness brightness,
+  ReportInvoiceRowStatus status,
+) =>
+    switch (status) {
+      ReportInvoiceRowStatus.cancelled => const Color(0xFFFF1744),
+      ReportInvoiceRowStatus.paid => const Color(0xFF00E676),
+      ReportInvoiceRowStatus.partialPayment => brightness == Brightness.dark
+          ? const Color(0xFFFFFF00)
+          : const Color(0xFFFFC400),
+      ReportInvoiceRowStatus.normal => Colors.transparent,
+    };
+
 @immutable
 class ReportInvoiceRow {
   const ReportInvoiceRow({
@@ -146,22 +184,9 @@ class ReportInvoiceTable extends StatelessWidget {
         ),
       );
 
-  Color? _rowBackground(BuildContext context, ReportInvoiceRowStatus status) {
-    final alpha = Theme.of(context).brightness == Brightness.dark ? .28 : .24;
-    return switch (status) {
-      ReportInvoiceRowStatus.cancelled =>
-        context.hg.danger.withValues(alpha: alpha),
-      ReportInvoiceRowStatus.paid =>
-        context.hg.positive.withValues(alpha: alpha),
-      ReportInvoiceRowStatus.partialPayment =>
-        context.hg.warning.withValues(alpha: alpha),
-      ReportInvoiceRowStatus.normal => null,
-    };
-  }
-
   DataRow _styledRow(BuildContext context, ReportInvoiceRow item) {
     final row = item.data;
-    final background = _rowBackground(context, item.status);
+    final background = reportInvoiceRowBackground(context, item.status);
     return DataRow(
       key: row.key,
       selected: row.selected,
@@ -251,14 +276,7 @@ class _ReportRowBorderPainter extends CustomPainter {
       ..strokeWidth = strokeWidth;
 
     for (final (index, status) in statuses.indexed) {
-      paint.color = switch (status) {
-        ReportInvoiceRowStatus.cancelled => const Color(0xFFFF1744),
-        ReportInvoiceRowStatus.paid => const Color(0xFF00E676),
-        ReportInvoiceRowStatus.partialPayment => brightness == Brightness.dark
-            ? const Color(0xFFFFFF00)
-            : const Color(0xFFFFC400),
-        ReportInvoiceRowStatus.normal => Colors.transparent,
-      };
+      paint.color = reportInvoiceRowBorderForBrightness(brightness, status);
       if (status == ReportInvoiceRowStatus.normal) continue;
 
       final top = ReportInvoiceTable._headingRowHeight +

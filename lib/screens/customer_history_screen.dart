@@ -5,8 +5,12 @@ import 'package:flutter/material.dart';
 import '../models/billing_customer.dart';
 import '../models/customer_history.dart';
 import '../services/customer_history_repository.dart';
-import '../services/payment_calendar_refresh.dart';
-import '../theme/hg_theme.dart';
+import 'reporte/report_invoice_table.dart';
+
+typedef CustomerInvoiceDetail = Future<void> Function(
+  CustomerHistoryInvoice invoice,
+  BillingCustomer customer,
+);
 
 class CustomerHistoryScreen extends StatefulWidget {
   const CustomerHistoryScreen(
@@ -15,6 +19,7 @@ class CustomerHistoryScreen extends StatefulWidget {
       required this.onEditHours,
       required this.onSchedule,
       required this.onDelete,
+      this.onOpenInvoiceDetail,
       this.repository,
       super.key});
   final BillingCustomer customer;
@@ -23,6 +28,7 @@ class CustomerHistoryScreen extends StatefulWidget {
   final Future<BillingCustomer> Function(BillingCustomer, String?) onEditHours;
   final Future<void> Function(BillingCustomer) onSchedule;
   final Future<bool> Function(BillingCustomer) onDelete;
+  final CustomerInvoiceDetail? onOpenInvoiceDetail;
   @override
   State<CustomerHistoryScreen> createState() => _CustomerHistoryScreenState();
 }
@@ -40,7 +46,6 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
   String? error;
   late BillingCustomer customer = widget.customer;
   bool actionBusy = false;
-  final reprogramming = <String>{};
   int _loadGeneration = 0;
   String? _activeRequestKey;
 
@@ -111,6 +116,58 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
     }
   }
 
+  Future<void> _refreshPreservingView() async {
+    final generation = ++_loadGeneration;
+    _activeRequestKey = 'refresh-preserving-$generation';
+    final targetCount = invoices.length.clamp(25, 1 << 31);
+    try {
+      final refreshed = <CustomerHistoryInvoice>[];
+      CustomerHistoryPage? firstPage;
+      while (refreshed.length < targetCount) {
+        final page = await repository.load(
+          customerId: customer.id,
+          offset: refreshed.length,
+          status: status,
+          search: searchController.text,
+          sort: sort,
+        );
+        firstPage ??= page;
+        refreshed.addAll(page.invoices);
+        if (page.invoices.isEmpty || refreshed.length >= page.filteredCount) {
+          break;
+        }
+      }
+      if (!mounted || generation != _loadGeneration || firstPage == null) {
+        return;
+      }
+      final currentPage = firstPage;
+      setState(() {
+        if (currentPage.customer != null) {
+          customer = BillingCustomer.fromJson(currentPage.customer!);
+        }
+        summary = currentPage.summary;
+        filteredCount = currentPage.filteredCount;
+        invoices
+          ..clear()
+          ..addAll(refreshed);
+        error = null;
+      });
+    } catch (_) {
+      if (mounted && generation == _loadGeneration) {
+        setState(() => error = 'No se pudo actualizar el historial.');
+      }
+    } finally {
+      if (generation == _loadGeneration) _activeRequestKey = null;
+    }
+  }
+
+  Future<void> _openInvoice(CustomerHistoryInvoice invoice) async {
+    final callback = widget.onOpenInvoiceDetail;
+    if (callback == null) return;
+    await callback(invoice, customer);
+    if (mounted) await _refreshPreservingView();
+  }
+
   void _search(String _) {
     debounce?.cancel();
     debounce = Timer(const Duration(milliseconds: 350), _load);
@@ -175,143 +232,6 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
     } finally {
       if (mounted) setState(() => actionBusy = false);
     }
-  }
-
-  String _date(DateTime value) =>
-      '${value.day.toString().padLeft(2, '0')}/${value.month.toString().padLeft(2, '0')}/${value.year}';
-
-  Future<void> _reprogram(CustomerHistoryInvoice invoice) async {
-    if (reprogramming.contains(invoice.reference)) return;
-    if (!customer.configured) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Configura primero el plazo de pago del cliente')));
-      return;
-    }
-    setState(() => reprogramming.add(invoice.reference));
-    try {
-      var preview = await repository.previewRecalculation(invoice.reference);
-      if (!mounted) return;
-      if (preview.alreadyCurrent) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text(
-                'Esta factura ya está programada de acuerdo con el plazo actual.')));
-        return;
-      }
-      while (mounted) {
-        final confirmed = await showDialog<bool>(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-                  title: const Text('Reprogramar factura'),
-                  content: SingleChildScrollView(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                        Text('Factura: ${preview.reference}'),
-                        Text('Fecha de factura: ${_date(preview.invoiceDate)}'),
-                        Text(
-                            'Plazo actual del cliente: ${preview.termDays} ${preview.termDays == 1 ? 'día' : 'días'}'),
-                        const SizedBox(height: 16),
-                        Text(
-                            'Fecha programada actual: ${preview.currentDate == null ? 'Sin programar' : _date(preview.currentDate!)}'),
-                        Text('Nueva fecha calculada: ${_date(preview.newDate)}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.bold)),
-                        if (preview.manualSchedule) ...[
-                          const SizedBox(height: 12),
-                          Text(
-                              'Esta factura tiene una fecha reprogramada manualmente. Al continuar, se reemplazará por la fecha calculada con el plazo actual.',
-                              style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error)),
-                        ],
-                        const SizedBox(height: 12),
-                        const Text(
-                            'Se modificará únicamente esta factura.\nLas demás facturas del cliente conservarán sus fechas.\n\n¿Deseas continuar?'),
-                      ])),
-                  actions: [
-                    TextButton(
-                        onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancelar')),
-                    FilledButton(
-                        onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Reprogramar factura')),
-                  ],
-                ));
-        if (confirmed != true || !mounted) return;
-        final result = await repository.reprogramInvoice(preview);
-        if (!mounted) return;
-        if (result.status == 'confirmation_required' ||
-            result.confirmationRequired) {
-          preview = result;
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text(
-                  'Los datos cambiaron en otro dispositivo. Revisa la nueva fecha antes de confirmar.')));
-          continue;
-        }
-        if (result.status == 'already_current' || result.alreadyCurrent) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text(
-                  'Esta factura ya está programada de acuerdo con el plazo actual.')));
-          return;
-        }
-        if (result.status != 'updated' && result.status != 'created') {
-          _showReprogramError(invoice, result.reason ?? result.status);
-          return;
-        }
-        await _load(); // Authoritative second read; preserves modal/filter/scroll.
-        final persisted = invoices
-            .where((item) => item.reference == result.reference)
-            .firstOrNull;
-        if (persisted?.reminderDate != result.newDate) {
-          _showReprogramError(invoice, 'schedule_changed');
-          return;
-        }
-        paymentCalendarRefresh.refresh();
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(result.status == 'created'
-                ? 'Recordatorio creado para el ${_date(result.newDate)}.'
-                : 'Factura ${result.reference} reprogramada para el ${_date(result.newDate)}.')));
-        return;
-      }
-    } on InvoiceReprogramException catch (error) {
-      if (mounted) _showReprogramError(invoice, error.reason);
-    } catch (_) {
-      if (mounted) {
-        _showReprogramError(invoice, 'conflict');
-      }
-    } finally {
-      if (mounted) setState(() => reprogramming.remove(invoice.reference));
-    }
-  }
-
-  void _showReprogramError(CustomerHistoryInvoice invoice, String reason) {
-    if (!mounted) return;
-    final message = switch (reason) {
-      'paid' => 'La factura ya se encuentra pagada.',
-      'cancelled' => 'No se puede reprogramar una factura anulada.',
-      'payment_term_missing' =>
-        'Configura primero el plazo de pago del cliente.',
-      'invoice_not_found' ||
-      'not_found' =>
-        'No se encontró la factura con su referencia completa.',
-      'monthly_row_missing' => 'La factura no tiene una fila mensual válida.',
-      'schedule_changed' ||
-      'customer_changed' ||
-      'conflict' =>
-        'La información cambió desde que abriste el historial. Revisa las fechas e inténtalo nuevamente.',
-      _ => 'No se pudo reprogramar esta factura.',
-    };
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 6),
-        backgroundColor: Theme.of(context).colorScheme.errorContainer,
-        content: Text(message,
-            style: TextStyle(
-                color: Theme.of(context).colorScheme.onErrorContainer)),
-        action: SnackBarAction(
-            label: 'Reintentar', onPressed: () => _reprogram(invoice))));
   }
 
   @override
@@ -395,9 +315,9 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
                         for (final invoice in invoices)
                           _InvoiceCard(
                               invoice: invoice,
-                              termDays: customer.paymentTermDays,
-                              busy: reprogramming.contains(invoice.reference),
-                              onReprogram: () => _reprogram(invoice)),
+                              onOpenDetail: widget.onOpenInvoiceDetail == null
+                                  ? null
+                                  : () => _openInvoice(invoice)),
                       if (invoices.length < filteredCount)
                         Center(
                             child: FilledButton.tonal(
@@ -725,100 +645,50 @@ class _DebtSummary extends StatelessWidget {
 }
 
 class _InvoiceCard extends StatelessWidget {
-  const _InvoiceCard(
-      {required this.invoice,
-      required this.termDays,
-      required this.busy,
-      required this.onReprogram});
+  const _InvoiceCard({required this.invoice, this.onOpenDetail});
   final CustomerHistoryInvoice invoice;
-  final int? termDays;
-  final bool busy;
-  final VoidCallback onReprogram;
+  final VoidCallback? onOpenDetail;
   String money(double v) => '\$${v.toStringAsFixed(2)}';
   String date(DateTime v) =>
       '${v.day.toString().padLeft(2, '0')}/${v.month.toString().padLeft(2, '0')}/${v.year}';
+
+  ReportInvoiceRowStatus get rowStatus => invoice.cancelled
+      ? ReportInvoiceRowStatus.cancelled
+      : invoice.isPaid
+          ? ReportInvoiceRowStatus.paid
+          : invoice.paid > 0 && invoice.balance > 0
+              ? ReportInvoiceRowStatus.partialPayment
+              : ReportInvoiceRowStatus.normal;
+
   @override
   Widget build(BuildContext context) {
-    final partialPayment =
-        !invoice.cancelled && invoice.paid > 0 && invoice.balance > 0;
-    final brightness = Theme.of(context).brightness;
-    final warning = Theme.of(context).extension<HgThemeColors>()?.warning ??
-        (brightness == Brightness.dark ? Colors.amberAccent : Colors.amber);
+    final background = reportInvoiceRowBackground(context, rowStatus);
+    final shape = rowStatus == ReportInvoiceRowStatus.normal
+        ? null
+        : RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: reportInvoiceRowBorder(context, rowStatus),
+              width: 1.4,
+            ),
+          );
     return Card(
-        color: partialPayment
-            ? warning.withValues(
-                alpha: brightness == Brightness.dark ? .28 : .24,
-              )
-            : null,
-        shape: partialPayment
-            ? RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: brightness == Brightness.dark
-                      ? const Color(0xFFFFFF00)
-                      : const Color(0xFFFFC400),
-                  width: 1.4,
-                ),
-              )
-            : null,
-        child: ExpansionTile(
-            key: PageStorageKey(invoice.reference),
-            title: Text('Factura ${invoice.invoiceNumber}'),
-            subtitle: Text('${date(invoice.date)} · ${invoice.status}'),
-            trailing: Text(money(invoice.balance),
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            children: [
-              Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                            'REF. ${invoice.reference} · ${invoice.reportMonth}'),
-                        Text(
-                            'Vendedor: ${invoice.seller.isEmpty ? 'Sin registrar' : invoice.seller}'),
-                        Text(
-                            'Venta: ${money(invoice.sale)} · Abonado: ${money(invoice.paid)} · Saldo: ${money(invoice.balance)}'),
-                        if (invoice.reminderDate != null)
-                          Text(
-                              'Fecha de cobro: ${date(invoice.reminderDate!)}'),
-                        if (invoice.calendarComment.isNotEmpty)
-                          Text(
-                              'Comentario del calendario: ${invoice.calendarComment}'),
-                        const SizedBox(height: 8),
-                        Tooltip(
-                            message: termDays == null
-                                ? 'Configura primero el plazo de pago del cliente'
-                                : 'Recalcular esta factura con el plazo actual del cliente',
-                            child: Semantics(
-                                button: true,
-                                label: termDays == null
-                                    ? 'Configura primero el plazo de pago del cliente'
-                                    : 'Reprogramar factura ${invoice.reference} con el plazo actual de $termDays ${termDays == 1 ? 'día' : 'días'}',
-                                child: FilledButton.tonalIcon(
-                                    key: ValueKey(
-                                        'reprogram-${invoice.reference}'),
-                                    onPressed: termDays == null ||
-                                            invoice.cancelled ||
-                                            invoice.isPaid ||
-                                            invoice.reference.isEmpty ||
-                                            busy
-                                        ? null
-                                        : onReprogram,
-                                    icon: busy
-                                        ? const SizedBox.square(
-                                            dimension: 16,
-                                            child: CircularProgressIndicator(
-                                                strokeWidth: 2))
-                                        : const Icon(
-                                            Icons.event_repeat_outlined),
-                                    label: const Text(
-                                        'Reprogramar con plazo actual')))),
-                        for (var i = 0; i < invoice.payments.length; i++)
-                          Text(
-                              'Abono ${i + 1}: ${money(invoice.payments[i].amount)} · Recibo: ${invoice.payments[i].receiptNumber ?? 'Sin recibo'}${invoice.payments[i].comment.isEmpty ? '' : ' · ${invoice.payments[i].comment}'}')
-                      ]))
-            ]));
+      key: ValueKey('customer-invoice-${invoice.reference}'),
+      color: background,
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onOpenDetail,
+        child: ListTile(
+          title: Text('Factura ${invoice.invoiceNumber}'),
+          subtitle: Text('${date(invoice.date)} · ${invoice.status}'),
+          trailing: Text(
+            money(invoice.balance),
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
   }
 }
 
