@@ -26,73 +26,103 @@ const _months = [
   'noviembre',
   'diciembre'
 ];
+
 String longCalendarDate(DateTime date) =>
     '${_weekdays[date.weekday - 1]}, ${date.day} de ${_months[date.month - 1]} de ${date.year}';
 
 Future<void> showDayInvoicesDialog(
-    BuildContext context,
-    DateTime day,
-    List<PaymentCalendarEntry> entries,
-    Future<void> Function(PaymentCalendarEntry) onEdit,
-    Future<void> Function(PaymentCalendarEntry) onPayment,
-    Future<void> Function(PaymentCalendarEntry) onPaid,
-    Future<void> Function(PaymentCalendarEntry) onHistory) async {
+  BuildContext context,
+  DateTime day,
+  List<PaymentCalendarEntry> entries,
+  Future<void> Function(PaymentCalendarEntry) onEdit,
+  Future<void> Function(PaymentCalendarEntry) onPayment,
+  Future<void> Function(PaymentCalendarEntry) onPaid,
+  Future<void> Function(PaymentCalendarEntry) onHistory, {
+  Future<List<PaymentCalendarEntry>?> Function()? onAdd,
+}) async {
+  var visibleEntries = entries;
   await showDialog<void>(
-      context: context,
-      builder: (context) => Dialog(
-            insetPadding: const EdgeInsets.all(16),
-            child: ConstrainedBox(
-                constraints:
-                    const BoxConstraints(maxWidth: 900, maxHeight: 760),
-                child: Padding(
-                    padding: const EdgeInsets.all(20),
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => Dialog(
+        insetPadding: const EdgeInsets.all(16),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 900, maxHeight: 760),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Expanded(
                     child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            Expanded(
-                                child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                  Text('Facturas pendientes',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineSmall),
-                                  Text(longCalendarDate(day))
-                                ])),
-                            IconButton(
-                                tooltip: 'Cerrar',
-                                onPressed: () => Navigator.pop(context),
-                                icon: const Icon(Icons.close))
-                          ]),
-                          const SizedBox(height: 12),
-                          Flexible(
-                              child: entries.isEmpty
-                                  ? const Center(
-                                      child: Text(
-                                          'No hay facturas pendientes para este día.'))
-                                  : ListView.builder(
-                                      shrinkWrap: true,
-                                      itemCount: entries.length,
-                                      itemBuilder: (_, index) =>
-                                          PendingInvoiceCard(
-                                              entry: entries[index],
-                                              onHistory: () =>
-                                                  onHistory(entries[index]),
-                                              onPayment: () async {
-                                                Navigator.pop(context);
-                                                await onPayment(entries[index]);
-                                              },
-                                              onPaid: () async {
-                                                Navigator.pop(context);
-                                                await onPaid(entries[index]);
-                                              },
-                                              onEdit: () async {
-                                                Navigator.pop(context);
-                                                await onEdit(entries[index]);
-                                              }))),
-                        ]))),
-          ));
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Facturas pendientes',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        Text(longCalendarDate(day)),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ]),
+                const SizedBox(height: 12),
+                if (onAdd != null) ...[
+                  TextButton.icon(
+                    key: const ValueKey('day-add-invoice'),
+                    onPressed: () async {
+                      final refreshed = await onAdd();
+                      if (refreshed != null && context.mounted) {
+                        setDialogState(() => visibleEntries = refreshed);
+                      }
+                    },
+                    icon: const Icon(Icons.add),
+                    label: const Text('+ Añadir factura'),
+                  ),
+                  const SizedBox(height: 4),
+                ],
+                Flexible(
+                  child: visibleEntries.isEmpty
+                      ? const Center(
+                          child:
+                              Text('No hay facturas pendientes para este día.'),
+                        )
+                      : ListView.builder(
+                          shrinkWrap: true,
+                          itemCount: visibleEntries.length,
+                          itemBuilder: (_, index) {
+                            final entry = visibleEntries[index];
+                            return PendingInvoiceCard(
+                              entry: entry,
+                              onHistory: () => onHistory(entry),
+                              onPayment: () async {
+                                Navigator.pop(context);
+                                await onPayment(entry);
+                              },
+                              onPaid: () async {
+                                Navigator.pop(context);
+                                await onPaid(entry);
+                              },
+                              onEdit: () async {
+                                Navigator.pop(context);
+                                await onEdit(entry);
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }

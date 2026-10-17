@@ -14,6 +14,7 @@ Future<void> showInvoiceDetailDialog(
   Future<void> Function()? onPayment,
   Future<void> Function()? onPayInFull,
   Future<void> Function()? onReschedule,
+  Future<bool> Function()? onViewCustomerProfile,
   Future<void> Function()? onClosed,
 }) async {
   final action = await showDialog<_InvoiceDetailAction>(
@@ -25,6 +26,7 @@ Future<void> showInvoiceDetailDialog(
       canChange: !invoice.anulada && !invoice.pagada,
       canReschedule:
           !invoice.anulada && !invoice.pagada && onReschedule != null,
+      onViewCustomerProfile: onViewCustomerProfile,
     ),
   );
   if (action == _InvoiceDetailAction.payment) await onPayment?.call();
@@ -33,13 +35,14 @@ Future<void> showInvoiceDetailDialog(
   await onClosed?.call();
 }
 
-class _InvoiceDetailDialog extends StatelessWidget {
+class _InvoiceDetailDialog extends StatefulWidget {
   const _InvoiceDetailDialog({
     required this.invoice,
     required this.scheduledDate,
     required this.reportMonth,
     required this.canChange,
     required this.canReschedule,
+    required this.onViewCustomerProfile,
   });
 
   final FilaVenta invoice;
@@ -47,6 +50,17 @@ class _InvoiceDetailDialog extends StatelessWidget {
   final String? reportMonth;
   final bool canChange;
   final bool canReschedule;
+  final Future<bool> Function()? onViewCustomerProfile;
+
+  @override
+  State<_InvoiceDetailDialog> createState() => _InvoiceDetailDialogState();
+}
+
+class _InvoiceDetailDialogState extends State<_InvoiceDetailDialog> {
+  bool _openingProfile = false;
+  String? _profileError;
+
+  FilaVenta get invoice => widget.invoice;
 
   String get _status => invoice.anulada
       ? 'Anulada'
@@ -78,6 +92,23 @@ class _InvoiceDetailDialog extends StatelessWidget {
           ],
         ),
       );
+
+  Future<void> _openCustomerProfile() async {
+    final callback = widget.onViewCustomerProfile;
+    if (callback == null || _openingProfile) return;
+    setState(() {
+      _openingProfile = true;
+      _profileError = null;
+    });
+    final opened = await callback();
+    if (!mounted) return;
+    setState(() {
+      _openingProfile = false;
+      if (!opened) {
+        _profileError = 'No se pudo identificar al cliente de esta factura.';
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -124,12 +155,12 @@ class _InvoiceDetailDialog extends StatelessWidget {
                       _field('Fecha de factura', invoice.fecha),
                       _field(
                         'Fecha de cobro',
-                        scheduledDate == null
+                        widget.scheduledDate == null
                             ? 'Sin programación'
-                            : calendarDate(scheduledDate!),
+                            : calendarDate(widget.scheduledDate!),
                       ),
-                      if (reportMonth?.isNotEmpty ?? false)
-                        _field('Reporte', reportMonth!),
+                      if (widget.reportMonth?.isNotEmpty ?? false)
+                        _field('Reporte', widget.reportMonth!),
                       _field('Venta', '\$${invoice.venta.toStringAsFixed(2)}'),
                       const Divider(height: 28),
                       Text('Abonos',
@@ -161,13 +192,31 @@ class _InvoiceDetailDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+              if (_profileError != null) ...[
+                Text(
+                  _profileError!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                const SizedBox(height: 8),
+              ],
               Wrap(
                 alignment: WrapAlignment.end,
                 spacing: 8,
                 runSpacing: 8,
                 children: [
                   OutlinedButton.icon(
-                    onPressed: canReschedule
+                    key: const ValueKey('view-customer-profile'),
+                    onPressed:
+                        widget.onViewCustomerProfile == null || _openingProfile
+                            ? null
+                            : _openCustomerProfile,
+                    icon: _openingProfile
+                        ? const Icon(Icons.hourglass_top)
+                        : const Icon(Icons.person_outline),
+                    label: const Text('Ver perfil del cliente'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: widget.canReschedule
                         ? () => Navigator.pop(
                             context, _InvoiceDetailAction.reschedule)
                         : null,
@@ -175,7 +224,7 @@ class _InvoiceDetailDialog extends StatelessWidget {
                     label: const Text('Reprogramar'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: canChange
+                    onPressed: widget.canChange
                         ? () =>
                             Navigator.pop(context, _InvoiceDetailAction.payment)
                         : null,
@@ -183,7 +232,7 @@ class _InvoiceDetailDialog extends StatelessWidget {
                     label: const Text('Registrar abono'),
                   ),
                   FilledButton.icon(
-                    onPressed: canChange
+                    onPressed: widget.canChange
                         ? () => Navigator.pop(
                             context, _InvoiceDetailAction.payInFull)
                         : null,

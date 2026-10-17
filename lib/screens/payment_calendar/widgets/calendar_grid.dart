@@ -11,6 +11,7 @@ class CalendarGrid extends StatelessWidget {
       required this.selected,
       required this.onSelect,
       required this.onAdd,
+      required this.showAddButtons,
       this.showEntryText = true,
       super.key});
   final DateTime month;
@@ -18,6 +19,7 @@ class CalendarGrid extends StatelessWidget {
   final DateTime? selected;
   final ValueChanged<DateTime> onSelect;
   final ValueChanged<DateTime> onAdd;
+  final bool showAddButtons;
   final bool showEntryText;
 
   bool _same(DateTime? a, DateTime b) =>
@@ -76,7 +78,8 @@ class CalendarGrid extends StatelessWidget {
                         selected: _same(selected, day),
                         compact: compact,
                         showEntryText: showEntryText,
-                        onAdd: day.month == month.month &&
+                        onAdd: showAddButtons &&
+                                day.month == month.month &&
                                 day.weekday < DateTime.saturday
                             ? () => onAdd(day)
                             : null,

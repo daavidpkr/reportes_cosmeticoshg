@@ -330,8 +330,7 @@ void main() {
       expect(find.text('Hoy'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
-    testWidgets(
-        'solo los laborables muestran + y programar conserva mes, día y zoom',
+    testWidgets('móvil programa desde el modal y conserva mes, día y zoom',
         (tester) async {
       final repository = SchedulingCalendarRepository([]);
       await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -341,17 +340,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byKey(const ValueKey('calendar-add-2026-08-17T00:00:00.000')),
-          findsOneWidget);
-      final addRect = tester.getRect(
-          find.byKey(const ValueKey('calendar-add-2026-08-17T00:00:00.000')));
-      final cellRect = tester.getRect(
-          find.byKey(const ValueKey('calendar-day-2026-08-17T00:00:00.000')));
-      expect(addRect.width, greaterThanOrEqualTo(36));
-      expect(addRect.height, greaterThanOrEqualTo(36));
-      expect(addRect.left, greaterThanOrEqualTo(cellRect.left));
-      expect(addRect.top, greaterThanOrEqualTo(cellRect.top));
-      expect(addRect.right, lessThanOrEqualTo(cellRect.right));
-      expect(addRect.bottom, lessThanOrEqualTo(cellRect.bottom));
+          findsNothing);
       expect(find.byKey(const ValueKey('calendar-add-2026-08-15T00:00:00.000')),
           findsNothing);
       expect(find.byKey(const ValueKey('calendar-add-2026-08-16T00:00:00.000')),
@@ -360,7 +349,10 @@ void main() {
       await tester.tap(find.byKey(const ValueKey('calendar-zoom-in')));
       await tester.pump();
       await tester.tap(
-          find.byKey(const ValueKey('calendar-add-2026-08-17T00:00:00.000')));
+          find.byKey(const ValueKey('calendar-day-2026-08-17T00:00:00.000')));
+      await tester.pumpAndSettle();
+      expect(find.text('+ Añadir factura'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('day-add-invoice')));
       await tester.pumpAndSettle();
       expect(find.text('Programar factura'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('schedulable-000000700')));
@@ -371,6 +363,23 @@ void main() {
       expect(find.text('Facturas pendientes'), findsOneWidget);
       expect(find.text('REF. 700'), findsOneWidget);
       expect(repository.values.single.reminderDate, DateTime(2026, 8, 17));
+      expect(tester.takeException(), isNull);
+    });
+    testWidgets('escritorio conserva + solo en días laborables',
+        (tester) async {
+      final repository = SchedulingCalendarRepository([]);
+      await tester.binding.setSurfaceSize(const Size(900, 800));
+      await tester.pumpWidget(MaterialApp(
+          home: PaymentCalendarScreen(
+              repository: repository, initialMonth: DateTime(2026, 8))));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const ValueKey('calendar-add-2026-08-17T00:00:00.000')),
+          findsOneWidget);
+      expect(find.byKey(const ValueKey('calendar-add-2026-08-15T00:00:00.000')),
+          findsNothing);
+      expect(find.byKey(const ValueKey('calendar-add-2026-08-16T00:00:00.000')),
+          findsNothing);
       expect(tester.takeException(), isNull);
     });
     testWidgets('móvil abre día vacío y popup con una factura', (tester) async {

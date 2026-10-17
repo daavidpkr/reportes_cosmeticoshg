@@ -135,6 +135,21 @@ void main() {
         invoice: selected.row,
         reportMonth: selected.reportMonth,
         scheduledDate: DateTime(2026, 8, 17),
+        onViewCustomerProfile: () async {
+          await showDialog<void>(
+            context: tester.element(find.byType(GeneralSearchScreen)),
+            builder: (context) => AlertDialog(
+              title: const Text('Perfil del Cliente'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cerrar perfil'),
+                ),
+              ],
+            ),
+          );
+          return true;
+        },
       ),
     ));
     await runSearch(tester, 'cliente');
@@ -151,6 +166,12 @@ void main() {
     expect(find.textContaining('Recibo: 45'), findsOneWidget);
     expect(find.textContaining('Transferencia'), findsOneWidget);
     expect(find.text('Pago completo'), findsOneWidget);
+    await tester.tap(find.text('Ver perfil del cliente'));
+    await tester.pumpAndSettle();
+    expect(find.text('Perfil del Cliente'), findsOneWidget);
+    await tester.tap(find.text('Cerrar perfil'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detalle de factura'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -313,6 +334,7 @@ void main() {
         mobileContext,
         invoice: selected.row,
         reportMonth: selected.reportMonth,
+        onViewCustomerProfile: () async => false,
       ),
     ));
     await runSearch(tester, 'cliente');
@@ -345,6 +367,10 @@ void main() {
     expect(find.text('Detalle de factura'), findsOneWidget);
     expect(find.text('Registrar abono'), findsOneWidget);
     expect(find.text('Pago completo'), findsOneWidget);
+    await tester.tap(find.text('Ver perfil del cliente'));
+    await tester.pump();
+    expect(find.textContaining('No se pudo identificar al cliente'),
+        findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

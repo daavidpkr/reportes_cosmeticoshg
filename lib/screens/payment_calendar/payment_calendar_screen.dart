@@ -173,6 +173,7 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
       selected: controller.selectedDay,
       onSelect: _transforming ? (_) {} : _select,
       onAdd: _transforming ? (_) {} : _scheduleOnDay,
+      showAddButtons: !mobile,
       showEntryText: kIsWeb || defaultTargetPlatform != TargetPlatform.android,
     );
     if (!mobile) return grid;
@@ -199,14 +200,16 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
     final entries =
         controller.grouped[dateOnly(day)] ?? const <PaymentCalendarEntry>[];
     await showDayInvoicesDialog(context, day, entries, _edit, _payment, _paid,
-        (entry) => _history(entry, day));
+        (entry) => _history(entry, day),
+        onAdd: _canSchedule(day) ? () => _addInvoiceToDay(day) : null);
   }
 
-  Future<void> _scheduleOnDay(DateTime day) async {
-    if (day.weekday >= DateTime.saturday ||
-        controller.repository is! CalendarInvoiceSchedulingDataSource) {
-      return;
-    }
+  bool _canSchedule(DateTime day) =>
+      day.weekday < DateTime.saturday &&
+      controller.repository is CalendarInvoiceSchedulingDataSource;
+
+  Future<List<PaymentCalendarEntry>?> _addInvoiceToDay(DateTime day) async {
+    if (!_canSchedule(day)) return null;
     controller.select(day);
     final source = controller.repository as CalendarInvoiceSchedulingDataSource;
     final facturaId = await showScheduleInvoiceDialog(
@@ -214,19 +217,24 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
       day: day,
       repository: source,
     );
-    if (facturaId == null || !mounted) return;
+    if (facturaId == null || !mounted) return null;
     final saved = await controller.scheduleInvoice(facturaId, day);
-    if (!mounted) return;
+    if (!mounted) return null;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(saved
           ? 'Factura programada correctamente.'
           : 'No fue posible programar la factura. Verifica que siga pendiente y tenga un plazo configurado.'),
     ));
-    if (!saved) return;
-    final refreshed =
-        controller.grouped[dateOnly(day)] ?? const <PaymentCalendarEntry>[];
+    if (!saved) return null;
+    return controller.grouped[dateOnly(day)] ?? const <PaymentCalendarEntry>[];
+  }
+
+  Future<void> _scheduleOnDay(DateTime day) async {
+    final refreshed = await _addInvoiceToDay(day);
+    if (refreshed == null || !mounted) return;
     await showDayInvoicesDialog(context, day, refreshed, _edit, _payment, _paid,
-        (entry) => _history(entry, day));
+        (entry) => _history(entry, day),
+        onAdd: _canSchedule(day) ? () => _addInvoiceToDay(day) : null);
   }
 
   Future<void> _history(PaymentCalendarEntry entry, DateTime day) async {
@@ -270,7 +278,8 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
     final refreshed =
         controller.grouped[dateOnly(day)] ?? const <PaymentCalendarEntry>[];
     await showDayInvoicesDialog(context, day, refreshed, _edit, _payment, _paid,
-        (item) => _history(item, day));
+        (item) => _history(item, day),
+        onAdd: _canSchedule(day) ? () => _addInvoiceToDay(day) : null);
   }
 
   Future<int?> _editCustomerTerm(BillingCustomer customer) async {
@@ -379,7 +388,10 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
       if (edit.date.year == controller.visibleMonth.year &&
           edit.date.month == controller.visibleMonth.month) {
         await showDayInvoicesDialog(context, edit.date, dayEntries, _edit,
-            _payment, _paid, (entry) => _history(entry, edit.date));
+            _payment, _paid, (entry) => _history(entry, edit.date),
+            onAdd: _canSchedule(edit.date)
+                ? () => _addInvoiceToDay(edit.date)
+                : null);
       }
     }
   }

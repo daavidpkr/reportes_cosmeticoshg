@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/fila_venta.dart';
+import '../models/billing_customer.dart';
 import '../models/payment_calendar_entry.dart';
+import '../services/customer_terms_repository.dart';
 import '../services/facturas_store.dart';
 import '../services/invoice_batch_importer.dart';
 import '../services/payment_calendar_refresh.dart';
@@ -20,6 +22,7 @@ import '../theme/hg_theme.dart';
 import 'carga_facturas_screen.dart';
 import 'cobros_mensuales_view.dart';
 import 'clientes_screen.dart';
+import 'customer_history_screen.dart';
 import 'estadisticas_screen.dart';
 import 'general_search_screen.dart';
 import 'invoice_detail_dialog.dart';
@@ -123,6 +126,12 @@ class _ReporteScreenState extends State<ReporteScreen> {
   final _reportes = ReportesStore();
   final _filterPreferences = ReportFilterPreferencesStore();
   final _supabaseReportes = SupabaseReportesService();
+  PaymentCalendarRepository? _paymentCalendarRepository;
+  CustomerTermsDataSource? _customerTermsRepository;
+  PaymentCalendarRepository get _invoiceCustomerResolver =>
+      _paymentCalendarRepository ??= PaymentCalendarRepository();
+  CustomerTermsDataSource get _profileCustomerTerms =>
+      _customerTermsRepository ??= CustomerTermsRepository();
   late List<FilaVenta> _filas;
   String _filtro = '';
   String _filtroVendedor = '';
@@ -941,11 +950,161 @@ class _ReporteScreenState extends State<ReporteScreen> {
         );
       },
       onReschedule: () => _reprogramarDesdeDetalle(fila),
+      onViewCustomerProfile: () => _openCustomerProfile(fila),
       onClosed: () async {
         if (mesReporte != null) await _cargarReportes();
         if (mounted) setState(() {});
       },
     );
+  }
+
+  Future<bool> _openCustomerProfile(FilaVenta invoice) async {
+    BillingCustomer? customer;
+    try {
+      customer = await _invoiceCustomerResolver
+          .resolveCustomer(invoice.referencia.trim());
+    } catch (_) {
+      customer = null;
+    }
+    if (!mounted || customer == null) return false;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => CustomerHistoryScreen(
+        customer: customer!,
+        onEditTerm: _editProfileCustomerTerm,
+        onEditHours: (customer, value) async {
+          final updated = await _profileCustomerTerms.saveBusinessHours(
+            customer.id,
+            value,
+          );
+          paymentCalendarRefresh.refresh();
+          return updated;
+        },
+        onSchedule: _scheduleProfileCustomer,
+        onDelete: _deleteProfileCustomer,
+      ),
+    );
+    if (!mounted) return true;
+    paymentCalendarRefresh.refresh();
+    return true;
+  }
+
+  Future<int?> _editProfileCustomerTerm(BillingCustomer customer) async {
+    final input = TextEditingController(
+      text: customer.paymentTermDays?.toString() ?? '',
+    );
+    final days = await showDialog<int>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Plazo habitual de pago'),
+        content: TextField(
+          controller: input,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(labelText: 'Días'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(
+              dialogContext,
+              int.tryParse(input.text.trim()),
+            ),
+            child: const Text('Continuar'),
+          ),
+        ],
+      ),
+    );
+    input.dispose();
+    if (days == null || days < 0 || !mounted) return null;
+    final impacted = await _profileCustomerTerms.previewImpact(
+      customer.id,
+      days,
+    );
+    if (!mounted) return null;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirmar plazo'),
+        content: Text(
+          impacted == 0
+              ? 'Se guardará el plazo habitual del cliente.'
+              : 'Se actualizarán $impacted facturas existentes con el nuevo plazo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Confirmar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return null;
+    await _profileCustomerTerms.savePaymentTerm(
+      customer.id,
+      days,
+      applyExisting: true,
+    );
+    paymentCalendarRefresh.refresh();
+    return days;
+  }
+
+  Future<void> _scheduleProfileCustomer(BillingCustomer customer) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Programar facturas pendientes'),
+        content: Text(
+          'Se programarán las facturas elegibles de ${customer.name} sin modificar recordatorios existentes.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Programar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _profileCustomerTerms.schedulePending(customer);
+    paymentCalendarRefresh.refresh();
+  }
+
+  Future<bool> _deleteProfileCustomer(BillingCustomer customer) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Eliminar cliente'),
+        content: const Text(
+          'Se quitará al cliente del apartado Clientes. Sus facturas, abonos y recordatorios se conservarán.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Eliminar cliente'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return false;
+    await _profileCustomerTerms.deleteCustomer(customer);
+    paymentCalendarRefresh.refresh();
+    return true;
   }
 
   Future<void> _reprogramarDesdeDetalle(FilaVenta fila) async {

@@ -1178,9 +1178,6 @@ extension _ReporteScreenView on _ReporteScreenState {
                                   style: TextStyle(
                                     color: context.hg.mutedText,
                                     fontSize: 11,
-                                    decoration: fila.referencia.trim().isEmpty
-                                        ? null
-                                        : TextDecoration.underline,
                                   ),
                                 ),
                               ),
