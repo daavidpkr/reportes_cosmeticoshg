@@ -38,6 +38,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   final _search = TextEditingController();
   final _scroll = ScrollController();
   final Map<String, Uint8List> _covers = {};
+  final Map<String, Future<Uint8List?>> _coverRequests = {};
   final Map<String, double> _progress = {};
   final Set<String> _downloaded = {};
   final Set<String> _invalidFiles = {};
@@ -947,21 +948,29 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
             ])));
   }
 
-  Widget _coverWidget(Catalog catalog) => FutureBuilder<Uint8List?>(
-        future: _cover(catalog),
+  Widget _coverWidget(Catalog catalog) {
+    final key = '${catalog.id}/v${catalog.version}';
+    return RepaintBoundary(
+      child: FutureBuilder<Uint8List?>(
+        future: _coverRequests.putIfAbsent(key, () => _cover(catalog)),
         builder: (_, snapshot) => snapshot.data == null
             ? ColoredBox(
                 color: context.hg.tableHeader,
                 child: Center(
                     child: Icon(Icons.auto_stories_outlined,
                         size: 56, color: context.hg.mutedText)))
-            : Image.memory(snapshot.data!,
+            : Image.memory(
+                snapshot.data!,
                 fit: BoxFit.cover,
                 width: double.infinity,
                 height: double.infinity,
+                gaplessPlayback: true,
                 errorBuilder: (_, __, ___) =>
-                    const Center(child: Icon(Icons.broken_image_outlined))),
-      );
+                    const Center(child: Icon(Icons.broken_image_outlined)),
+              ),
+      ),
+    );
+  }
 
   List<Widget> _badges(Catalog catalog) => [
         if (catalog.isNew)
