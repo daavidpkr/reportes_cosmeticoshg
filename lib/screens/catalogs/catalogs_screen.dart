@@ -1,6 +1,7 @@
 import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart';
 
@@ -31,8 +32,6 @@ class CatalogsScreen extends StatefulWidget {
 
 class _CatalogsScreenState extends State<CatalogsScreen> {
   static const _pageSize = 12;
-  static int _nextInstanceId = 0;
-  late final int _instanceId = ++_nextInstanceId;
   late final CatalogRepository _repository;
   late final CatalogCacheService _cache;
   late final CatalogPdfService _pdfFiles;
@@ -56,14 +55,9 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   String? _error;
   String? _featuredError;
 
-  void _trace(String event) => debugPrint(
-        '[catalog-diagnostic instance=$_instanceId] $event',
-      );
-
   @override
   void initState() {
     super.initState();
-    _trace('initState');
     _repository = widget.repository ?? SupabaseCatalogRepository();
     _cache = widget.cache ?? CatalogCacheService();
     _pdfFiles = CatalogPdfService(repository: _repository, cache: _cache);
@@ -74,7 +68,6 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
 
   @override
   void dispose() {
-    _trace('dispose');
     _debounce?.cancel();
     _listGeneration++;
     _featuredGeneration++;
@@ -167,7 +160,6 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
 
   Future<void> _loadFeatured() async {
     final generation = ++_featuredGeneration;
-    _trace('_loadFeatured start generation=$generation');
     if (mounted) {
       setState(() {
         _featuredLoading = true;
@@ -176,20 +168,8 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     }
     try {
       final featured = await _repository.getFeatured();
-      _trace(
-        'getFeatured result generation=$generation '
-        'catalog=${featured?.id ?? 'null'} '
-        'organization=${featured?.organizationId ?? 'null'} '
-        'active=${featured?.active ?? 'null'} '
-        'featured=${featured?.featured ?? 'null'} '
-        'status=${featured?.status.name ?? 'null'}',
-      );
       if (!mounted || generation != _featuredGeneration) return;
       setState(() {
-        _trace(
-          '_featuredCatalog assignment '
-          '${_featuredCatalog?.id ?? 'null'} -> ${featured?.id ?? 'null'}',
-        );
         _featuredCatalog = featured;
         _featuredError = null;
       });
@@ -206,12 +186,10 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   }
 
   Future<void> _refreshAll() async {
-    _trace('_refreshAll start');
     await Future.wait<void>([
       _load(reset: true),
       _loadFeatured(),
     ]);
-    _trace('_refreshAll end');
   }
 
   void _searchChanged(String _) {
@@ -574,96 +552,91 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    _trace(
-      'build featured=${_featuredCatalog?.id ?? 'null'} '
-      'featuredLoading=$_featuredLoading catalogs=${_catalogs.length}',
-    );
-    return LayoutBuilder(builder: (context, constraints) {
-      final mobile = constraints.maxWidth < 650;
-      return ColoredBox(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        child: RefreshIndicator(
-          onRefresh: _refreshAll,
-          child: CustomScrollView(
-            key: const Key('catalogs-scroll'),
-            controller: _scroll,
-            slivers: [
-              SliverPadding(
-                padding: EdgeInsets.fromLTRB(
-                    mobile ? 16 : 32, 28, mobile ? 16 : 32, 18),
-                sliver: SliverToBoxAdapter(child: _header(mobile)),
-              ),
-              if (_error != null)
-                SliverPadding(
-                  padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
-                  sliver: SliverToBoxAdapter(child: _notice()),
-                ),
-              if (_featuredError != null)
-                SliverPadding(
-                  padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
-                  sliver: SliverToBoxAdapter(child: _featuredNotice()),
-                ),
-              if (_featuredCatalog case final featured?)
+  Widget build(BuildContext context) =>
+      LayoutBuilder(builder: (context, constraints) {
+        final mobile = constraints.maxWidth < 650;
+        return ColoredBox(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          child: RefreshIndicator(
+            onRefresh: _refreshAll,
+            child: CustomScrollView(
+              key: const Key('catalogs-scroll'),
+              controller: _scroll,
+              slivers: [
                 SliverPadding(
                   padding: EdgeInsets.fromLTRB(
-                      mobile ? 16 : 32, 6, mobile ? 16 : 32, 22),
-                  sliver:
-                      SliverToBoxAdapter(child: _featured(featured, mobile)),
-                )
-              else if (_featuredLoading)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 32),
-                    child: LinearProgressIndicator(),
-                  ),
+                      mobile ? 16 : 32, 28, mobile ? 16 : 32, 18),
+                  sliver: SliverToBoxAdapter(child: _header(mobile)),
                 ),
-              if (_loading)
-                const SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 220,
-                    child: Center(child: CircularProgressIndicator()),
+                if (_error != null)
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
+                    sliver: SliverToBoxAdapter(child: _notice()),
                   ),
-                )
-              else if (_catalogs.isEmpty)
-                SliverToBoxAdapter(child: _empty())
-              else ...[
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                      mobile ? 16 : 32, 0, mobile ? 16 : 32, 28),
-                  sliver: mobile
-                      ? SliverList.separated(
-                          itemCount: _catalogs.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (_, index) =>
-                              _card(_catalogs[index], true),
-                        )
-                      : SliverGrid.builder(
-                          itemCount: _catalogs.length,
-                          gridDelegate:
-                              const SliverGridDelegateWithMaxCrossAxisExtent(
-                            maxCrossAxisExtent: 310,
-                            mainAxisExtent: 430,
-                            mainAxisSpacing: 18,
-                            crossAxisSpacing: 18,
-                          ),
-                          itemBuilder: (_, index) =>
-                              _card(_catalogs[index], false),
-                        ),
-                ),
-                if (_loadingMore)
+                if (_featuredError != null)
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
+                    sliver: SliverToBoxAdapter(child: _featuredNotice()),
+                  ),
+                if (_featuredCatalog case final featured?)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                        mobile ? 16 : 32, 6, mobile ? 16 : 32, 22),
+                    sliver:
+                        SliverToBoxAdapter(child: _featured(featured, mobile)),
+                  )
+                else if (_featuredLoading)
                   const SliverToBoxAdapter(
-                      child: Padding(
-                          padding: EdgeInsets.all(20),
-                          child: Center(child: CircularProgressIndicator()))),
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 32),
+                      child: LinearProgressIndicator(),
+                    ),
+                  ),
+                if (_loading)
+                  const SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 220,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  )
+                else if (_catalogs.isEmpty)
+                  SliverToBoxAdapter(child: _empty())
+                else ...[
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                        mobile ? 16 : 32, 0, mobile ? 16 : 32, 28),
+                    sliver: mobile
+                        ? SliverList.separated(
+                            itemCount: _catalogs.length,
+                            separatorBuilder: (_, __) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (_, index) =>
+                                _card(_catalogs[index], true),
+                          )
+                        : SliverGrid.builder(
+                            itemCount: _catalogs.length,
+                            gridDelegate:
+                                const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 310,
+                              mainAxisExtent: 430,
+                              mainAxisSpacing: 18,
+                              crossAxisSpacing: 18,
+                            ),
+                            itemBuilder: (_, index) =>
+                                _card(_catalogs[index], false),
+                          ),
+                  ),
+                  if (_loadingMore)
+                    const SliverToBoxAdapter(
+                        child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Center(child: CircularProgressIndicator()))),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
-      );
-    });
-  }
+        );
+      });
 
   Widget _header(bool mobile) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
