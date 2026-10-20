@@ -44,6 +44,13 @@ jobs:
         # obsoleto. La caché privada de catálogos usa CacheStorage aparte.
         run: flutter build web --release --base-href "/reportes_cosmeticoshg/" --pwa-strategy=none
 
+      - name: Versionar bundles web con el commit
+        run: |
+          cp build/web/main.dart.js "build/web/main.${GITHUB_SHA}.dart.js"
+          sed -i "s/main\.dart\.js/main.${GITHUB_SHA}.dart.js/g" build/web/flutter_bootstrap.js
+          cp build/web/flutter_bootstrap.js "build/web/flutter_bootstrap.${GITHUB_SHA}.js"
+          sed -i "s/flutter_bootstrap\.js/flutter_bootstrap.${GITHUB_SHA}.js/g" build/web/index.html
+
       - name: Retirar service worker anterior
         run: cp web/flutter_service_worker_cleanup.js build/web/flutter_service_worker.js
 
