@@ -42,12 +42,18 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   final Set<String> _downloaded = {};
   final Set<String> _invalidFiles = {};
   List<Catalog> _catalogs = [];
+  Catalog? _featuredCatalog;
   CatalogFilter _filter = CatalogFilter.all;
   Timer? _debounce;
+  int _listGeneration = 0;
+  int _listRequestId = 0;
+  int _featuredGeneration = 0;
   bool _loading = true;
   bool _loadingMore = false;
+  bool _featuredLoading = true;
   bool _hasMore = true;
   String? _error;
+  String? _featuredError;
 
   @override
   void initState() {
@@ -57,24 +63,34 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     _pdfFiles = CatalogPdfService(repository: _repository, cache: _cache);
     _scroll.addListener(_onScroll);
     unawaited(_retryCleanup());
-    unawaited(_load(reset: true));
+    unawaited(_refreshAll());
   }
 
   @override
   void dispose() {
     _debounce?.cancel();
+    _listGeneration++;
+    _featuredGeneration++;
+    _scroll.removeListener(_onScroll);
     _search.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
   void _onScroll() {
-    if (_scroll.position.extentAfter < 500 && !_loadingMore && _hasMore) {
+    if (_scroll.position.extentAfter < 500 &&
+        !_loading &&
+        !_loadingMore &&
+        _hasMore) {
       unawaited(_load());
     }
   }
 
   Future<void> _load({bool reset = false}) async {
+    final generation = reset ? ++_listGeneration : _listGeneration;
+    final requestId = ++_listRequestId;
+    final query = _search.text;
+    final filter = _filter;
     if (reset) {
       setState(() {
         _loading = true;
@@ -88,31 +104,40 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
       final rows = await _repository.list(
         offset: offset,
         limit: _pageSize,
-        query: _search.text,
-        filter: _filter,
+        query: query,
+        filter: filter,
       );
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _listGeneration ||
+          requestId != _listRequestId) {
+        return;
+      }
       setState(() {
         _catalogs = reset ? rows : [..._catalogs, ...rows];
         _hasMore = rows.length == _pageSize;
         _error = null;
       });
       for (final catalog in rows) {
-        if (await _cache.isDownloaded(catalog) && mounted) {
+        if (await _cache.isDownloaded(catalog) &&
+            mounted &&
+            generation == _listGeneration &&
+            requestId == _listRequestId) {
           setState(() => _downloaded.add(catalog.id));
         }
       }
     } catch (error) {
       final cached = reset ? await _cache.cachedCatalogs() : <Catalog>[];
-      if (!mounted) return;
+      if (!mounted ||
+          generation != _listGeneration ||
+          requestId != _listRequestId) {
+        return;
+      }
       setState(() {
         if (reset && cached.isNotEmpty) {
           _catalogs = cached
               .where((item) =>
-                  item.title
-                      .toLowerCase()
-                      .contains(_search.text.toLowerCase()) &&
-                  catalogMatchesFilter(item, _filter))
+                  item.title.toLowerCase().contains(query.toLowerCase()) &&
+                  catalogMatchesFilter(item, filter))
               .toList();
           _downloaded.addAll(cached.map((item) => item.id));
           _hasMore = false;
@@ -122,13 +147,49 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         }
       });
     } finally {
-      if (mounted) {
+      if (mounted &&
+          generation == _listGeneration &&
+          requestId == _listRequestId) {
         setState(() {
           _loading = false;
           _loadingMore = false;
         });
       }
     }
+  }
+
+  Future<void> _loadFeatured() async {
+    final generation = ++_featuredGeneration;
+    if (mounted) {
+      setState(() {
+        _featuredLoading = true;
+        _featuredError = null;
+      });
+    }
+    try {
+      final featured = await _repository.getFeatured();
+      if (!mounted || generation != _featuredGeneration) return;
+      setState(() {
+        _featuredCatalog = featured;
+        _featuredError = null;
+      });
+    } catch (error) {
+      if (!mounted || generation != _featuredGeneration) return;
+      setState(() {
+        _featuredError = 'No se pudo actualizar el catálogo destacado: $error';
+      });
+    } finally {
+      if (mounted && generation == _featuredGeneration) {
+        setState(() => _featuredLoading = false);
+      }
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait<void>([
+      _load(reset: true),
+      _loadFeatured(),
+    ]);
   }
 
   void _searchChanged(String _) {
@@ -275,7 +336,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
             ? 'Catálogo publicado.'
             : 'Nueva versión publicada.');
       }
-      await _load(reset: true);
+      await _refreshAll();
     } catch (error) {
       if (mounted) {
         _message('No se pudieron guardar los cambios: $error', error: true);
@@ -426,7 +487,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
             try {
               if (await _repository.getById(catalog.id) == null) {
                 await _cache.removeLocal(catalog.id);
-                await _load(reset: true);
+                await _refreshAll();
                 return;
               }
             } catch (_) {
@@ -457,7 +518,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
           }
           await _cache.removeLocal(catalog.id);
       }
-      await _load(reset: true);
+      await _refreshAll();
     } catch (error) {
       if (mounted) _message('$error', error: true);
     }
@@ -497,7 +558,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         return ColoredBox(
           color: Theme.of(context).scaffoldBackgroundColor,
           child: RefreshIndicator(
-            onRefresh: () => _load(reset: true),
+            onRefresh: _refreshAll,
             child: CustomScrollView(
               key: const Key('catalogs-scroll'),
               controller: _scroll,
@@ -512,21 +573,35 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                     padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
                     sliver: SliverToBoxAdapter(child: _notice()),
                   ),
-                if (_loading)
-                  const SliverFillRemaining(
-                      child: Center(child: CircularProgressIndicator()))
-                else if (_catalogs.isEmpty)
-                  SliverFillRemaining(child: _empty())
-                else ...[
-                  if (_catalogs.any((item) => item.featured))
-                    SliverPadding(
-                      padding: EdgeInsets.fromLTRB(
-                          mobile ? 16 : 32, 6, mobile ? 16 : 32, 22),
-                      sliver: SliverToBoxAdapter(
-                          child: _featured(
-                              _catalogs.firstWhere((item) => item.featured),
-                              mobile)),
+                if (_featuredError != null)
+                  SliverPadding(
+                    padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
+                    sliver: SliverToBoxAdapter(child: _featuredNotice()),
+                  ),
+                if (_featuredCatalog case final featured?)
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                        mobile ? 16 : 32, 6, mobile ? 16 : 32, 22),
+                    sliver:
+                        SliverToBoxAdapter(child: _featured(featured, mobile)),
+                  )
+                else if (_featuredLoading)
+                  const SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 32),
+                      child: LinearProgressIndicator(),
                     ),
+                  ),
+                if (_loading)
+                  const SliverToBoxAdapter(
+                    child: SizedBox(
+                      height: 220,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  )
+                else if (_catalogs.isEmpty)
+                  SliverToBoxAdapter(child: _empty())
+                else ...[
                   SliverPadding(
                     padding: EdgeInsets.fromLTRB(
                         mobile ? 16 : 32, 0, mobile ? 16 : 32, 28),
@@ -579,6 +654,13 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                 Text('Descubre y consulta nuestras colecciones',
                     style: TextStyle(color: context.hg.mutedText)),
               ])),
+          IconButton(
+            key: const Key('catalogs-refresh'),
+            tooltip: 'Actualizar catálogos',
+            onPressed: _refreshAll,
+            icon: const Icon(Icons.refresh),
+          ),
+          const SizedBox(width: 8),
           FilledButton.icon(
               onPressed: () => _edit(),
               icon: const Icon(Icons.add),
@@ -644,6 +726,23 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
               child: const Text('Reintentar')),
         ]),
       ));
+
+  Widget _featuredNotice() => Card(
+        color: context.hg.warningContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(children: [
+            const Icon(Icons.warning_amber_outlined),
+            const SizedBox(width: 10),
+            Expanded(child: Text(_featuredError!)),
+            TextButton(
+              key: const Key('featured-retry'),
+              onPressed: _featuredLoading ? null : _loadFeatured,
+              child: const Text('Reintentar destacado'),
+            ),
+          ]),
+        ),
+      );
 
   Widget _featured(Catalog catalog, bool mobile) => Semantics(
         label: 'Catálogo destacado: ${catalog.title}',

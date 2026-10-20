@@ -22,6 +22,7 @@ class CatalogDraft {
 
 abstract class CatalogRepository {
   Future<Catalog?> getById(String id);
+  Future<Catalog?> getFeatured();
   Future<List<Catalog>> list({
     required int offset,
     required int limit,
@@ -67,6 +68,19 @@ class SupabaseCatalogRepository implements CatalogRepository {
         .from('catalogos_con_etiquetas')
         .select()
         .eq('id', id)
+        .maybeSingle();
+    return row == null ? null : Catalog.fromJson(row);
+  }
+
+  @override
+  Future<Catalog?> getFeatured() async {
+    final row = await _client
+        .from('catalogos_con_etiquetas')
+        .select()
+        .eq('estado', 'publicado')
+        .eq('activo', true)
+        .eq('destacado', true)
+        .limit(1)
         .maybeSingle();
     return row == null ? null : Catalog.fromJson(row);
   }

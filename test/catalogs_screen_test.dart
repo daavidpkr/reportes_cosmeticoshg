@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cosmeticos_hg_reportes/models/catalog.dart';
@@ -43,6 +44,8 @@ class _Repository implements CatalogRepository {
 
   @override
   Future<Catalog?> getById(String id) async => item;
+  @override
+  Future<Catalog?> getFeatured() async => item;
   @override
   Future<List<Catalog>> list(
           {required int offset,
@@ -104,6 +107,76 @@ class _Downloads extends DocumentDownloadService {
     saveCalls++;
     return SavedDocument(name: fileName, location: fileName);
   }
+}
+
+class _ControlledRepository extends _Repository {
+  final listCalls = <({
+    String query,
+    CatalogFilter filter,
+    Completer<List<Catalog>> completer,
+  })>[];
+  final featuredCalls = <Completer<Catalog?>>[];
+
+  @override
+  Future<List<Catalog>> list({
+    required int offset,
+    required int limit,
+    String query = '',
+    CatalogFilter filter = CatalogFilter.all,
+    bool includeAdministration = true,
+  }) {
+    final completer = Completer<List<Catalog>>();
+    listCalls.add((query: query, filter: filter, completer: completer));
+    return completer.future;
+  }
+
+  @override
+  Future<Catalog?> getFeatured() {
+    final completer = Completer<Catalog?>();
+    featuredCalls.add(completer);
+    return completer.future;
+  }
+}
+
+Catalog _catalog({
+  required String id,
+  required String title,
+  bool featured = false,
+  bool isNew = false,
+}) =>
+    Catalog(
+      id: id,
+      organizationId: 'org',
+      title: title,
+      filePath: 'org/$id/v1/catalogo.pdf',
+      version: 1,
+      pageCount: 1,
+      status: CatalogStatus.publicado,
+      active: true,
+      featured: featured,
+      order: 0,
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026, 10, 20),
+      isNew: isNew,
+    );
+
+Future<void> _pumpControlled(
+  WidgetTester tester,
+  _ControlledRepository repository,
+) async {
+  await tester.binding.setSurfaceSize(const Size(1280, 900));
+  await tester.pumpWidget(MaterialApp(
+    theme: ThemeData.light().copyWith(
+      extensions: const [HgThemeColors.light],
+    ),
+    home: Scaffold(
+      body: CatalogsScreen(
+        repository: repository,
+        cache: CatalogCacheService(backend: _MemoryBackend()),
+      ),
+    ),
+  ));
+  await tester.pump();
 }
 
 void main() {
@@ -198,5 +271,187 @@ void main() {
     expect(repository.downloadCalls, 1);
     expect(downloads.saveCalls, 1);
     expect(isValidPdfBytes(backend.data['id/v1/catalogo.pdf']!), isTrue);
+  });
+
+  testWidgets(
+      'el destacado remoto permanece visible durante más de 10 segundos',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ControlledRepository();
+    await _pumpControlled(tester, repository);
+    final featured = _catalog(
+      id: 'featured',
+      title: 'Destacado remoto estable',
+      featured: true,
+    );
+    repository.featuredCalls.single.complete(featured);
+    repository.listCalls.single.completer.complete([
+      _catalog(id: 'regular', title: 'Catálogo regular'),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Destacado remoto estable'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 11));
+
+    expect(find.text('Destacado remoto estable'), findsOneWidget);
+  });
+
+  testWidgets('una respuesta tardía del buscador no elimina el destacado',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ControlledRepository();
+    await _pumpControlled(tester, repository);
+    repository.featuredCalls.single.complete(
+      _catalog(
+          id: 'featured', title: 'Destacado independiente', featured: true),
+    );
+    repository.listCalls.single.completer.complete([
+      _catalog(id: 'regular', title: 'Inicial'),
+    ]);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('catalog-search')), 'ninguno');
+    await tester.pump(const Duration(milliseconds: 351));
+    expect(repository.listCalls, hasLength(2));
+    await tester.pump(const Duration(seconds: 6));
+    repository.listCalls[1].completer.complete(const []);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Destacado independiente'), findsOneWidget);
+    expect(find.text('No hay catálogos para mostrar.'), findsOneWidget);
+  });
+
+  testWidgets('ignora respuestas de listado fuera de orden', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ControlledRepository();
+    await _pumpControlled(tester, repository);
+    repository.featuredCalls.single.complete(
+      _catalog(id: 'featured', title: 'Destacado fijo', featured: true),
+    );
+    repository.listCalls.single.completer.complete([
+      _catalog(id: 'initial', title: 'Inicial'),
+    ]);
+    await tester.pumpAndSettle();
+
+    final search = find.byKey(const Key('catalog-search'));
+    await tester.enterText(search, 'antigua');
+    await tester.pump(const Duration(milliseconds: 351));
+    await tester.enterText(search, 'nueva');
+    await tester.pump(const Duration(milliseconds: 351));
+    expect(repository.listCalls, hasLength(3));
+
+    repository.listCalls[2].completer.complete([
+      _catalog(id: 'new', title: 'Respuesta nueva'),
+    ]);
+    await tester.pump();
+    repository.listCalls[1].completer.complete([
+      _catalog(id: 'old', title: 'Respuesta antigua'),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Respuesta nueva'), findsOneWidget);
+    expect(find.text('Respuesta antigua'), findsNothing);
+    expect(find.text('Destacado fijo'), findsOneWidget);
+  });
+
+  testWidgets('los filtros no controlan el destacado', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ControlledRepository();
+    await _pumpControlled(tester, repository);
+    repository.featuredCalls.single.complete(
+      _catalog(id: 'featured', title: 'Destacado sin filtro', featured: true),
+    );
+    repository.listCalls.single.completer.complete([
+      _catalog(id: 'regular', title: 'Regular'),
+    ]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Nuevos'));
+    await tester.pump();
+    expect(repository.listCalls, hasLength(2));
+    expect(repository.listCalls.last.filter, CatalogFilter.newItems);
+    repository.listCalls.last.completer.complete(const []);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Destacado sin filtro'), findsOneWidget);
+    expect(find.text('No hay catálogos para mostrar.'), findsOneWidget);
+  });
+
+  testWidgets('una recarga fallida conserva el último destacado remoto',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ControlledRepository();
+    await _pumpControlled(tester, repository);
+    repository.featuredCalls.single.complete(
+      _catalog(id: 'featured', title: 'Destacado conservado', featured: true),
+    );
+    repository.listCalls.single.completer.complete([
+      _catalog(id: 'regular', title: 'Regular'),
+    ]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('catalogs-refresh')));
+    await tester.pump();
+    expect(repository.featuredCalls, hasLength(2));
+    expect(repository.listCalls, hasLength(2));
+    repository.featuredCalls[1].completeError(StateError('red no disponible'));
+    repository.listCalls[1].completer.complete([
+      _catalog(id: 'regular', title: 'Regular'),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Destacado conservado'), findsOneWidget);
+    expect(find.textContaining('red no disponible'), findsOneWidget);
+    expect(find.byKey(const Key('featured-retry')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('featured-retry')));
+    await tester.pump();
+    expect(repository.featuredCalls, hasLength(3));
+    repository.featuredCalls[2].complete(null);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Destacado conservado'), findsNothing);
+    expect(find.byKey(const Key('featured-retry')), findsNothing);
+  });
+
+  testWidgets('ignora respuestas del destacado fuera de orden', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ControlledRepository();
+    await _pumpControlled(tester, repository);
+    repository.featuredCalls.single.complete(
+      _catalog(id: 'featured', title: 'Destacado inicial', featured: true),
+    );
+    repository.listCalls.single.completer.complete([
+      _catalog(id: 'regular', title: 'Regular'),
+    ]);
+    await tester.pumpAndSettle();
+
+    final refresh = find.byKey(const Key('catalogs-refresh'));
+    await tester.tap(refresh);
+    await tester.pump();
+    await tester.tap(refresh);
+    await tester.pump();
+    expect(repository.featuredCalls, hasLength(3));
+    expect(repository.listCalls, hasLength(3));
+
+    repository.featuredCalls[2].complete(
+      _catalog(id: 'new-featured', title: 'Destacado nuevo', featured: true),
+    );
+    repository.listCalls[2].completer.complete([
+      _catalog(id: 'new-list', title: 'Lista nueva'),
+    ]);
+    await tester.pump();
+    repository.featuredCalls[1].complete(
+      _catalog(id: 'old-featured', title: 'Destacado antiguo', featured: true),
+    );
+    repository.listCalls[1].completer.complete([
+      _catalog(id: 'old-list', title: 'Lista antigua'),
+    ]);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Destacado nuevo'), findsOneWidget);
+    expect(find.text('Destacado antiguo'), findsNothing);
+    expect(find.text('Lista nueva'), findsOneWidget);
+    expect(find.text('Lista antigua'), findsNothing);
   });
 }

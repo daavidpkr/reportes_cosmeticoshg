@@ -26,6 +26,48 @@ Map<String, dynamic> catalogJson() => {
     };
 
 void main() {
+  test('consulta el destacado publicado y activo independientemente', () async {
+    Uri? requestedUri;
+    final featuredRow = {
+      ...catalogJson(),
+      'estado': 'publicado',
+      'activo': true,
+      'destacado': true,
+      'archivo_path':
+          '${catalogJson()['organization_id']}/${catalogJson()['id']}/v1/catalogo.pdf',
+      'portada_path':
+          '${catalogJson()['organization_id']}/${catalogJson()['id']}/v1/portada.webp',
+      'numero_paginas': 1,
+      'fecha_publicacion': '2026-10-19T12:00:00Z',
+      'fecha_actualizacion': '2026-10-19T12:00:00Z',
+    };
+    final client = SupabaseClient(
+      'https://example.supabase.co',
+      'anon-key',
+      accessToken: () async => 'session-token',
+      httpClient: MockClient((request) async {
+        requestedUri = request.url;
+        return http.Response(
+          jsonEncode(featuredRow),
+          200,
+          headers: {'content-type': 'application/json'},
+          request: request,
+        );
+      }),
+    );
+    addTearDown(client.dispose);
+
+    final featured =
+        await SupabaseCatalogRepository(client: client).getFeatured();
+
+    expect(featured?.featured, isTrue);
+    expect(requestedUri?.queryParameters['estado'], 'eq.publicado');
+    expect(requestedUri?.queryParameters['activo'], 'eq.true');
+    expect(requestedUri?.queryParameters['destacado'], 'eq.true');
+    expect(requestedUri?.queryParameters['limit'], '1');
+    expect(requestedUri?.queryParameters, isNot(contains('offset')));
+  });
+
   test('usa las firmas RPC reales para crear, administrar y eliminar',
       () async {
     final calls = <String, Map<String, dynamic>>{};
