@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -85,8 +86,7 @@ class SupabaseCatalogRepository implements CatalogRepository {
     final safeUser = userId == null
         ? 'null'
         : userId.substring(userId.length > 8 ? userId.length - 8 : 0);
-    // ignore: avoid_print
-    print(
+    debugPrint(
       '[catalog-diagnostic repository] session=${session != null} '
       'userSuffix=$safeUser organization=$organization '
       'expiresAt=${session?.expiresAt}',
@@ -99,8 +99,7 @@ class SupabaseCatalogRepository implements CatalogRepository {
         .eq('destacado', true)
         .limit(1)
         .maybeSingle();
-    // ignore: avoid_print
-    print(
+    debugPrint(
       '[catalog-diagnostic repository] remoteResult='
       '${row == null ? 'null' : {
           'id': row['id'],
