@@ -1,6 +1,6 @@
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart';
 
@@ -56,9 +56,10 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   String? _error;
   String? _featuredError;
 
-  void _trace(String event) => debugPrint(
-        '[catalog-diagnostic instance=$_instanceId] $event',
-      );
+  void _trace(String event) {
+    // ignore: avoid_print
+    print('[catalog-diagnostic instance=$_instanceId] $event');
+  }
 
   @override
   void initState() {
