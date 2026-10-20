@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -74,6 +75,22 @@ class SupabaseCatalogRepository implements CatalogRepository {
 
   @override
   Future<Catalog?> getFeatured() async {
+    final session = _client.auth.currentSession;
+    Object? organization;
+    try {
+      organization = await _client.rpc('current_organization_id');
+    } catch (error) {
+      organization = 'rpc-error:${error.runtimeType}';
+    }
+    final userId = session?.user.id;
+    final safeUser = userId == null
+        ? 'null'
+        : userId.substring(userId.length > 8 ? userId.length - 8 : 0);
+    debugPrint(
+      '[catalog-diagnostic repository] session=${session != null} '
+      'userSuffix=$safeUser organization=$organization '
+      'expiresAt=${session?.expiresAt}',
+    );
     final row = await _client
         .from('catalogos_con_etiquetas')
         .select()
@@ -82,6 +99,16 @@ class SupabaseCatalogRepository implements CatalogRepository {
         .eq('destacado', true)
         .limit(1)
         .maybeSingle();
+    debugPrint(
+      '[catalog-diagnostic repository] remoteResult='
+      '${row == null ? 'null' : {
+          'id': row['id'],
+          'organization_id': row['organization_id'],
+          'estado': row['estado'],
+          'activo': row['activo'],
+          'destacado': row['destacado'],
+        }}',
+    );
     return row == null ? null : Catalog.fromJson(row);
   }
 
