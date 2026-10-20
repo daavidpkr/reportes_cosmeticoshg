@@ -10,6 +10,9 @@ set(BINARY_NAME "reportes_cosmeticoshg")
 # versions of CMake.
 cmake_policy(VERSION 3.14...3.25)
 
+# Version used by pdfx's Windows PDFium package.
+set(PDFIUM_VERSION "4638" CACHE STRING "")
+
 # Define build configuration option.
 get_property(IS_MULTICONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
 if(IS_MULTICONFIG)

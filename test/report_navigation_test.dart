@@ -12,6 +12,7 @@ void main() {
     expect(mobileNavigationIndex(ReportDestination.clients), 2);
     expect(mobileNavigationIndex(ReportDestination.calendar), 3);
     expect(mobileNavigationIndex(ReportDestination.sellers), isNull);
+    expect(mobileNavigationIndex(ReportDestination.catalogs), isNull);
   });
 
   test('mobile selection and visible destination use the same mapping', () {
@@ -56,6 +57,7 @@ void main() {
     expect(isPrimaryReportDestination(ReportDestination.statistics), isFalse);
     expect(
         isPrimaryReportDestination(ReportDestination.invoiceImport), isFalse);
+    expect(isPrimaryReportDestination(ReportDestination.catalogs), isFalse);
   });
 
   test('ordena referencias naturalmente sin modificar sus ceros', () {

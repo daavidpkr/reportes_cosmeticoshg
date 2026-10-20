@@ -1,6 +1,7 @@
 import 'package:cosmeticos_hg_reportes/services/document_download_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'dart:io';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -66,5 +67,30 @@ void main() {
         ),
       ),
     );
+  });
+
+  test('Windows no sobrescribe una descarga existente', () async {
+    final directory =
+        await Directory.systemTemp.createTemp('catalog-download-');
+    addTearDown(() => directory.delete(recursive: true));
+    await File('${directory.path}${Platform.pathSeparator}catalogo.pdf')
+        .writeAsBytes([9]);
+    final service = DocumentDownloadService(
+      platformOverride: TargetPlatform.windows,
+      documentsDirectory: () async => directory,
+    );
+
+    final saved = await service.save(
+      bytes: Uint8List.fromList([1, 2, 3]),
+      fileName: 'catalogo.pdf',
+      mimeType: 'application/pdf',
+    );
+
+    expect(saved.name, 'catalogo (1).pdf');
+    expect(await File(saved.location).readAsBytes(), [1, 2, 3]);
+    expect(
+        await File('${directory.path}${Platform.pathSeparator}catalogo.pdf')
+            .readAsBytes(),
+        [9]);
   });
 }

@@ -6,6 +6,8 @@ list(APPEND FLUTTER_PLUGIN_LIST
   app_links
   desktop_drop
   firebase_core
+  pdfx
+  share_plus
   url_launcher_windows
 )
 

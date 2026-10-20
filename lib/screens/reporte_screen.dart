@@ -22,6 +22,7 @@ import '../services/vendedores_store.dart';
 import '../theme/hg_theme.dart';
 import 'carga_facturas_screen.dart';
 import 'cobros_mensuales_view.dart';
+import 'catalogs/catalogs_screen.dart';
 import 'clientes_screen.dart';
 import 'customer_history_screen.dart';
 import 'estadisticas_screen.dart';
@@ -65,7 +66,8 @@ const mobileReportNavigationDestinations = <NavigationDestination>[
 const mobileReportMenuSectionLabels = <String>[
   'Cobros mensuales',
   'Vendedores',
-  'Estadísticas'
+  'Estadísticas',
+  'Catálogos',
 ];
 
 enum ReportDestination {
@@ -77,6 +79,7 @@ enum ReportDestination {
   statistics,
   calendar,
   invoiceImport,
+  catalogs,
 }
 
 int? mobileNavigationIndex(ReportDestination destination) =>
@@ -164,6 +167,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       _destination == ReportDestination.invoiceImport;
   bool get _vistaBusquedaGeneral =>
       _destination == ReportDestination.globalSearch;
+  bool get _vistaCatalogos => _destination == ReportDestination.catalogs;
 
   void _navigate(ReportDestination destination) {
     if (_destination == destination) return;
@@ -2196,54 +2200,58 @@ class _ReporteScreenState extends State<ReporteScreen> {
         children: [
           _barraSuperior(),
           Expanded(
-            child: _vistaCalendario
-                ? PaymentCalendarView(
-                    key: ValueKey(widget.calendarRequestId),
-                    initialMonth: widget.initialCalendarDate,
-                    initialDate: widget.initialCalendarDate,
-                    onPaymentPersisted: _actualizarConsumidoresDeAbonos,
-                    onOpenInvoiceDetail: _abrirDetalleDesdePerfil)
-                : _vistaCargaFacturas
-                    ? CargaFacturasView(
-                        key: ValueKey(_reportes.activo.id),
-                        mes: _reportes.activo.mes,
-                        anio: _reportes.activo.anio,
-                        onVolver: _goBack,
-                        onFacturasGuardadas: _actualizarDesdeSupabase,
-                        vendedores: _vendedores.vendedores,
-                      )
-                    : _vistaClientes
-                        ? ClientesScreen(
-                            onOpenInvoiceDetail: _abrirDetalleDesdePerfil)
-                        : _vistaBusquedaGeneral
-                            ? _busquedaGeneral()
-                            : _vistaVendedores
-                                ? VendedoresContent(store: _vendedores)
-                                : _vistaEstadisticas
-                                    ? const EstadisticasScreen()
-                                    : _vistaCobrosMensuales
-                                        ? CobrosMensualesView(
-                                            key: ValueKey(
-                                                _versionCobrosMensuales),
-                                          )
-                                        : LayoutBuilder(
-                                            builder: (context, constraints) {
-                                              final layout =
-                                                  ReportResponsiveLayout
-                                                      .forWidth(
-                                                constraints.maxWidth,
-                                              );
-                                              return ReportDesktopFrame(
-                                                layout: layout,
-                                                header:
-                                                    _encabezadoPagina(layout),
-                                                kpis: _tarjetasResumen(layout),
-                                                toolbar:
-                                                    _barraRedisenada(layout),
-                                                table: _tarjetaTabla(),
-                                              );
-                                            },
-                                          ),
+            child: _vistaCatalogos
+                ? const CatalogsScreen()
+                : _vistaCalendario
+                    ? PaymentCalendarView(
+                        key: ValueKey(widget.calendarRequestId),
+                        initialMonth: widget.initialCalendarDate,
+                        initialDate: widget.initialCalendarDate,
+                        onPaymentPersisted: _actualizarConsumidoresDeAbonos,
+                        onOpenInvoiceDetail: _abrirDetalleDesdePerfil)
+                    : _vistaCargaFacturas
+                        ? CargaFacturasView(
+                            key: ValueKey(_reportes.activo.id),
+                            mes: _reportes.activo.mes,
+                            anio: _reportes.activo.anio,
+                            onVolver: _goBack,
+                            onFacturasGuardadas: _actualizarDesdeSupabase,
+                            vendedores: _vendedores.vendedores,
+                          )
+                        : _vistaClientes
+                            ? ClientesScreen(
+                                onOpenInvoiceDetail: _abrirDetalleDesdePerfil)
+                            : _vistaBusquedaGeneral
+                                ? _busquedaGeneral()
+                                : _vistaVendedores
+                                    ? VendedoresContent(store: _vendedores)
+                                    : _vistaEstadisticas
+                                        ? const EstadisticasScreen()
+                                        : _vistaCobrosMensuales
+                                            ? CobrosMensualesView(
+                                                key: ValueKey(
+                                                    _versionCobrosMensuales),
+                                              )
+                                            : LayoutBuilder(
+                                                builder:
+                                                    (context, constraints) {
+                                                  final layout =
+                                                      ReportResponsiveLayout
+                                                          .forWidth(
+                                                    constraints.maxWidth,
+                                                  );
+                                                  return ReportDesktopFrame(
+                                                    layout: layout,
+                                                    header: _encabezadoPagina(
+                                                        layout),
+                                                    kpis: _tarjetasResumen(
+                                                        layout),
+                                                    toolbar: _barraRedisenada(
+                                                        layout),
+                                                    table: _tarjetaTabla(),
+                                                  );
+                                                },
+                                              ),
           ),
         ],
       ),

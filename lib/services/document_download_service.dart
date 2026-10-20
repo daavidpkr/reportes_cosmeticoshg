@@ -86,10 +86,22 @@ class DocumentDownloadService {
     }
 
     final directory = await _documentsDirectory();
-    final file = File(
-      '${directory.path}${Platform.pathSeparator}$cleanName',
-    );
+    var file = File('${directory.path}${Platform.pathSeparator}$cleanName');
+    if (await file.exists()) {
+      final dot = cleanName.lastIndexOf('.');
+      final base = dot > 0 ? cleanName.substring(0, dot) : cleanName;
+      final extension = dot > 0 ? cleanName.substring(dot) : '';
+      var suffix = 1;
+      do {
+        file = File(
+            '${directory.path}${Platform.pathSeparator}$base ($suffix)$extension');
+        suffix++;
+      } while (await file.exists());
+    }
     await file.writeAsBytes(bytes, flush: true);
-    return SavedDocument(name: cleanName, location: file.path);
+    return SavedDocument(
+      name: file.path.split(Platform.pathSeparator).last,
+      location: file.path,
+    );
   }
 }
