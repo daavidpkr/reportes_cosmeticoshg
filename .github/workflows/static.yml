@@ -44,6 +44,9 @@ jobs:
         # obsoleto. La caché privada de catálogos usa CacheStorage aparte.
         run: flutter build web --release --base-href "/reportes_cosmeticoshg/" --pwa-strategy=none
 
+      - name: Retirar service worker anterior
+        run: cp web/flutter_service_worker_cleanup.js build/web/flutter_service_worker.js
+
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5
 
