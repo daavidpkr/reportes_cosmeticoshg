@@ -749,20 +749,31 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         child: Container(
           constraints: BoxConstraints(minHeight: mobile ? 190 : 255),
           decoration: BoxDecoration(
-            gradient:
-                LinearGradient(colors: [context.hg.burgundy, context.hg.plum]),
             borderRadius: BorderRadius.circular(22),
           ),
           clipBehavior: Clip.antiAlias,
-          child: mobile
-              ? Row(children: [
-                  Expanded(flex: 4, child: _coverWidget(catalog)),
-                  Expanded(flex: 6, child: _featuredText(catalog))
-                ])
-              : Row(children: [
-                  Expanded(flex: 4, child: _coverWidget(catalog)),
-                  Expanded(flex: 7, child: _featuredText(catalog))
-                ]),
+          child: Stack(
+            fit: StackFit.passthrough,
+            children: [
+              Positioned.fill(
+                child: CustomPaint(
+                  painter: _CatalogBannerPainter(
+                    context.hg.burgundy,
+                    context.hg.plum,
+                  ),
+                ),
+              ),
+              mobile
+                  ? Row(children: [
+                      Expanded(flex: 4, child: _coverWidget(catalog)),
+                      Expanded(flex: 6, child: _featuredText(catalog)),
+                    ])
+                  : Row(children: [
+                      Expanded(flex: 4, child: _coverWidget(catalog)),
+                      Expanded(flex: 7, child: _featuredText(catalog)),
+                    ]),
+            ],
+          ),
         ),
       );
 
@@ -991,6 +1002,32 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     }
     return 'image/png';
   }
+}
+
+class _CatalogBannerPainter extends CustomPainter {
+  const _CatalogBannerPainter(this.start, this.end);
+
+  final Color start;
+  final Color end;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    const bands = 128;
+    final bandWidth = size.width / bands;
+    final paint = Paint();
+    for (var index = 0; index < bands; index++) {
+      paint.color = Color.lerp(start, end, index / (bands - 1)) ?? start;
+      canvas.drawRect(
+        Rect.fromLTWH(index * bandWidth, 0, bandWidth + 0.5, size.height),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CatalogBannerPainter oldDelegate) =>
+      oldDelegate.start != start || oldDelegate.end != end;
 }
 
 class _CatalogFormResult {

@@ -57,8 +57,13 @@ void main() {
     );
     addTearDown(client.dispose);
 
-    final featured =
-        await SupabaseCatalogRepository(client: client).getFeatured();
+    final featured = await SupabaseCatalogRepository(
+      client: client,
+      queryContextProvider: () async => (
+        userId: 'user',
+        organizationId: catalogJson()['organization_id']! as String,
+      ),
+    ).getFeatured();
 
     expect(featured?.featured, isTrue);
     expect(requestedUri?.queryParameters['estado'], 'eq.publicado');
@@ -66,6 +71,64 @@ void main() {
     expect(requestedUri?.queryParameters['destacado'], 'eq.true');
     expect(requestedUri?.queryParameters['limit'], '1');
     expect(requestedUri?.queryParameters, isNot(contains('offset')));
+  });
+
+  test('confirma dos veces un destacado ausente en el mismo contexto',
+      () async {
+    var catalogRequests = 0;
+    var contextRequests = 0;
+    final client = SupabaseClient(
+      'https://example.supabase.co',
+      'anon-key',
+      accessToken: () async => 'session-token',
+      httpClient: MockClient((request) async {
+        catalogRequests++;
+        return http.Response(
+          'null',
+          200,
+          headers: {'content-type': 'application/json'},
+          request: request,
+        );
+      }),
+    );
+    addTearDown(client.dispose);
+    final repository = SupabaseCatalogRepository(
+      client: client,
+      queryContextProvider: () async {
+        contextRequests++;
+        return (userId: 'user', organizationId: 'organization');
+      },
+    );
+
+    expect(await repository.getFeatured(), isNull);
+    expect(catalogRequests, 2);
+    expect(contextRequests, 3);
+  });
+
+  test('rechaza un null si cambia la sesión u organización', () async {
+    var contextRequests = 0;
+    final client = SupabaseClient(
+      'https://example.supabase.co',
+      'anon-key',
+      accessToken: () async => 'session-token',
+      httpClient: MockClient((request) async => http.Response(
+            'null',
+            200,
+            headers: {'content-type': 'application/json'},
+            request: request,
+          )),
+    );
+    addTearDown(client.dispose);
+    final repository = SupabaseCatalogRepository(
+      client: client,
+      queryContextProvider: () async => (
+        userId: 'user',
+        organizationId:
+            contextRequests++ == 0 ? 'organization-a' : 'organization-b',
+      ),
+    );
+
+    await expectLater(repository.getFeatured(), throwsStateError);
   });
 
   test('usa las firmas RPC reales para crear, administrar y eliminar',

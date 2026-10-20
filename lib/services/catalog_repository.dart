@@ -6,6 +6,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/catalog.dart';
 import 'catalog_file_error.dart';
 
+typedef CatalogQueryContext = ({String userId, String organizationId});
+typedef CatalogQueryContextProvider = Future<CatalogQueryContext> Function();
+
 class CatalogDraft {
   const CatalogDraft({
     required this.id,
@@ -55,12 +58,17 @@ abstract class CatalogRepository {
 }
 
 class SupabaseCatalogRepository implements CatalogRepository {
-  SupabaseCatalogRepository({SupabaseClient? client, http.Client? httpClient})
-      : _client = client ?? Supabase.instance.client,
+  SupabaseCatalogRepository({
+    SupabaseClient? client,
+    http.Client? httpClient,
+    CatalogQueryContextProvider? queryContextProvider,
+  })  : _queryContextProvider = queryContextProvider,
+        _client = client ?? Supabase.instance.client,
         _http = httpClient ?? http.Client();
 
   final SupabaseClient _client;
   final http.Client _http;
+  final CatalogQueryContextProvider? _queryContextProvider;
 
   @override
   Future<Catalog?> getById(String id) async {
@@ -74,15 +82,67 @@ class SupabaseCatalogRepository implements CatalogRepository {
 
   @override
   Future<Catalog?> getFeatured() async {
-    final row = await _client
-        .from('catalogos_con_etiquetas')
-        .select()
-        .eq('estado', 'publicado')
-        .eq('activo', true)
-        .eq('destacado', true)
-        .limit(1)
-        .maybeSingle();
-    return row == null ? null : Catalog.fromJson(row);
+    final initialContext = await _featuredQueryContext();
+    final row = await _queryFeatured();
+    if (row != null) {
+      final catalog = Catalog.fromJson(row);
+      if (catalog.organizationId != initialContext.organizationId) {
+        throw StateError(
+          'El catálogo destacado no pertenece a la organización activa.',
+        );
+      }
+      return catalog;
+    }
+
+    final confirmationContext = await _featuredQueryContext();
+    if (confirmationContext != initialContext) {
+      throw StateError(
+        'La sesión u organización cambió durante la consulta.',
+      );
+    }
+    final confirmedRow = await _queryFeatured();
+    final finalContext = await _featuredQueryContext();
+    if (finalContext != initialContext) {
+      throw StateError(
+        'La sesión u organización cambió durante la confirmación.',
+      );
+    }
+    if (confirmedRow == null) return null;
+    final confirmed = Catalog.fromJson(confirmedRow);
+    if (confirmed.organizationId != initialContext.organizationId) {
+      throw StateError(
+        'El catálogo confirmado no pertenece a la organización activa.',
+      );
+    }
+    return confirmed;
+  }
+
+  Future<Map<String, dynamic>?> _queryFeatured() => _client
+      .from('catalogos_con_etiquetas')
+      .select()
+      .eq('estado', 'publicado')
+      .eq('activo', true)
+      .eq('destacado', true)
+      .limit(1)
+      .maybeSingle();
+
+  Future<CatalogQueryContext> _featuredQueryContext() async {
+    if (_queryContextProvider case final provider?) return provider();
+    final userBefore = _client.auth.currentUser?.id;
+    if (userBefore == null) {
+      throw StateError('No hay una sesión activa para consultar catálogos.');
+    }
+    final organization = await _client.rpc('current_organization_id');
+    final userAfter = _client.auth.currentUser?.id;
+    final organizationId = organization?.toString();
+    if (userAfter != userBefore ||
+        organizationId == null ||
+        organizationId.isEmpty) {
+      throw StateError(
+        'No se pudo confirmar la sesión y organización activas.',
+      );
+    }
+    return (userId: userBefore, organizationId: organizationId);
   }
 
   @override
