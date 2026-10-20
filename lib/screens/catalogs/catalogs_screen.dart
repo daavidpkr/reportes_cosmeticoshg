@@ -563,80 +563,92 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
               key: const Key('catalogs-scroll'),
               controller: _scroll,
               slivers: [
-                SliverPadding(
-                  padding: EdgeInsets.fromLTRB(
-                      mobile ? 16 : 32, 28, mobile ? 16 : 32, 18),
-                  sliver: SliverToBoxAdapter(child: _header(mobile)),
-                ),
-                if (_error != null)
-                  SliverPadding(
-                    padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
-                    sliver: SliverToBoxAdapter(child: _notice()),
-                  ),
-                if (_featuredError != null)
-                  SliverPadding(
-                    padding: EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
-                    sliver: SliverToBoxAdapter(child: _featuredNotice()),
-                  ),
-                if (_featuredCatalog case final featured?)
-                  SliverPadding(
+                SliverList.list(children: [
+                  Padding(
                     padding: EdgeInsets.fromLTRB(
-                        mobile ? 16 : 32, 6, mobile ? 16 : 32, 22),
-                    sliver:
-                        SliverToBoxAdapter(child: _featured(featured, mobile)),
-                  )
-                else if (_featuredLoading)
-                  const SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 32),
-                      child: LinearProgressIndicator(),
+                      mobile ? 16 : 32,
+                      28,
+                      mobile ? 16 : 32,
+                      18,
                     ),
+                    child: _header(mobile),
                   ),
-                if (_loading)
-                  const SliverToBoxAdapter(
-                    child: SizedBox(
-                      height: 220,
+                  if (_error != null)
+                    Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
+                      child: _notice(),
+                    ),
+                  if (_featuredError != null)
+                    Padding(
+                      padding:
+                          EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
+                      child: _featuredNotice(),
+                    ),
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      mobile ? 16 : 32,
+                      6,
+                      mobile ? 16 : 32,
+                      22,
+                    ),
+                    child: switch (_featuredCatalog) {
+                      final featured? => _featured(featured, mobile),
+                      null when _featuredLoading =>
+                        const LinearProgressIndicator(),
+                      null => const SizedBox.shrink(),
+                    },
+                  ),
+                  _catalogBody(mobile),
+                  if (_loadingMore)
+                    const Padding(
+                      padding: EdgeInsets.all(20),
                       child: Center(child: CircularProgressIndicator()),
                     ),
-                  )
-                else if (_catalogs.isEmpty)
-                  SliverToBoxAdapter(child: _empty())
-                else ...[
-                  SliverPadding(
-                    padding: EdgeInsets.fromLTRB(
-                        mobile ? 16 : 32, 0, mobile ? 16 : 32, 28),
-                    sliver: mobile
-                        ? SliverList.separated(
-                            itemCount: _catalogs.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 12),
-                            itemBuilder: (_, index) =>
-                                _card(_catalogs[index], true),
-                          )
-                        : SliverGrid.builder(
-                            itemCount: _catalogs.length,
-                            gridDelegate:
-                                const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 310,
-                              mainAxisExtent: 430,
-                              mainAxisSpacing: 18,
-                              crossAxisSpacing: 18,
-                            ),
-                            itemBuilder: (_, index) =>
-                                _card(_catalogs[index], false),
-                          ),
-                  ),
-                  if (_loadingMore)
-                    const SliverToBoxAdapter(
-                        child: Padding(
-                            padding: EdgeInsets.all(20),
-                            child: Center(child: CircularProgressIndicator()))),
-                ],
+                ]),
               ],
             ),
           ),
         );
       });
+
+  Widget _catalogBody(bool mobile) {
+    if (_loading) {
+      return const SizedBox(
+        height: 220,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_catalogs.isEmpty) return _empty();
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        mobile ? 16 : 32,
+        0,
+        mobile ? 16 : 32,
+        28,
+      ),
+      child: mobile
+          ? ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _catalogs.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (_, index) => _card(_catalogs[index], true),
+            )
+          : GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _catalogs.length,
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 310,
+                mainAxisExtent: 430,
+                mainAxisSpacing: 18,
+                crossAxisSpacing: 18,
+              ),
+              itemBuilder: (_, index) => _card(_catalogs[index], false),
+            ),
+    );
+  }
 
   Widget _header(bool mobile) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
