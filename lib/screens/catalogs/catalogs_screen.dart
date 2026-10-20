@@ -756,11 +756,16 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
             fit: StackFit.passthrough,
             children: [
               Positioned.fill(
-                child: CustomPaint(
-                  painter: _CatalogBannerPainter(
-                    context.hg.burgundy,
-                    context.hg.plum,
-                  ),
+                child: Row(
+                  children: List.generate(64, (index) {
+                    final color = Color.lerp(
+                          context.hg.burgundy,
+                          context.hg.plum,
+                          index / 63,
+                        ) ??
+                        context.hg.burgundy;
+                    return Expanded(child: ColoredBox(color: color));
+                  }),
                 ),
               ),
               mobile
@@ -1002,32 +1007,6 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     }
     return 'image/png';
   }
-}
-
-class _CatalogBannerPainter extends CustomPainter {
-  const _CatalogBannerPainter(this.start, this.end);
-
-  final Color start;
-  final Color end;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (size.isEmpty) return;
-    const bands = 128;
-    final bandWidth = size.width / bands;
-    final paint = Paint();
-    for (var index = 0; index < bands; index++) {
-      paint.color = Color.lerp(start, end, index / (bands - 1)) ?? start;
-      canvas.drawRect(
-        Rect.fromLTWH(index * bandWidth, 0, bandWidth + 0.5, size.height),
-        paint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _CatalogBannerPainter oldDelegate) =>
-      oldDelegate.start != start || oldDelegate.end != end;
 }
 
 class _CatalogFormResult {
