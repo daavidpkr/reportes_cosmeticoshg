@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/catalog.dart';
+import 'catalog_file_error.dart';
 
 class CatalogDraft {
   const CatalogDraft({
@@ -106,13 +107,41 @@ class SupabaseCatalogRepository implements CatalogRepository {
   @override
   Future<Uint8List> download(String path,
       {void Function(double)? onProgress}) async {
-    final signed =
-        await _client.storage.from('catalogos').createSignedUrl(path, 300);
-    final request = http.Request('GET', Uri.parse(signed));
-    final response = await _http.send(request);
+    late final String signed;
+    try {
+      signed =
+          await _client.storage.from('catalogos').createSignedUrl(path, 300);
+    } catch (error) {
+      logCatalogFileError(CatalogFileStage.signedUrl, error);
+      throw CatalogFileException(
+        stage: CatalogFileStage.signedUrl,
+        userMessage:
+            'No se pudo autorizar la descarga. Actualiza tu sesión e inténtalo nuevamente.',
+        detail: sanitizeCatalogError(error),
+      );
+    }
+    late final http.StreamedResponse response;
+    try {
+      response = await _http.send(http.Request('GET', Uri.parse(signed)));
+    } catch (error) {
+      logCatalogFileError(CatalogFileStage.httpDownload, error);
+      throw CatalogFileException(
+        stage: CatalogFileStage.httpDownload,
+        userMessage:
+            'No se pudo conectar con el archivo. Revisa la conexión e inténtalo nuevamente.',
+        detail: sanitizeCatalogError(error),
+      );
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw StateError(
-          'No se pudo descargar el archivo (${response.statusCode}).');
+      final error = CatalogFileException(
+        stage: CatalogFileStage.httpDownload,
+        httpStatus: response.statusCode,
+        userMessage:
+            'El servidor no pudo entregar el PDF (HTTP ${response.statusCode}).',
+      );
+      logCatalogFileError(CatalogFileStage.httpDownload, error,
+          httpStatus: response.statusCode);
+      throw error;
     }
     final bytes = BytesBuilder(copy: false);
     var received = 0;
@@ -123,12 +152,37 @@ class SupabaseCatalogRepository implements CatalogRepository {
         onProgress?.call(received / total);
       }
     }
+    final result = bytes.takeBytes();
+    if (path.toLowerCase().endsWith('.pdf') && !isValidPdfBytes(result)) {
+      final error = CatalogFileException(
+        stage: CatalogFileStage.validation,
+        httpStatus: response.statusCode,
+        userMessage: result.isEmpty
+            ? 'El PDF publicado está vacío. Reemplázalo desde Editar catálogo.'
+            : 'El archivo publicado no contiene un PDF válido.',
+      );
+      logCatalogFileError(CatalogFileStage.validation, error,
+          httpStatus: response.statusCode);
+      throw error;
+    }
     onProgress?.call(1);
-    return bytes.takeBytes();
+    return result;
   }
 
   @override
   Future<void> upload(String path, Uint8List bytes, String contentType) async {
+    if (contentType == 'application/pdf' && !isValidPdfBytes(bytes)) {
+      throw const CatalogFileException(
+        stage: CatalogFileStage.validation,
+        userMessage: 'El PDF está vacío o no es válido.',
+      );
+    }
+    if (bytes.isEmpty) {
+      throw const CatalogFileException(
+        stage: CatalogFileStage.validation,
+        userMessage: 'El archivo que se intenta subir está vacío.',
+      );
+    }
     await _client.storage.from('catalogos').uploadBinary(
           path,
           bytes,

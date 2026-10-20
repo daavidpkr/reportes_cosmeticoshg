@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/catalog.dart';
 import 'catalog_cache_backend.dart';
+import 'catalog_file_error.dart';
 
 class CachedCatalogFile {
   const CachedCatalogFile({
@@ -53,8 +54,9 @@ class CatalogCacheService {
 
   Future<bool> isDownloaded(Catalog catalog) async {
     final version = await cachedVersion(catalog.id);
-    return version != null &&
-        await _backend.read(_pdfKey(catalog.id, version)) != null;
+    if (version == null) return false;
+    final bytes = await _backend.read(_pdfKey(catalog.id, version));
+    return bytes != null && isValidPdfBytes(bytes);
   }
 
   Future<List<Catalog>> cachedCatalogs() async {
@@ -73,6 +75,15 @@ class CatalogCacheService {
     if (version == null) return null;
     final bytes = await _backend.read(_pdfKey(current.id, version));
     if (bytes == null) return null;
+    if (!isValidPdfBytes(bytes)) {
+      await removeLocal(current.id);
+      logCatalogFileError(
+        CatalogFileStage.cache,
+        const FormatException('PDF inválido en caché'),
+        catalogId: current.id,
+      );
+      return null;
+    }
     return CachedCatalogFile(
       catalog: current,
       cachedVersion: version,
@@ -82,6 +93,12 @@ class CatalogCacheService {
   }
 
   Future<void> store(Catalog catalog, Uint8List pdf, {Uint8List? cover}) async {
+    if (!isValidPdfBytes(pdf)) {
+      throw const CatalogFileException(
+        stage: CatalogFileStage.cache,
+        userMessage: 'No se guardó un PDF inválido en la caché.',
+      );
+    }
     final metadata = await _metadata();
     final previous = (metadata[catalog.id] as Map?)?['cached_version'] as num?;
     await _backend.write(_pdfKey(catalog.id, catalog.version), pdf);

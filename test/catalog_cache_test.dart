@@ -24,6 +24,9 @@ class _Backend extends CatalogCacheBackend {
   }
 }
 
+Uint8List pdfBytes(int marker) =>
+    Uint8List.fromList([...'%PDF-1.7\n'.codeUnits, marker]);
+
 Catalog version(int value) => Catalog(
       id: 'id',
       organizationId: 'org',
@@ -46,17 +49,27 @@ void main() {
   test('reemplaza la caché sólo después de guardar la versión nueva', () async {
     final backend = _Backend();
     final cache = CatalogCacheService(backend: backend);
-    await cache.store(version(1), Uint8List.fromList([1]));
+    await cache.store(version(1), pdfBytes(1));
     backend.failingKey = 'id/v2/catalogo.pdf';
 
-    await expectLater(
-        cache.store(version(2), Uint8List.fromList([2])), throwsStateError);
+    await expectLater(cache.store(version(2), pdfBytes(2)), throwsStateError);
     expect((await cache.open(version(2)))?.cachedVersion, 1);
-    expect(backend.files['id/v1/catalogo.pdf'], [1]);
+    expect(backend.files['id/v1/catalogo.pdf'], pdfBytes(1));
 
     backend.failingKey = null;
-    await cache.store(version(2), Uint8List.fromList([2]));
+    await cache.store(version(2), pdfBytes(2));
     expect((await cache.open(version(2)))?.cachedVersion, 2);
+    expect(backend.files.containsKey('id/v1/catalogo.pdf'), isFalse);
+  });
+
+  test('descarta un PDF vacío o corrupto de la caché', () async {
+    final backend = _Backend();
+    final cache = CatalogCacheService(backend: backend);
+    await cache.store(version(1), pdfBytes(1));
+    backend.files['id/v1/catalogo.pdf'] = Uint8List(0);
+
+    expect(await cache.open(version(1)), isNull);
+    expect(await cache.isDownloaded(version(1)), isFalse);
     expect(backend.files.containsKey('id/v1/catalogo.pdf'), isFalse);
   });
 

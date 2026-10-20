@@ -5,6 +5,7 @@ import 'package:cosmeticos_hg_reportes/screens/catalogs/catalogs_screen.dart';
 import 'package:cosmeticos_hg_reportes/services/catalog_cache_backend.dart';
 import 'package:cosmeticos_hg_reportes/services/catalog_cache_service.dart';
 import 'package:cosmeticos_hg_reportes/services/catalog_repository.dart';
+import 'package:cosmeticos_hg_reportes/services/document_download_service.dart';
 import 'package:cosmeticos_hg_reportes/theme/hg_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -23,6 +24,7 @@ class _MemoryBackend extends CatalogCacheBackend {
 }
 
 class _Repository implements CatalogRepository {
+  int downloadCalls = 0;
   final item = Catalog(
     id: 'id',
     organizationId: 'org',
@@ -51,8 +53,11 @@ class _Repository implements CatalogRepository {
       offset == 0 ? [item] : [];
   @override
   Future<Uint8List> download(String path,
-          {void Function(double p1)? onProgress}) async =>
-      Uint8List.fromList([1]);
+      {void Function(double p1)? onProgress}) async {
+    downloadCalls++;
+    return Uint8List.fromList('%PDF-1.7\ncontenido'.codeUnits);
+  }
+
   @override
   Future<void> removeObjects(Iterable<String> paths) async {}
   @override
@@ -84,6 +89,20 @@ class _Repository implements CatalogRepository {
   Future<Catalog> setFeatured(String id) => throw UnimplementedError();
 }
 
+class _Downloads extends DocumentDownloadService {
+  int saveCalls = 0;
+
+  @override
+  Future<SavedDocument> save({
+    required Uint8List bytes,
+    required String fileName,
+    required String mimeType,
+  }) async {
+    saveCalls++;
+    return SavedDocument(name: fileName, location: fileName);
+  }
+}
+
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
@@ -110,4 +129,36 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('Descargar reutiliza el PDF versionado de la caché',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _Repository();
+    final cache = CatalogCacheService(backend: _MemoryBackend());
+    final downloads = _Downloads();
+    await cache.store(
+      repository.item,
+      Uint8List.fromList('%PDF-1.7\ncontenido'.codeUnits),
+    );
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData.light().copyWith(
+        extensions: const [HgThemeColors.light],
+      ),
+      home: Scaffold(
+        body: CatalogsScreen(
+          repository: repository,
+          cache: cache,
+          downloads: downloads,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Descargar').first);
+    await tester.pumpAndSettle();
+
+    expect(repository.downloadCalls, 0);
+    expect(downloads.saveCalls, 1);
+  });
 }

@@ -1,13 +1,16 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../models/catalog.dart';
 import '../../services/catalog_external_open.dart';
+import '../../services/catalog_file_error.dart';
 import '../../services/document_download_service.dart';
 import '../../theme/hg_theme.dart';
+
+bool usesPinchCatalogViewer(TargetPlatform platform, {required bool isWeb}) =>
+    isWeb || platform != TargetPlatform.windows;
 
 class CatalogViewerScreen extends StatefulWidget {
   const CatalogViewerScreen({
@@ -30,7 +33,8 @@ class CatalogViewerScreen extends StatefulWidget {
 }
 
 class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
-  late final PdfControllerPinch _pdfController;
+  PdfControllerPinch? _pinchController;
+  PdfController? _simpleController;
   late final TextEditingController _pageController;
   int _page = 1;
   int _pages = 0;
@@ -38,15 +42,20 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
   @override
   void initState() {
     super.initState();
-    _pdfController =
-        PdfControllerPinch(document: PdfDocument.openData(widget.bytes));
+    final document = PdfDocument.openData(Uint8List.fromList(widget.bytes));
+    if (usesPinchCatalogViewer(defaultTargetPlatform, isWeb: kIsWeb)) {
+      _pinchController = PdfControllerPinch(document: document);
+    } else {
+      _simpleController = PdfController(document: document);
+    }
     _pageController = TextEditingController(text: '1');
   }
 
   @override
   void dispose() {
     _pageController.dispose();
-    _pdfController.dispose();
+    _pinchController?.dispose();
+    _simpleController?.dispose();
     super.dispose();
   }
 
@@ -60,7 +69,8 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
       );
       if (mounted) _message(saved.confirmationMessage);
     } catch (error) {
-      if (mounted) _message('No se pudo guardar: $error', error: true);
+      _actionError(
+          CatalogFileStage.export, error, 'No se pudo guardar el PDF.');
     }
   }
 
@@ -75,7 +85,8 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
         ],
       ));
     } catch (error) {
-      if (mounted) _message('No se pudo compartir: $error', error: true);
+      _actionError(
+          CatalogFileStage.export, error, 'No se pudo compartir el PDF.');
     }
   }
 
@@ -83,7 +94,8 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
     try {
       await openCatalogExternally(widget.bytes, widget.localPath);
     } catch (error) {
-      if (mounted) _message('$error', error: true);
+      _actionError(CatalogFileStage.export, error,
+          'No se pudo abrir el PDF con otra aplicación.');
     }
   }
 
@@ -93,30 +105,122 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
         backgroundColor: error ? context.hg.danger : null,
       ));
 
+  void _actionError(CatalogFileStage stage, Object error, String userMessage) {
+    logCatalogFileError(stage, error, catalogId: widget.catalog.id);
+    if (mounted) _message(userMessage, error: true);
+  }
+
   void _goToPage() {
     final value = int.tryParse(_pageController.text);
     if (value == null || value < 1 || value > _pages) {
       _message('Ingresa una página entre 1 y $_pages.', error: true);
       return;
     }
-    _pdfController.animateToPage(
-        pageNumber: value,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut);
+    _animateToPage(value);
   }
 
   void _zoom(double factor) {
-    final current = _pdfController.zoomRatio;
+    final controller = _pinchController;
+    if (controller == null) return;
+    final current = controller.zoomRatio;
     final target = (current * factor).clamp(1.0, 6.0);
     final change = target / current;
-    _pdfController.value = _pdfController.value.clone()
+    controller.value = controller.value.clone()
       ..scaleByDouble(change, change, change, 1);
   }
 
-  void _resetZoom() => _pdfController.animateToPage(
-      pageNumber: _page,
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut);
+  void _resetZoom() => _animateToPage(_page);
+
+  Future<void> _animateToPage(int page) => _pinchController != null
+      ? _pinchController!.animateToPage(
+          pageNumber: page,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        )
+      : _simpleController!.animateToPage(
+          page,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
+
+  Future<void> _previousPage() => _pinchController != null
+      ? _pinchController!.previousPage(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        )
+      : _simpleController!.previousPage(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
+
+  Future<void> _nextPage() => _pinchController != null
+      ? _pinchController!.nextPage(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        )
+      : _simpleController!.nextPage(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+        );
+
+  void _documentLoaded(PdfDocument document) {
+    if (mounted) setState(() => _pages = document.pagesCount);
+  }
+
+  void _pageChanged(int page) {
+    if (!mounted) return;
+    setState(() {
+      _page = page;
+      _pageController.text = '$page';
+    });
+  }
+
+  void _documentError(Object error) {
+    logCatalogFileError(CatalogFileStage.viewer, error,
+        catalogId: widget.catalog.id);
+  }
+
+  Widget _pdfViewer() {
+    final pinch = _pinchController;
+    if (pinch != null) {
+      return PdfViewPinch(
+        controller: pinch,
+        scrollDirection: Axis.vertical,
+        minScale: 1,
+        maxScale: 6,
+        onDocumentLoaded: _documentLoaded,
+        onDocumentError: _documentError,
+        onPageChanged: _pageChanged,
+        builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
+          options: const DefaultBuilderOptions(),
+          documentLoaderBuilder: (_) =>
+              const Center(child: CircularProgressIndicator()),
+          pageLoaderBuilder: (_) =>
+              const Center(child: CircularProgressIndicator()),
+          errorBuilder: (_, __) => const Center(
+            child: Text('No se pudo abrir el PDF descargado.'),
+          ),
+        ),
+      );
+    }
+    return PdfView(
+      controller: _simpleController!,
+      scrollDirection: Axis.horizontal,
+      onDocumentLoaded: _documentLoaded,
+      onDocumentError: _documentError,
+      onPageChanged: _pageChanged,
+      builders: PdfViewBuilders<DefaultBuilderOptions>(
+        options: const DefaultBuilderOptions(),
+        documentLoaderBuilder: (_) =>
+            const Center(child: CircularProgressIndicator()),
+        pageLoaderBuilder: (_) =>
+            const Center(child: CircularProgressIndicator()),
+        errorBuilder: (_, __) => const Center(
+          child: Text('No se pudo abrir el PDF descargado.'),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -154,27 +258,7 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
         Expanded(
           child: ColoredBox(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: PdfViewPinch(
-              controller: _pdfController,
-              scrollDirection: Axis.vertical,
-              minScale: 1,
-              maxScale: 6,
-              onDocumentLoaded: (document) =>
-                  setState(() => _pages = document.pagesCount),
-              onPageChanged: (page) => setState(() {
-                _page = page;
-                _pageController.text = '$page';
-              }),
-              builders: PdfViewPinchBuilders<DefaultBuilderOptions>(
-                options: const DefaultBuilderOptions(),
-                documentLoaderBuilder: (_) =>
-                    const Center(child: CircularProgressIndicator()),
-                pageLoaderBuilder: (_) =>
-                    const Center(child: CircularProgressIndicator()),
-                errorBuilder: (_, error) =>
-                    Center(child: Text('No se pudo mostrar el PDF: $error')),
-              ),
-            ),
+            child: _pdfViewer(),
           ),
         ),
         SafeArea(
@@ -187,11 +271,7 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
                 children: [
                   IconButton(
                     tooltip: 'Página anterior',
-                    onPressed: _page > 1
-                        ? () => _pdfController.previousPage(
-                            duration: const Duration(milliseconds: 180),
-                            curve: Curves.easeOut)
-                        : null,
+                    onPressed: _page > 1 ? _previousPage : null,
                     icon: const Icon(Icons.chevron_left),
                   ),
                   SizedBox(
@@ -210,26 +290,24 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
                       child: Text('de ${_pages == 0 ? '…' : _pages}')),
                   IconButton(
                     tooltip: 'Página siguiente',
-                    onPressed: _pages > 0 && _page < _pages
-                        ? () => _pdfController.nextPage(
-                            duration: const Duration(milliseconds: 180),
-                            curve: Curves.easeOut)
-                        : null,
+                    onPressed: _pages > 0 && _page < _pages ? _nextPage : null,
                     icon: const Icon(Icons.chevron_right),
                   ),
                   const SizedBox(width: 8),
-                  IconButton(
-                      tooltip: 'Alejar',
-                      onPressed: () => _zoom(.8),
-                      icon: const Icon(Icons.zoom_out)),
-                  IconButton(
-                      tooltip: 'Restablecer zoom',
-                      onPressed: _resetZoom,
-                      icon: const Icon(Icons.fit_screen_outlined)),
-                  IconButton(
-                      tooltip: 'Acercar',
-                      onPressed: () => _zoom(1.25),
-                      icon: const Icon(Icons.zoom_in)),
+                  if (_pinchController != null) ...[
+                    IconButton(
+                        tooltip: 'Alejar',
+                        onPressed: () => _zoom(.8),
+                        icon: const Icon(Icons.zoom_out)),
+                    IconButton(
+                        tooltip: 'Restablecer zoom',
+                        onPressed: _resetZoom,
+                        icon: const Icon(Icons.fit_screen_outlined)),
+                    IconButton(
+                        tooltip: 'Acercar',
+                        onPressed: () => _zoom(1.25),
+                        icon: const Icon(Icons.zoom_in)),
+                  ],
                 ]),
           ),
         ),

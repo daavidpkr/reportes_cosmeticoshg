@@ -7,6 +7,7 @@ import 'package:pdfx/pdfx.dart';
 
 import '../../models/catalog.dart';
 import '../../services/catalog_cache_service.dart';
+import '../../services/catalog_file_error.dart';
 import '../../services/catalog_repository.dart';
 import '../../services/document_download_service.dart';
 import '../../theme/hg_theme.dart';
@@ -134,23 +135,32 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
 
   Future<Uint8List?> _cover(Catalog catalog) async {
     if (_covers[catalog.id] case final cover?) return cover;
-    final cached = await _cache.cover(catalog);
-    if (cached != null) return _covers[catalog.id] = cached;
-    if (catalog.coverPath == null) return null;
     try {
+      final cached = await _cache.cover(catalog);
+      if (cached != null) return _covers[catalog.id] = cached;
+      if (catalog.coverPath == null) return null;
       return _covers[catalog.id] =
           await _repository.download(catalog.coverPath!);
-    } catch (_) {
+    } catch (error) {
+      logCatalogFileError(CatalogFileStage.cache, error, catalogId: catalog.id);
       return null;
     }
   }
 
   Future<CachedCatalogFile?> _ensureDownloaded(Catalog catalog) async {
-    final cached = await _cache.open(catalog);
+    CachedCatalogFile? cached;
+    try {
+      cached = await _cache.open(catalog);
+    } catch (error) {
+      logCatalogFileError(CatalogFileStage.cache, error, catalogId: catalog.id);
+    }
     if (cached != null && cached.cachedVersion == catalog.version) {
       return cached;
     }
-    if (catalog.filePath == null) return cached;
+    if (!catalog.canOpen) {
+      _message('Archivo pendiente de publicación.', error: true);
+      return cached;
+    }
     setState(() => _progress[catalog.id] = 0);
     try {
       final pdf = await _repository.download(
@@ -160,12 +170,44 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         },
       );
       final cover = catalog.coverPath == null ? null : await _cover(catalog);
-      await _cache.store(catalog, pdf, cover: cover);
+      try {
+        await _cache.store(catalog, pdf, cover: cover);
+      } catch (error) {
+        logCatalogFileError(CatalogFileStage.cache, error,
+            catalogId: catalog.id);
+        if (mounted) {
+          _message(
+              'El PDF se descargó, pero el navegador no pudo guardarlo sin conexión.');
+        }
+        return CachedCatalogFile(
+          catalog: catalog,
+          cachedVersion: catalog.version,
+          bytes: pdf,
+        );
+      }
       if (!mounted) return null;
       setState(() => _downloaded.add(catalog.id));
-      return _cache.open(catalog);
+      return await _cache.open(catalog) ??
+          CachedCatalogFile(
+            catalog: catalog,
+            cachedVersion: catalog.version,
+            bytes: pdf,
+          );
     } catch (error) {
-      if (mounted) _message('No se pudo descargar: $error', error: true);
+      final status = error is CatalogFileException ? error.httpStatus : null;
+      final stage = error is CatalogFileException
+          ? error.stage
+          : CatalogFileStage.httpDownload;
+      logCatalogFileError(stage, error,
+          httpStatus: status, catalogId: catalog.id);
+      if (mounted) {
+        _message(
+          error is CatalogFileException
+              ? error.userMessage
+              : 'No se pudo descargar el PDF. Inténtalo nuevamente.',
+          error: true,
+        );
+      }
       return cached;
     } finally {
       if (mounted) setState(() => _progress.remove(catalog.id));
@@ -174,12 +216,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
 
   Future<void> _view(Catalog catalog) async {
     final file = await _ensureDownloaded(catalog);
-    if (!mounted || file == null) {
-      if (mounted) {
-        _message('Este catálogo no está disponible sin conexión.', error: true);
-      }
-      return;
-    }
+    if (!mounted || file == null) return;
     await Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) => CatalogViewerScreen(
         catalog: catalog,
@@ -208,7 +245,11 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
       );
       if (mounted) _message(saved.confirmationMessage);
     } catch (error) {
-      if (mounted) _message('No se pudo guardar: $error', error: true);
+      logCatalogFileError(CatalogFileStage.export, error,
+          catalogId: catalog.id);
+      if (mounted) {
+        _message('El navegador no pudo guardar el PDF.', error: true);
+      }
     }
   }
 
@@ -663,15 +704,21 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
               const SizedBox(height: 8),
               Text(_catalogMeta(catalog),
                   style: const TextStyle(color: Colors.white70)),
+              if (catalog.filePending) ...[
+                const SizedBox(height: 8),
+                const Text('Archivo pendiente de publicación',
+                    style: TextStyle(color: Colors.white70)),
+              ],
               const SizedBox(height: 18),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 FilledButton.tonalIcon(
-                    onPressed: () => _view(catalog),
+                    onPressed: catalog.canOpen ? () => _view(catalog) : null,
                     icon: const Icon(Icons.visibility_outlined),
                     label: const Text('Ver')),
                 IconButton.filledTonal(
                     tooltip: 'Descargar',
-                    onPressed: () => _download(catalog),
+                    onPressed:
+                        catalog.canOpen ? () => _download(catalog) : null,
                     icon: const Icon(Icons.download_outlined)),
               ]),
             ]),
@@ -695,6 +742,11 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
           const SizedBox(height: 6),
           Text(_catalogMeta(catalog),
               style: TextStyle(fontSize: 12, color: context.hg.mutedText)),
+          if (catalog.filePending) ...[
+            const SizedBox(height: 6),
+            Text('Archivo pendiente de publicación',
+                style: TextStyle(fontSize: 12, color: context.hg.warning)),
+          ],
           if (progress != null) ...[
             const SizedBox(height: 8),
             LinearProgressIndicator(value: progress),
@@ -897,8 +949,9 @@ class _CatalogFormDialogState extends State<_CatalogFormDialog> {
         type: FileType.custom,
         allowedExtensions: const ['pdf'],
         withData: true);
-    final bytes = result?.files.single.bytes;
-    if (bytes == null) return;
+    final selectedBytes = result?.files.single.bytes;
+    if (selectedBytes == null) return;
+    final bytes = Uint8List.fromList(selectedBytes);
     if (bytes.length > 100 * 1024 * 1024) {
       return _setError('El PDF supera el límite de 100 MB.');
     }
@@ -911,7 +964,10 @@ class _CatalogFormDialogState extends State<_CatalogFormDialog> {
     });
     PdfDocument? document;
     try {
-      document = await PdfDocument.openData(bytes);
+      // PDF.js puede transferir el ArrayBuffer recibido. El visor usa una
+      // copia independiente para que los bytes destinados a Storage nunca
+      // queden desprendidos o convertidos en un archivo de cero bytes.
+      document = await PdfDocument.openData(Uint8List.fromList(bytes));
       final page = await document.getPage(1);
       const width = 720.0;
       final image = await page.render(
@@ -923,7 +979,7 @@ class _CatalogFormDialogState extends State<_CatalogFormDialog> {
       if (image == null) throw StateError('No se pudo generar la portada.');
       if (!mounted) return;
       setState(() {
-        _pdf = bytes;
+        _pdf = Uint8List.fromList(bytes);
         _pages = document!.pagesCount;
         _cover = image.bytes;
         _coverMime = 'image/png';

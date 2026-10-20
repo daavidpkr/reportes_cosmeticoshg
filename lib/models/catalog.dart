@@ -41,7 +41,13 @@ class Catalog {
   final bool isNew;
   final bool isUpdated;
 
-  bool get canOpen => filePath != null && filePath!.isNotEmpty;
+  String get expectedFilePath => '$organizationId/$id/v$version/catalogo.pdf';
+
+  bool get hasExpectedFilePath => filePath == expectedFilePath;
+
+  bool get canOpen => status == CatalogStatus.publicado && hasExpectedFilePath;
+
+  bool get filePending => !canOpen;
 
   factory Catalog.fromJson(Map<String, dynamic> json) => Catalog(
         id: json['id'].toString(),
@@ -107,3 +113,11 @@ bool catalogMatchesFilter(Catalog catalog, CatalogFilter filter) =>
       CatalogFilter.newItems => catalog.isNew,
       CatalogFilter.updated => catalog.isUpdated,
     };
+
+bool isValidPdfBytes(List<int> bytes) =>
+    bytes.length >= 5 &&
+    bytes[0] == 0x25 &&
+    bytes[1] == 0x50 &&
+    bytes[2] == 0x44 &&
+    bytes[3] == 0x46 &&
+    bytes[4] == 0x2D;

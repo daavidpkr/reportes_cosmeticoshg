@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:cosmeticos_hg_reportes/models/catalog.dart';
+import 'package:cosmeticos_hg_reportes/services/catalog_file_error.dart';
 import 'package:cosmeticos_hg_reportes/services/catalog_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -81,5 +83,93 @@ void main() {
       'p_storage_objects_deleted': true,
     });
     client.dispose();
+  });
+
+  group('descarga privada', () {
+    late SupabaseClient client;
+
+    tearDown(() => client.dispose());
+
+    SupabaseCatalogRepository repositoryFor(http.Client downloadClient) {
+      client = SupabaseClient(
+        'https://example.supabase.co',
+        'anon-key',
+        accessToken: () async => 'session-token',
+        httpClient: MockClient((request) async {
+          expect(
+              request.url.path, contains('/storage/v1/object/sign/catalogos/'));
+          expect(request.headers['authorization'], 'Bearer session-token');
+          return http.Response(
+            jsonEncode(
+                {'signedURL': '/object/sign/catalogos/file.pdf?token=secret'}),
+            200,
+            headers: {'content-type': 'application/json'},
+            request: request,
+          );
+        }),
+      );
+      return SupabaseCatalogRepository(
+        client: client,
+        httpClient: downloadClient,
+      );
+    }
+
+    test('rechaza un PDF vacío aunque Storage responda HTTP 200', () async {
+      final repository = repositoryFor(MockClient((request) async =>
+          http.Response.bytes(const [], 200, request: request)));
+
+      await expectLater(
+        repository.download('org/id/v1/catalogo.pdf'),
+        throwsA(
+          isA<CatalogFileException>()
+              .having(
+                  (error) => error.stage, 'etapa', CatalogFileStage.validation)
+              .having((error) => error.httpStatus, 'HTTP', 200)
+              .having(
+                  (error) => error.userMessage, 'mensaje', contains('vacío')),
+        ),
+      );
+    });
+
+    test('devuelve una sola vez el PDF válido de la URL firmada', () async {
+      var requests = 0;
+      final expected = Uint8List.fromList('%PDF-1.7\ncontenido'.codeUnits);
+      final repository = repositoryFor(MockClient((request) async {
+        requests++;
+        return http.Response.bytes(expected, 200, request: request);
+      }));
+
+      final result = await repository.download('org/id/v1/catalogo.pdf');
+
+      expect(result, expected);
+      expect(requests, 1);
+    });
+
+    test('conserva el código HTTP de una descarga rechazada', () async {
+      final repository = repositoryFor(MockClient((request) async =>
+          http.Response('forbidden', 403, request: request)));
+
+      await expectLater(
+        repository.download('org/id/v1/catalogo.pdf'),
+        throwsA(
+          isA<CatalogFileException>()
+              .having((error) => error.stage, 'etapa',
+                  CatalogFileStage.httpDownload)
+              .having((error) => error.httpStatus, 'HTTP', 403),
+        ),
+      );
+    });
+  });
+
+  test('el registro de errores oculta URLs, tokens y JWT', () {
+    final sanitized = sanitizeCatalogError(
+      'GET https://example.test/file?token=secret '
+      'Authorization: Bearer private '
+      'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.signature',
+    );
+
+    expect(sanitized, isNot(contains('secret')));
+    expect(sanitized, isNot(contains('private')));
+    expect(sanitized, isNot(contains('eyJhbGci')));
   });
 }

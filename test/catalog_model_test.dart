@@ -48,4 +48,17 @@ void main() {
         'Colección_ Otoño _ 2026-v3.pdf');
     expect(safeCatalogFileName('   ', 1), 'catalogo-v1.pdf');
   });
+
+  test('sólo habilita un PDF publicado con la ruta versionada esperada', () {
+    expect(catalog().canOpen, isTrue);
+    final pending = Catalog.fromJson({
+      ...catalog().toCacheJson(),
+      'estado': 'borrador',
+      'archivo_path': null,
+    });
+    expect(pending.canOpen, isFalse);
+    expect(pending.filePending, isTrue);
+    expect(isValidPdfBytes('%PDF-1.7'.codeUnits), isTrue);
+    expect(isValidPdfBytes(const []), isFalse);
+  });
 }
