@@ -36,17 +36,22 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
   PdfControllerPinch? _pinchController;
   PdfController? _simpleController;
   late final TextEditingController _pageController;
+  String? _startupError;
   int _page = 1;
   int _pages = 0;
 
   @override
   void initState() {
     super.initState();
-    final document = PdfDocument.openData(Uint8List.fromList(widget.bytes));
-    if (usesPinchCatalogViewer(defaultTargetPlatform, isWeb: kIsWeb)) {
-      _pinchController = PdfControllerPinch(document: document);
+    if (!isValidPdfBytes(widget.bytes)) {
+      _startupError = 'El archivo recibido está vacío o no comienza con %PDF-.';
     } else {
-      _simpleController = PdfController(document: document);
+      final document = PdfDocument.openData(Uint8List.fromList(widget.bytes));
+      if (usesPinchCatalogViewer(defaultTargetPlatform, isWeb: kIsWeb)) {
+        _pinchController = PdfControllerPinch(document: document);
+      } else {
+        _simpleController = PdfController(document: document);
+      }
     }
     _pageController = TextEditingController(text: '1');
   }
@@ -60,42 +65,60 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
   }
 
   Future<void> _download() async {
-    try {
-      final saved = await (widget.downloads ?? DocumentDownloadService()).save(
-        bytes: widget.bytes,
-        fileName: safeCatalogFileName(widget.catalog.title,
-            widget.cachedVersion ?? widget.catalog.version),
-        mimeType: 'application/pdf',
-      );
-      if (mounted) _message(saved.confirmationMessage);
-    } catch (error) {
-      _actionError(
-          CatalogFileStage.export, error, 'No se pudo guardar el PDF.');
-    }
+    await _withValidPdf(
+      action: (bytes) async {
+        final saved =
+            await (widget.downloads ?? DocumentDownloadService()).save(
+          bytes: bytes,
+          fileName: safeCatalogFileName(widget.catalog.title,
+              widget.cachedVersion ?? widget.catalog.version),
+          mimeType: 'application/pdf',
+        );
+        if (mounted) _message(saved.confirmationMessage);
+      },
+      failureMessage: 'No se pudo guardar el PDF.',
+    );
   }
 
   Future<void> _share() async {
-    try {
-      await SharePlus.instance.share(ShareParams(
+    await _withValidPdf(
+      action: (bytes) => SharePlus.instance.share(ShareParams(
         title: widget.catalog.title,
-        files: [XFile.fromData(widget.bytes, mimeType: 'application/pdf')],
+        files: [XFile.fromData(bytes, mimeType: 'application/pdf')],
         fileNameOverrides: [
           safeCatalogFileName(widget.catalog.title,
               widget.cachedVersion ?? widget.catalog.version)
         ],
-      ));
-    } catch (error) {
-      _actionError(
-          CatalogFileStage.export, error, 'No se pudo compartir el PDF.');
-    }
+      )),
+      failureMessage: 'No se pudo compartir el PDF.',
+    );
   }
 
   Future<void> _openExternal() async {
+    await _withValidPdf(
+      action: (bytes) => openCatalogExternally(bytes, widget.localPath),
+      failureMessage: 'No se pudo abrir el PDF con otra aplicación.',
+    );
+  }
+
+  Future<void> _withValidPdf({
+    required Future<void> Function(Uint8List bytes) action,
+    required String failureMessage,
+  }) async {
     try {
-      await openCatalogExternally(widget.bytes, widget.localPath);
+      if (!isValidPdfBytes(widget.bytes)) {
+        throw const CatalogFileException(
+          stage: CatalogFileStage.validation,
+          userMessage: 'El PDF está vacío o no contiene una cabecera válida.',
+        );
+      }
+      await action(Uint8List.fromList(widget.bytes));
     } catch (error) {
-      _actionError(CatalogFileStage.export, error,
-          'No se pudo abrir el PDF con otra aplicación.');
+      _actionError(
+        error is CatalogFileException ? error.stage : CatalogFileStage.export,
+        error,
+        error is CatalogFileException ? error.userMessage : failureMessage,
+      );
     }
   }
 
@@ -181,6 +204,9 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
   }
 
   Widget _pdfViewer() {
+    if (_startupError case final error?) {
+      return Center(child: Text('No se pudo mostrar el PDF: $error'));
+    }
     final pinch = _pinchController;
     if (pinch != null) {
       return PdfViewPinch(
@@ -197,14 +223,20 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
               const Center(child: CircularProgressIndicator()),
           pageLoaderBuilder: (_) =>
               const Center(child: CircularProgressIndicator()),
-          errorBuilder: (_, __) => const Center(
-            child: Text('No se pudo abrir el PDF descargado.'),
+          errorBuilder: (_, error) => Center(
+            child: Text(
+              'No se pudo mostrar el PDF validado: ${sanitizeCatalogError(error)}',
+            ),
           ),
         ),
       );
     }
+    final simple = _simpleController;
+    if (simple == null) {
+      return const Center(child: Text('No se pudo iniciar el visor PDF.'));
+    }
     return PdfView(
-      controller: _simpleController!,
+      controller: simple,
       scrollDirection: Axis.horizontal,
       onDocumentLoaded: _documentLoaded,
       onDocumentError: _documentError,
@@ -215,8 +247,10 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
             const Center(child: CircularProgressIndicator()),
         pageLoaderBuilder: (_) =>
             const Center(child: CircularProgressIndicator()),
-        errorBuilder: (_, __) => const Center(
-          child: Text('No se pudo abrir el PDF descargado.'),
+        errorBuilder: (_, error) => Center(
+          child: Text(
+            'No se pudo mostrar el PDF validado: ${sanitizeCatalogError(error)}',
+          ),
         ),
       ),
     );
@@ -232,15 +266,15 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
         actions: [
           IconButton(
               tooltip: 'Descargar',
-              onPressed: _download,
+              onPressed: _startupError == null ? _download : null,
               icon: const Icon(Icons.download_outlined)),
           IconButton(
               tooltip: 'Compartir',
-              onPressed: _share,
+              onPressed: _startupError == null ? _share : null,
               icon: const Icon(Icons.share_outlined)),
           IconButton(
               tooltip: 'Abrir con otra aplicación',
-              onPressed: _openExternal,
+              onPressed: _startupError == null ? _openExternal : null,
               icon: const Icon(Icons.open_in_new)),
         ],
       ),

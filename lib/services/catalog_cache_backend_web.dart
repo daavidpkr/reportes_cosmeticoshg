@@ -14,7 +14,7 @@ class CatalogCacheBackend {
     final response = await (await _cache()).match(_url(key).toJS).toDart;
     if (response == null) return null;
     final buffer = await response.arrayBuffer().toDart;
-    return buffer.toDart.asUint8List();
+    return Uint8List.fromList(buffer.toDart.asUint8List());
   }
 
   Future<String?> localPath(String key) async => null;
@@ -23,7 +23,7 @@ class CatalogCacheBackend {
     final headers = web.Headers()
       ..set('content-type', 'application/octet-stream');
     final response = web.Response(
-      bytes.toJS,
+      Uint8List.fromList(bytes).toJS,
       web.ResponseInit(headers: headers),
     );
     await (await _cache()).put(_url(key).toJS, response).toDart;

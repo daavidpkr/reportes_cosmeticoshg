@@ -40,7 +40,9 @@ jobs:
         run: flutter pub get
 
       - name: Compilar Flutter Web
-        run: flutter build web --release --base-href "/reportes_cosmeticoshg/"
+        # Retira el service worker anterior para impedir que sirva un bundle
+        # obsoleto. La caché privada de catálogos usa CacheStorage aparte.
+        run: flutter build web --release --base-href "/reportes_cosmeticoshg/" --pwa-strategy=none
 
       - name: Configurar GitHub Pages
         uses: actions/configure-pages@v5

@@ -24,7 +24,7 @@ class CatalogFileException implements Exception {
   final String? detail;
 
   @override
-  String toString() => userMessage;
+  String toString() => detail == null ? userMessage : '$userMessage ($detail)';
 }
 
 String sanitizeCatalogError(Object error) {

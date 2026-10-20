@@ -56,7 +56,15 @@ class CatalogCacheService {
     final version = await cachedVersion(catalog.id);
     if (version == null) return false;
     final bytes = await _backend.read(_pdfKey(catalog.id, version));
-    return bytes != null && isValidPdfBytes(bytes);
+    if (bytes == null) return false;
+    if (isValidPdfBytes(bytes)) return true;
+    await removeLocal(catalog.id);
+    logCatalogFileError(
+      CatalogFileStage.cache,
+      const FormatException('PDF inválido en caché'),
+      catalogId: catalog.id,
+    );
+    return false;
   }
 
   Future<List<Catalog>> cachedCatalogs() async {

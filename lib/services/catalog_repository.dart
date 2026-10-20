@@ -29,7 +29,11 @@ abstract class CatalogRepository {
     CatalogFilter filter = CatalogFilter.all,
     bool includeAdministration = true,
   });
-  Future<Uint8List> download(String path, {void Function(double)? onProgress});
+  Future<Uint8List> download(
+    String path, {
+    void Function(double)? onProgress,
+    bool requirePdf = false,
+  });
   Future<void> upload(String path, Uint8List bytes, String contentType);
   Future<void> removeObjects(Iterable<String> paths);
   Future<CatalogDraft> createDraft(String title, int order);
@@ -105,8 +109,12 @@ class SupabaseCatalogRepository implements CatalogRepository {
       .replaceAll('_', r'\_');
 
   @override
-  Future<Uint8List> download(String path,
-      {void Function(double)? onProgress}) async {
+  Future<Uint8List> download(
+    String path, {
+    void Function(double)? onProgress,
+    bool requirePdf = false,
+  }) async {
+    _validateStoragePath(path);
     late final String signed;
     try {
       signed =
@@ -115,14 +123,20 @@ class SupabaseCatalogRepository implements CatalogRepository {
       logCatalogFileError(CatalogFileStage.signedUrl, error);
       throw CatalogFileException(
         stage: CatalogFileStage.signedUrl,
-        userMessage:
-            'No se pudo autorizar la descarga. Actualiza tu sesión e inténtalo nuevamente.',
+        userMessage: 'Storage no pudo crear la URL firmada.',
         detail: sanitizeCatalogError(error),
+      );
+    }
+    final signedUri = Uri.tryParse(signed);
+    if (signedUri == null || !signedUri.hasScheme || signedUri.host.isEmpty) {
+      throw const CatalogFileException(
+        stage: CatalogFileStage.signedUrl,
+        userMessage: 'Storage devolvió una URL firmada inválida.',
       );
     }
     late final http.StreamedResponse response;
     try {
-      response = await _http.send(http.Request('GET', Uri.parse(signed)));
+      response = await _http.send(http.Request('GET', signedUri));
     } catch (error) {
       logCatalogFileError(CatalogFileStage.httpDownload, error);
       throw CatalogFileException(
@@ -131,17 +145,6 @@ class SupabaseCatalogRepository implements CatalogRepository {
             'No se pudo conectar con el archivo. Revisa la conexión e inténtalo nuevamente.',
         detail: sanitizeCatalogError(error),
       );
-    }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
-      final error = CatalogFileException(
-        stage: CatalogFileStage.httpDownload,
-        httpStatus: response.statusCode,
-        userMessage:
-            'El servidor no pudo entregar el PDF (HTTP ${response.statusCode}).',
-      );
-      logCatalogFileError(CatalogFileStage.httpDownload, error,
-          httpStatus: response.statusCode);
-      throw error;
     }
     final bytes = BytesBuilder(copy: false);
     var received = 0;
@@ -153,20 +156,108 @@ class SupabaseCatalogRepository implements CatalogRepository {
       }
     }
     final result = bytes.takeBytes();
-    if (path.toLowerCase().endsWith('.pdf') && !isValidPdfBytes(result)) {
+    final contentType =
+        response.headers['content-type']?.split(';').first.trim().toLowerCase();
+    final contentLength = response.contentLength;
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final serverMessage = _serverErrorMessage(result);
+      final error = CatalogFileException(
+        stage: CatalogFileStage.httpDownload,
+        httpStatus: response.statusCode,
+        userMessage:
+            'Storage no pudo entregar el archivo (HTTP ${response.statusCode})${serverMessage == null ? '.' : ': $serverMessage'}',
+        detail: 'content-type=${contentType ?? 'ausente'}',
+      );
+      logCatalogFileError(CatalogFileStage.httpDownload, error,
+          httpStatus: response.statusCode);
+      throw error;
+    }
+    onProgress?.call(1);
+    if (contentLength != null && contentLength != result.length) {
       final error = CatalogFileException(
         stage: CatalogFileStage.validation,
         httpStatus: response.statusCode,
-        userMessage: result.isEmpty
-            ? 'El PDF publicado está vacío. Reemplázalo desde Editar catálogo.'
-            : 'El archivo publicado no contiene un PDF válido.',
+        userMessage:
+            'La descarga quedó incompleta: se esperaban $contentLength bytes y llegaron ${result.length}.',
+        detail: 'content-type=${contentType ?? 'ausente'}',
       );
       logCatalogFileError(CatalogFileStage.validation, error,
           httpStatus: response.statusCode);
       throw error;
     }
-    onProgress?.call(1);
+    if (requirePdf) {
+      _validatePdfResponse(
+        result,
+        status: response.statusCode,
+        contentType: contentType,
+        contentLength: contentLength,
+      );
+    } else if (result.isEmpty) {
+      throw CatalogFileException(
+        stage: CatalogFileStage.validation,
+        httpStatus: response.statusCode,
+        userMessage: 'Storage entregó un archivo vacío.',
+        detail: 'content-type=${contentType ?? 'ausente'}',
+      );
+    }
     return result;
+  }
+
+  void _validateStoragePath(String path) {
+    final uri = Uri.tryParse(path);
+    final segments = path.split('/');
+    final valid = path == path.trim() &&
+        uri != null &&
+        !uri.hasScheme &&
+        uri.host.isEmpty &&
+        uri.query.isEmpty &&
+        uri.fragment.isEmpty &&
+        !path.startsWith('/') &&
+        !path.contains(r'\') &&
+        segments.length >= 4 &&
+        segments.first != 'catalogos' &&
+        !segments.any((part) => part.isEmpty || part == '.' || part == '..');
+    if (!valid) {
+      throw const CatalogFileException(
+        stage: CatalogFileStage.metadata,
+        userMessage:
+            'La ruta del archivo no es una ruta relativa válida del bucket catalogos.',
+      );
+    }
+  }
+
+  void _validatePdfResponse(
+    Uint8List bytes, {
+    required int status,
+    required String? contentType,
+    required int? contentLength,
+  }) {
+    String? message;
+    if (bytes.isEmpty || contentLength == 0) {
+      message = 'El PDF publicado está vacío.';
+    } else if (contentType != 'application/pdf') {
+      message =
+          'Storage respondió ${contentType ?? 'sin Content-Type'} en lugar de application/pdf.';
+    } else if (!isValidPdfBytes(bytes)) {
+      message = 'La respuesta no comienza con la cabecera %PDF-.';
+    }
+    if (message == null) return;
+    final error = CatalogFileException(
+      stage: CatalogFileStage.validation,
+      httpStatus: status,
+      userMessage: message,
+      detail:
+          'content-type=${contentType ?? 'ausente'}, content-length=${contentLength ?? 'ausente'}, bytes=${bytes.length}',
+    );
+    logCatalogFileError(CatalogFileStage.validation, error, httpStatus: status);
+    throw error;
+  }
+
+  String? _serverErrorMessage(Uint8List bytes) {
+    if (bytes.isEmpty) return null;
+    final decoded = String.fromCharCodes(bytes.take(512)).trim();
+    if (decoded.isEmpty) return null;
+    return sanitizeCatalogError(decoded);
   }
 
   @override

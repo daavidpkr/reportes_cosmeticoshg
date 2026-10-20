@@ -52,8 +52,11 @@ class _Repository implements CatalogRepository {
           bool includeAdministration = true}) async =>
       offset == 0 ? [item] : [];
   @override
-  Future<Uint8List> download(String path,
-      {void Function(double p1)? onProgress}) async {
+  Future<Uint8List> download(
+    String path, {
+    void Function(double p1)? onProgress,
+    bool requirePdf = false,
+  }) async {
     downloadCalls++;
     return Uint8List.fromList('%PDF-1.7\ncontenido'.codeUnits);
   }
@@ -160,5 +163,40 @@ void main() {
 
     expect(repository.downloadCalls, 0);
     expect(downloads.saveCalls, 1);
+  });
+
+  testWidgets('elimina una caché corrupta y descarga el PDF una sola vez',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _Repository();
+    final backend = _MemoryBackend();
+    final cache = CatalogCacheService(backend: backend);
+    final downloads = _Downloads();
+    await cache.store(
+      repository.item,
+      Uint8List.fromList('%PDF-1.7\ncontenido'.codeUnits),
+    );
+    backend.data['id/v1/catalogo.pdf'] = Uint8List(0);
+    await tester.pumpWidget(MaterialApp(
+      theme: ThemeData.light().copyWith(
+        extensions: const [HgThemeColors.light],
+      ),
+      home: Scaffold(
+        body: CatalogsScreen(
+          repository: repository,
+          cache: cache,
+          downloads: downloads,
+        ),
+      ),
+    ));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Descargar').first);
+    await tester.pumpAndSettle();
+
+    expect(repository.downloadCalls, 1);
+    expect(downloads.saveCalls, 1);
+    expect(isValidPdfBytes(backend.data['id/v1/catalogo.pdf']!), isTrue);
   });
 }

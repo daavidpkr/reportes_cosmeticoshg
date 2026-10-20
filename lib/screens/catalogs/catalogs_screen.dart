@@ -8,6 +8,7 @@ import 'package:pdfx/pdfx.dart';
 import '../../models/catalog.dart';
 import '../../services/catalog_cache_service.dart';
 import '../../services/catalog_file_error.dart';
+import '../../services/catalog_pdf_service.dart';
 import '../../services/catalog_repository.dart';
 import '../../services/document_download_service.dart';
 import '../../theme/hg_theme.dart';
@@ -33,11 +34,13 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   static const _pageSize = 12;
   late final CatalogRepository _repository;
   late final CatalogCacheService _cache;
+  late final CatalogPdfService _pdfFiles;
   final _search = TextEditingController();
   final _scroll = ScrollController();
   final Map<String, Uint8List> _covers = {};
   final Map<String, double> _progress = {};
   final Set<String> _downloaded = {};
+  final Set<String> _invalidFiles = {};
   List<Catalog> _catalogs = [];
   CatalogFilter _filter = CatalogFilter.all;
   Timer? _debounce;
@@ -51,6 +54,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     super.initState();
     _repository = widget.repository ?? SupabaseCatalogRepository();
     _cache = widget.cache ?? CatalogCacheService();
+    _pdfFiles = CatalogPdfService(repository: _repository, cache: _cache);
     _scroll.addListener(_onScroll);
     unawaited(_retryCleanup());
     unawaited(_load(reset: true));
@@ -148,51 +152,23 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   }
 
   Future<CachedCatalogFile?> _ensureDownloaded(Catalog catalog) async {
-    CachedCatalogFile? cached;
-    try {
-      cached = await _cache.open(catalog);
-    } catch (error) {
-      logCatalogFileError(CatalogFileStage.cache, error, catalogId: catalog.id);
-    }
-    if (cached != null && cached.cachedVersion == catalog.version) {
-      return cached;
-    }
-    if (!catalog.canOpen) {
-      _message('Archivo pendiente de publicación.', error: true);
-      return cached;
-    }
     setState(() => _progress[catalog.id] = 0);
     try {
-      final pdf = await _repository.download(
-        catalog.filePath!,
+      final file = await _pdfFiles.obtain(
+        catalog,
         onProgress: (value) {
           if (mounted) setState(() => _progress[catalog.id] = value);
         },
+        loadCover: () => _cover(catalog),
       );
-      final cover = catalog.coverPath == null ? null : await _cover(catalog);
-      try {
-        await _cache.store(catalog, pdf, cover: cover);
-      } catch (error) {
-        logCatalogFileError(CatalogFileStage.cache, error,
-            catalogId: catalog.id);
-        if (mounted) {
-          _message(
-              'El PDF se descargó, pero el navegador no pudo guardarlo sin conexión.');
+      if (!mounted) return file;
+      setState(() {
+        if (file.cachedVersion == catalog.version) {
+          _downloaded.add(catalog.id);
+          _invalidFiles.remove(catalog.id);
         }
-        return CachedCatalogFile(
-          catalog: catalog,
-          cachedVersion: catalog.version,
-          bytes: pdf,
-        );
-      }
-      if (!mounted) return null;
-      setState(() => _downloaded.add(catalog.id));
-      return await _cache.open(catalog) ??
-          CachedCatalogFile(
-            catalog: catalog,
-            cachedVersion: catalog.version,
-            bytes: pdf,
-          );
+      });
+      return file;
     } catch (error) {
       final status = error is CatalogFileException ? error.httpStatus : null;
       final stage = error is CatalogFileException
@@ -201,18 +177,27 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
       logCatalogFileError(stage, error,
           httpStatus: status, catalogId: catalog.id);
       if (mounted) {
+        if (error is CatalogFileException &&
+            (error.stage == CatalogFileStage.validation ||
+                error.stage == CatalogFileStage.metadata ||
+                error.httpStatus == 404)) {
+          setState(() => _invalidFiles.add(catalog.id));
+        }
         _message(
           error is CatalogFileException
-              ? error.userMessage
+              ? error.toString()
               : 'No se pudo descargar el PDF. Inténtalo nuevamente.',
           error: true,
         );
       }
-      return cached;
+      return null;
     } finally {
       if (mounted) setState(() => _progress.remove(catalog.id));
     }
   }
+
+  bool _fileActionsEnabled(Catalog catalog) =>
+      catalog.canOpen && !_invalidFiles.contains(catalog.id);
 
   Future<void> _view(Catalog catalog) async {
     final file = await _ensureDownloaded(catalog);
@@ -704,21 +689,29 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
               const SizedBox(height: 8),
               Text(_catalogMeta(catalog),
                   style: const TextStyle(color: Colors.white70)),
-              if (catalog.filePending) ...[
+              if (catalog.filePending ||
+                  _invalidFiles.contains(catalog.id)) ...[
                 const SizedBox(height: 8),
-                const Text('Archivo pendiente de publicación',
-                    style: TextStyle(color: Colors.white70)),
+                Text(
+                  catalog.filePending
+                      ? 'Archivo pendiente de publicación'
+                      : 'PDF no disponible',
+                  style: const TextStyle(color: Colors.white70),
+                ),
               ],
               const SizedBox(height: 18),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 FilledButton.tonalIcon(
-                    onPressed: catalog.canOpen ? () => _view(catalog) : null,
+                    onPressed: _fileActionsEnabled(catalog)
+                        ? () => _view(catalog)
+                        : null,
                     icon: const Icon(Icons.visibility_outlined),
                     label: const Text('Ver')),
                 IconButton.filledTonal(
                     tooltip: 'Descargar',
-                    onPressed:
-                        catalog.canOpen ? () => _download(catalog) : null,
+                    onPressed: _fileActionsEnabled(catalog)
+                        ? () => _download(catalog)
+                        : null,
                     icon: const Icon(Icons.download_outlined)),
               ]),
             ]),
@@ -742,9 +735,12 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
           const SizedBox(height: 6),
           Text(_catalogMeta(catalog),
               style: TextStyle(fontSize: 12, color: context.hg.mutedText)),
-          if (catalog.filePending) ...[
+          if (catalog.filePending || _invalidFiles.contains(catalog.id)) ...[
             const SizedBox(height: 6),
-            Text('Archivo pendiente de publicación',
+            Text(
+                catalog.filePending
+                    ? 'Archivo pendiente de publicación'
+                    : 'PDF no disponible',
                 style: TextStyle(fontSize: 12, color: context.hg.warning)),
           ],
           if (progress != null) ...[
@@ -758,18 +754,24 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
             if (mobile)
               IconButton.filledTonal(
                   tooltip: 'Ver catálogo',
-                  onPressed: catalog.canOpen ? () => _view(catalog) : null,
+                  onPressed: _fileActionsEnabled(catalog)
+                      ? () => _view(catalog)
+                      : null,
                   icon: const Icon(Icons.visibility_outlined))
             else
               Expanded(
                   child: FilledButton.tonalIcon(
-                      onPressed: catalog.canOpen ? () => _view(catalog) : null,
+                      onPressed: _fileActionsEnabled(catalog)
+                          ? () => _view(catalog)
+                          : null,
                       icon: const Icon(Icons.visibility_outlined),
                       label: const Text('Ver'))),
             const SizedBox(width: 8),
             IconButton.outlined(
                 tooltip: 'Descargar',
-                onPressed: catalog.canOpen ? () => _download(catalog) : null,
+                onPressed: _fileActionsEnabled(catalog)
+                    ? () => _download(catalog)
+                    : null,
                 icon: const Icon(Icons.download_outlined)),
             PopupMenuButton<String>(
               tooltip: 'Administrar catálogo',
