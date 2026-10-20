@@ -7,6 +7,7 @@ import 'package:pdfx/pdfx.dart';
 
 import '../../models/catalog.dart';
 import '../../services/catalog_cache_service.dart';
+import '../../services/catalog_cover_image.dart';
 import '../../services/catalog_file_error.dart';
 import '../../services/catalog_pdf_service.dart';
 import '../../services/catalog_repository.dart';
@@ -959,15 +960,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                 child: Center(
                     child: Icon(Icons.auto_stories_outlined,
                         size: 56, color: context.hg.mutedText)))
-            : Image.memory(
-                snapshot.data!,
-                fit: BoxFit.cover,
-                width: double.infinity,
-                height: double.infinity,
-                gaplessPlayback: true,
-                errorBuilder: (_, __, ___) =>
-                    const Center(child: Icon(Icons.broken_image_outlined)),
-              ),
+            : catalogCoverImage(snapshot.data!),
       ),
     );
   }
