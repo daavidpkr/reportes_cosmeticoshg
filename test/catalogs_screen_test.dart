@@ -45,8 +45,6 @@ class _Repository implements CatalogRepository {
   @override
   Future<Catalog?> getById(String id) async => item;
   @override
-  Future<Catalog?> getFeatured() async => item;
-  @override
   Future<List<Catalog>> list(
           {required int offset,
           required int limit,
@@ -91,8 +89,6 @@ class _Repository implements CatalogRepository {
   @override
   Future<Catalog> setActive(String id, bool active) =>
       throw UnimplementedError();
-  @override
-  Future<Catalog> setFeatured(String id) => throw UnimplementedError();
 }
 
 class _Downloads extends DocumentDownloadService {
@@ -115,7 +111,6 @@ class _ControlledRepository extends _Repository {
     CatalogFilter filter,
     Completer<List<Catalog>> completer,
   })>[];
-  final featuredCalls = <Completer<Catalog?>>[];
 
   @override
   Future<List<Catalog>> list({
@@ -127,13 +122,6 @@ class _ControlledRepository extends _Repository {
   }) {
     final completer = Completer<List<Catalog>>();
     listCalls.add((query: query, filter: filter, completer: completer));
-    return completer.future;
-  }
-
-  @override
-  Future<Catalog?> getFeatured() {
-    final completer = Completer<Catalog?>();
-    featuredCalls.add(completer);
     return completer.future;
   }
 }
@@ -222,22 +210,16 @@ void main() {
 
       expect(find.text('Catálogos'), findsOneWidget);
       expect(find.byKey(const Key('catalog-search')), findsOneWidget);
-      expect(find.text('Colección destacada'), findsWidgets);
-      expect(find.byKey(const ValueKey('featured-id-v1')), findsOneWidget);
+      expect(find.text('Colección destacada'), findsOneWidget);
       expect(
-        find.byKey(const ValueKey('featured-cover-id-v1')),
+        find.byKey(const ValueKey('catalog-list-id-v1')),
         findsOneWidget,
       );
-      if (size.width >= 650) {
-        expect(
-          find.byKey(const ValueKey('catalog-list-id-v1')),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(const ValueKey('catalog-list-cover-id-v1')),
-          findsOneWidget,
-        );
-      }
+      expect(
+        find.byKey(const ValueKey('catalog-list-cover-id-v1')),
+        findsOneWidget,
+      );
+      expect(find.text('Destacar'), findsNothing);
       expect(tester.takeException(), isNull);
     });
   }
@@ -309,8 +291,7 @@ void main() {
     expect(isValidPdfBytes(backend.data['id/v1/catalogo.pdf']!), isTrue);
   });
 
-  testWidgets(
-      'el destacado remoto permanece visible durante más de 10 segundos',
+  testWidgets('un destacado remoto se muestra una vez como tarjeta normal',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
@@ -320,20 +301,22 @@ void main() {
       title: 'Destacado remoto estable',
       featured: true,
     );
-    repository.featuredCalls.single.complete(featured);
     repository.listCalls.single.completer.complete([
+      featured,
       _catalog(id: 'regular', title: 'Catálogo regular'),
     ]);
     await tester.pumpAndSettle();
 
     expect(find.text('Destacado remoto estable'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 11));
-
-    expect(find.text('Destacado remoto estable'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('catalog-list-featured-v1')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('featured-featured-v1')), findsNothing);
   });
 
   testWidgets(
-      'la carga inicial no muestra el listado antes del destacado y ambos permanecen 30 segundos',
+      'la carga inicial muestra el listado sin esperar una consulta destacada',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
@@ -342,23 +325,10 @@ void main() {
       _catalog(id: 'original', title: 'Catálogo original'),
       _catalog(id: 'new', title: 'Catálogo recién creado'),
     ]);
-    await tester.pump();
-
-    expect(find.text('Catálogo original'), findsNothing);
-    expect(find.text('Catálogo recién creado'), findsNothing);
-
-    repository.featuredCalls.single.complete(
-      _catalog(id: 'featured', title: 'Destacado estable', featured: true),
-    );
     await tester.pumpAndSettle();
 
     expect(find.text('Catálogo original'), findsOneWidget);
     expect(find.text('Catálogo recién creado'), findsOneWidget);
-    expect(find.text('Destacado estable'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 31));
-    expect(find.text('Catálogo original'), findsOneWidget);
-    expect(find.text('Catálogo recién creado'), findsOneWidget);
-    expect(find.text('Destacado estable'), findsOneWidget);
   });
 
   testWidgets('una recarga fallida conserva el listado actual y muestra error',
@@ -366,7 +336,6 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
     await _pumpControlled(tester, repository);
-    repository.featuredCalls.single.complete(null);
     repository.listCalls.single.completer.complete([
       _catalog(id: 'regular', title: 'Listado conservado'),
     ]);
@@ -374,7 +343,6 @@ void main() {
 
     await tester.tap(find.byKey(const Key('catalogs-refresh')));
     await tester.pump();
-    repository.featuredCalls[1].complete(null);
     repository.listCalls[1].completer.completeError(
       StateError('consulta remota fallida'),
     );
@@ -386,61 +354,30 @@ void main() {
     expect(find.text('No hay catálogos para mostrar.'), findsNothing);
   });
 
-  testWidgets(
-      'el banner permanece completo sin portada, durante la carga y tras error',
+  testWidgets('un error de portada no reemplaza por vacío el listado remoto',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledCoverRepository();
     await _pumpControlled(tester, repository);
-    repository.featuredCalls.single.complete(
+    repository.listCalls.single.completer.complete([
       _catalog(
         id: 'featured',
-        title: 'Destacado sin portada',
+        title: 'Catálogo con portada fallida',
         featured: true,
+        coverPath: 'org/featured/v1/portada.webp',
       ),
-    );
-    repository.listCalls.single.completer.complete(const []);
-    await tester.pumpAndSettle();
-
-    expect(find.byKey(const ValueKey('featured-featured-v1')), findsOneWidget);
-    expect(find.byKey(const Key('featured-cover-placeholder')), findsOneWidget);
-    expect(find.text('Destacado sin portada'), findsOneWidget);
-    expect(find.text('Ver'), findsOneWidget);
-    expect(find.byTooltip('Descargar'), findsOneWidget);
-
-    await tester.pump(const Duration(seconds: 15));
-
-    expect(find.byKey(const ValueKey('featured-featured-v1')), findsOneWidget);
-    expect(find.text('Destacado sin portada'), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('catalogs-refresh')));
-    await tester.pump();
-    repository.featuredCalls[1].complete(
-      _catalog(
-        id: 'featured',
-        title: 'Destacado con portada',
-        featured: true,
-        version: 2,
-        coverPath: 'org/featured/v2/portada.webp',
-      ),
-    );
-    repository.listCalls[1].completer.complete(const []);
+    ]);
     await tester.pump();
 
-    expect(find.byKey(const ValueKey('featured-featured-v2')), findsOneWidget);
-    expect(find.byKey(const Key('featured-cover-placeholder')), findsOneWidget);
-    expect(find.text('Destacado con portada'), findsOneWidget);
-
-    await tester.pump(const Duration(seconds: 15));
-
-    expect(find.byKey(const ValueKey('featured-featured-v2')), findsOneWidget);
-    expect(find.text('Destacado con portada'), findsOneWidget);
     repository.coverDownload.completeError(StateError('portada no disponible'));
     await tester.pumpAndSettle();
 
-    expect(find.byKey(const ValueKey('featured-featured-v2')), findsOneWidget);
-    expect(find.byKey(const Key('featured-cover-placeholder')), findsOneWidget);
-    expect(find.text('Destacado con portada'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('catalog-list-featured-v1')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('cover-placeholder')), findsOneWidget);
+    expect(find.text('Catálogo con portada fallida'), findsOneWidget);
     expect(find.text('Ver'), findsOneWidget);
     expect(find.byTooltip('Descargar'), findsOneWidget);
   });
@@ -465,15 +402,11 @@ void main() {
     expect(catalogImageMime(Uint8List.fromList([0xFF, 0xD8])), isNull);
   });
 
-  testWidgets('una respuesta tardía del buscador no elimina el destacado',
+  testWidgets('una respuesta del buscador vacía reemplaza el listado',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
     await _pumpControlled(tester, repository);
-    repository.featuredCalls.single.complete(
-      _catalog(
-          id: 'featured', title: 'Destacado independiente', featured: true),
-    );
     repository.listCalls.single.completer.complete([
       _catalog(id: 'regular', title: 'Inicial'),
     ]);
@@ -486,7 +419,6 @@ void main() {
     repository.listCalls[1].completer.complete(const []);
     await tester.pumpAndSettle();
 
-    expect(find.text('Destacado independiente'), findsOneWidget);
     expect(find.text('No hay catálogos para mostrar.'), findsOneWidget);
   });
 
@@ -494,9 +426,6 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
     await _pumpControlled(tester, repository);
-    repository.featuredCalls.single.complete(
-      _catalog(id: 'featured', title: 'Destacado fijo', featured: true),
-    );
     repository.listCalls.single.completer.complete([
       _catalog(id: 'initial', title: 'Inicial'),
     ]);
@@ -520,17 +449,15 @@ void main() {
 
     expect(find.text('Respuesta nueva'), findsOneWidget);
     expect(find.text('Respuesta antigua'), findsNothing);
-    expect(find.text('Destacado fijo'), findsOneWidget);
   });
 
-  testWidgets('los filtros no controlan el destacado', (tester) async {
+  testWidgets('los filtros tratan destacado como cualquier otro catálogo',
+      (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
     await _pumpControlled(tester, repository);
-    repository.featuredCalls.single.complete(
-      _catalog(id: 'featured', title: 'Destacado sin filtro', featured: true),
-    );
     repository.listCalls.single.completer.complete([
+      _catalog(id: 'featured', title: 'Destacado sin filtro', featured: true),
       _catalog(id: 'regular', title: 'Regular'),
     ]);
     await tester.pumpAndSettle();
@@ -542,54 +469,37 @@ void main() {
     repository.listCalls.last.completer.complete(const []);
     await tester.pumpAndSettle();
 
-    expect(find.text('Destacado sin filtro'), findsOneWidget);
+    expect(find.text('Destacado sin filtro'), findsNothing);
     expect(find.text('No hay catálogos para mostrar.'), findsOneWidget);
   });
 
-  testWidgets('una recarga fallida conserva el último destacado remoto',
+  testWidgets('una recarga fallida conserva el último listado remoto',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
     await _pumpControlled(tester, repository);
-    repository.featuredCalls.single.complete(
-      _catalog(id: 'featured', title: 'Destacado conservado', featured: true),
-    );
     repository.listCalls.single.completer.complete([
+      _catalog(id: 'featured', title: 'Destacado conservado', featured: true),
       _catalog(id: 'regular', title: 'Regular'),
     ]);
     await tester.pumpAndSettle();
 
     await tester.tap(find.byKey(const Key('catalogs-refresh')));
     await tester.pump();
-    expect(repository.featuredCalls, hasLength(2));
     expect(repository.listCalls, hasLength(2));
-    repository.featuredCalls[1].completeError(StateError('red no disponible'));
-    repository.listCalls[1].completer.complete([
-      _catalog(id: 'regular', title: 'Regular'),
-    ]);
+    repository.listCalls[1].completer
+        .completeError(StateError('red no disponible'));
     await tester.pumpAndSettle();
 
     expect(find.text('Destacado conservado'), findsOneWidget);
     expect(find.textContaining('red no disponible'), findsOneWidget);
-    expect(find.byKey(const Key('featured-retry')), findsOneWidget);
-
-    await tester.tap(find.byKey(const Key('featured-retry')));
-    await tester.pump();
-    expect(repository.featuredCalls, hasLength(3));
-    repository.featuredCalls[2].complete(null);
-    await tester.pumpAndSettle();
-
-    expect(find.text('Destacado conservado'), findsNothing);
-    expect(find.byKey(const Key('featured-retry')), findsNothing);
   });
 
-  testWidgets('ignora respuestas del destacado fuera de orden', (tester) async {
+  testWidgets('ignora respuestas del listado fuera de orden al recargar',
+      (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
     await _pumpControlled(tester, repository);
-    repository.featuredCalls.single.complete(
-      _catalog(id: 'featured', title: 'Destacado inicial', featured: true),
-    );
     repository.listCalls.single.completer.complete([
       _catalog(id: 'regular', title: 'Regular'),
     ]);
@@ -600,26 +510,17 @@ void main() {
     await tester.pump();
     await tester.tap(refresh);
     await tester.pump();
-    expect(repository.featuredCalls, hasLength(3));
     expect(repository.listCalls, hasLength(3));
 
-    repository.featuredCalls[2].complete(
-      _catalog(id: 'new-featured', title: 'Destacado nuevo', featured: true),
-    );
     repository.listCalls[2].completer.complete([
       _catalog(id: 'new-list', title: 'Lista nueva'),
     ]);
     await tester.pump();
-    repository.featuredCalls[1].complete(
-      _catalog(id: 'old-featured', title: 'Destacado antiguo', featured: true),
-    );
     repository.listCalls[1].completer.complete([
       _catalog(id: 'old-list', title: 'Lista antigua'),
     ]);
     await tester.pumpAndSettle();
 
-    expect(find.text('Destacado nuevo'), findsOneWidget);
-    expect(find.text('Destacado antiguo'), findsNothing);
     expect(find.text('Lista nueva'), findsOneWidget);
     expect(find.text('Lista antigua'), findsNothing);
   });

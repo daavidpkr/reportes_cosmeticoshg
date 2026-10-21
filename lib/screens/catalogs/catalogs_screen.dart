@@ -14,7 +14,6 @@ import '../../services/document_download_service.dart';
 import '../../theme/hg_theme.dart';
 import 'catalog_cover.dart';
 import 'catalog_viewer_screen.dart';
-import 'featured_catalog_banner.dart';
 
 class CatalogsScreen extends StatefulWidget {
   const CatalogsScreen({
@@ -45,19 +44,15 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   final Set<String> _downloaded = {};
   final Set<String> _invalidFiles = {};
   List<Catalog> _catalogs = [];
-  Catalog? _featuredCatalog;
   CatalogFilter _filter = CatalogFilter.all;
   Timer? _debounce;
   int _listGeneration = 0;
   int _listRequestId = 0;
-  int _featuredGeneration = 0;
   bool _loading = true;
   bool _initialLoading = true;
   bool _loadingMore = false;
-  bool _featuredLoading = true;
   bool _hasMore = true;
   String? _error;
-  String? _featuredError;
 
   @override
   void initState() {
@@ -74,7 +69,6 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   void dispose() {
     _debounce?.cancel();
     _listGeneration++;
-    _featuredGeneration++;
     _scroll.removeListener(_onScroll);
     _search.dispose();
     _scroll.dispose();
@@ -167,39 +161,9 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
     }
   }
 
-  Future<void> _loadFeatured() async {
-    final generation = ++_featuredGeneration;
-    if (mounted) {
-      setState(() {
-        _featuredLoading = true;
-        _featuredError = null;
-      });
-    }
-    try {
-      final featured = await _repository.getFeatured();
-      if (!mounted || generation != _featuredGeneration) return;
-      setState(() {
-        _featuredCatalog = featured;
-        _featuredError = null;
-      });
-    } catch (error) {
-      if (!mounted || generation != _featuredGeneration) return;
-      setState(() {
-        _featuredError = 'No se pudo actualizar el catálogo destacado: $error';
-      });
-    } finally {
-      if (mounted && generation == _featuredGeneration) {
-        setState(() => _featuredLoading = false);
-      }
-    }
-  }
-
   Future<void> _refreshAll() async {
     try {
-      await Future.wait<void>([
-        _load(reset: true),
-        _loadFeatured(),
-      ]);
+      await _load(reset: true);
     } finally {
       if (mounted && _initialLoading) {
         setState(() => _initialLoading = false);
@@ -475,8 +439,6 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         case 'edit':
           await _edit(catalog);
           return;
-        case 'featured':
-          await _repository.setFeatured(catalog.id);
         case 'active':
           await _repository.setActive(catalog.id, !catalog.active);
         case 'delete':
@@ -594,28 +556,6 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                           EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
                       child: _notice(),
                     ),
-                  if (_featuredError != null)
-                    Padding(
-                      padding:
-                          EdgeInsets.symmetric(horizontal: mobile ? 16 : 32),
-                      child: _featuredNotice(),
-                    ),
-                  Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      mobile ? 16 : 32,
-                      6,
-                      mobile ? 16 : 32,
-                      22,
-                    ),
-                    child: _initialLoading
-                        ? const LinearProgressIndicator()
-                        : switch (_featuredCatalog) {
-                            final featured? => _featured(featured, mobile),
-                            null when _featuredLoading =>
-                              const LinearProgressIndicator(),
-                            null => const SizedBox.shrink(),
-                          },
-                  ),
                   _catalogBody(mobile),
                   if (_loadingMore)
                     const Padding(
@@ -756,38 +696,6 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         ]),
       ));
 
-  Widget _featuredNotice() => Card(
-        color: context.hg.warningContainer,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(children: [
-            const Icon(Icons.warning_amber_outlined),
-            const SizedBox(width: 10),
-            Expanded(child: Text(_featuredError!)),
-            TextButton(
-              key: const Key('featured-retry'),
-              onPressed: _featuredLoading ? null : _loadFeatured,
-              child: const Text('Reintentar destacado'),
-            ),
-          ]),
-        ),
-      );
-
-  Widget _featured(Catalog catalog, bool mobile) => FeaturedCatalogBanner(
-        catalog: catalog,
-        mobile: mobile,
-        cover: _coverWidget(catalog, featured: true),
-        metadata: _catalogMeta(catalog),
-        fileMessage: catalog.filePending
-            ? 'Archivo pendiente de publicación'
-            : _invalidFiles.contains(catalog.id)
-                ? 'PDF no disponible'
-                : null,
-        onView: _fileActionsEnabled(catalog) ? () => _view(catalog) : null,
-        onDownload:
-            _fileActionsEnabled(catalog) ? () => _download(catalog) : null,
-      );
-
   Widget _card(Catalog catalog, bool mobile) {
     final progress = _progress[catalog.id];
     final content =
@@ -853,14 +761,6 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                     child: ListTile(
                         leading: Icon(Icons.edit_outlined),
                         title: Text('Editar'))),
-                if (!catalog.featured &&
-                    catalog.status == CatalogStatus.publicado &&
-                    catalog.active)
-                  const PopupMenuItem(
-                      value: 'featured',
-                      child: ListTile(
-                          leading: Icon(Icons.star_outline),
-                          title: Text('Destacar'))),
                 PopupMenuItem(
                     value: 'active',
                     child: ListTile(
@@ -898,12 +798,11 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
             ])));
   }
 
-  Widget _coverWidget(Catalog catalog, {bool featured = false}) {
+  Widget _coverWidget(Catalog catalog) {
     final key = '${catalog.id}/v${catalog.version}';
     return CatalogCover(
       catalog: catalog,
       bytes: _coverRequests.putIfAbsent(key, () => _cover(catalog)),
-      featured: featured,
     );
   }
 

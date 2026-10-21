@@ -25,7 +25,6 @@ class CatalogDraft {
 
 abstract class CatalogRepository {
   Future<Catalog?> getById(String id);
-  Future<Catalog?> getFeatured();
   Future<List<Catalog>> list({
     required int offset,
     required int limit,
@@ -52,7 +51,6 @@ abstract class CatalogRepository {
     required bool replaceFile,
     required int order,
   });
-  Future<Catalog> setFeatured(String id);
   Future<Catalog> setActive(String id, bool active);
   Future<void> deleteAfterStorage(String id, int expectedVersion);
 }
@@ -79,52 +77,6 @@ class SupabaseCatalogRepository implements CatalogRepository {
         .maybeSingle();
     return row == null ? null : Catalog.fromJson(row);
   }
-
-  @override
-  Future<Catalog?> getFeatured() async {
-    final initialContext = await _queryContext();
-    final row = await _queryFeatured();
-    if (row != null) {
-      final catalog = Catalog.fromJson(row);
-      if (catalog.organizationId != initialContext.organizationId) {
-        throw StateError(
-          'El catálogo destacado no pertenece a la organización activa.',
-        );
-      }
-      return catalog;
-    }
-
-    final confirmationContext = await _queryContext();
-    if (confirmationContext != initialContext) {
-      throw StateError(
-        'La sesión u organización cambió durante la consulta.',
-      );
-    }
-    final confirmedRow = await _queryFeatured();
-    final finalContext = await _queryContext();
-    if (finalContext != initialContext) {
-      throw StateError(
-        'La sesión u organización cambió durante la confirmación.',
-      );
-    }
-    if (confirmedRow == null) return null;
-    final confirmed = Catalog.fromJson(confirmedRow);
-    if (confirmed.organizationId != initialContext.organizationId) {
-      throw StateError(
-        'El catálogo confirmado no pertenece a la organización activa.',
-      );
-    }
-    return confirmed;
-  }
-
-  Future<Map<String, dynamic>?> _queryFeatured() => _client
-      .from('catalogos_con_etiquetas')
-      .select()
-      .eq('estado', 'publicado')
-      .eq('activo', true)
-      .eq('destacado', true)
-      .limit(1)
-      .maybeSingle();
 
   Future<CatalogQueryContext> _queryContext() async {
     if (_queryContextProvider case final provider?) return provider();
@@ -169,7 +121,6 @@ class SupabaseCatalogRepository implements CatalogRepository {
       request = request.eq('es_actualizado', true);
     }
     final rows = await request
-        .order('destacado', ascending: false)
         .order('orden', ascending: true)
         .order('fecha_actualizacion', ascending: false)
         .range(offset, offset + limit - 1);
@@ -431,14 +382,6 @@ class SupabaseCatalogRepository implements CatalogRepository {
     });
     return Catalog.fromJson(Map<String, dynamic>.from(result as Map));
   }
-
-  @override
-  Future<Catalog> setFeatured(String id) async => Catalog.fromJson(
-        Map<String, dynamic>.from(await _client.rpc(
-          'admin_set_featured_catalog',
-          params: {'p_catalogo_id': id},
-        ) as Map),
-      );
 
   @override
   Future<Catalog> setActive(String id, bool active) async => Catalog.fromJson(

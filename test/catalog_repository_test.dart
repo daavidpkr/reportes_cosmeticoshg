@@ -26,111 +26,6 @@ Map<String, dynamic> catalogJson() => {
     };
 
 void main() {
-  test('consulta el destacado publicado y activo independientemente', () async {
-    Uri? requestedUri;
-    final featuredRow = {
-      ...catalogJson(),
-      'estado': 'publicado',
-      'activo': true,
-      'destacado': true,
-      'archivo_path':
-          '${catalogJson()['organization_id']}/${catalogJson()['id']}/v1/catalogo.pdf',
-      'portada_path':
-          '${catalogJson()['organization_id']}/${catalogJson()['id']}/v1/portada.webp',
-      'numero_paginas': 1,
-      'fecha_publicacion': '2026-10-19T12:00:00Z',
-      'fecha_actualizacion': '2026-10-19T12:00:00Z',
-    };
-    final client = SupabaseClient(
-      'https://example.supabase.co',
-      'anon-key',
-      accessToken: () async => 'session-token',
-      httpClient: MockClient((request) async {
-        requestedUri = request.url;
-        return http.Response(
-          jsonEncode(featuredRow),
-          200,
-          headers: {'content-type': 'application/json'},
-          request: request,
-        );
-      }),
-    );
-    addTearDown(client.dispose);
-
-    final featured = await SupabaseCatalogRepository(
-      client: client,
-      queryContextProvider: () async => (
-        userId: 'user',
-        organizationId: catalogJson()['organization_id']! as String,
-      ),
-    ).getFeatured();
-
-    expect(featured?.featured, isTrue);
-    expect(requestedUri?.queryParameters['estado'], 'eq.publicado');
-    expect(requestedUri?.queryParameters['activo'], 'eq.true');
-    expect(requestedUri?.queryParameters['destacado'], 'eq.true');
-    expect(requestedUri?.queryParameters['limit'], '1');
-    expect(requestedUri?.queryParameters, isNot(contains('offset')));
-  });
-
-  test('confirma dos veces un destacado ausente en el mismo contexto',
-      () async {
-    var catalogRequests = 0;
-    var contextRequests = 0;
-    final client = SupabaseClient(
-      'https://example.supabase.co',
-      'anon-key',
-      accessToken: () async => 'session-token',
-      httpClient: MockClient((request) async {
-        catalogRequests++;
-        return http.Response(
-          'null',
-          200,
-          headers: {'content-type': 'application/json'},
-          request: request,
-        );
-      }),
-    );
-    addTearDown(client.dispose);
-    final repository = SupabaseCatalogRepository(
-      client: client,
-      queryContextProvider: () async {
-        contextRequests++;
-        return (userId: 'user', organizationId: 'organization');
-      },
-    );
-
-    expect(await repository.getFeatured(), isNull);
-    expect(catalogRequests, 2);
-    expect(contextRequests, 3);
-  });
-
-  test('rechaza un null si cambia la sesión u organización', () async {
-    var contextRequests = 0;
-    final client = SupabaseClient(
-      'https://example.supabase.co',
-      'anon-key',
-      accessToken: () async => 'session-token',
-      httpClient: MockClient((request) async => http.Response(
-            'null',
-            200,
-            headers: {'content-type': 'application/json'},
-            request: request,
-          )),
-    );
-    addTearDown(client.dispose);
-    final repository = SupabaseCatalogRepository(
-      client: client,
-      queryContextProvider: () async => (
-        userId: 'user',
-        organizationId:
-            contextRequests++ == 0 ? 'organization-a' : 'organization-b',
-      ),
-    );
-
-    await expectLater(repository.getFeatured(), throwsStateError);
-  });
-
   test('administración consulta borradores y ocultos sin filtros públicos',
       () async {
     Uri? requestedUri;
@@ -139,7 +34,8 @@ void main() {
       {
         ...catalogJson(),
         'id': '00000000-0000-0000-0000-000000000003',
-        'activo': false
+        'activo': false,
+        'destacado': true,
       },
     ];
     final client = SupabaseClient(
@@ -172,12 +68,15 @@ void main() {
     );
 
     expect(result, hasLength(2));
+    expect(result.where((catalog) => catalog.featured), hasLength(1));
     expect(requestedUri?.queryParameters, isNot(contains('estado')));
     expect(requestedUri?.queryParameters, isNot(contains('activo')));
+    expect(requestedUri?.queryParameters, isNot(contains('destacado')));
     expect(
       requestedUri?.queryParameters['order'],
       contains('orden.asc'),
     );
+    expect(requestedUri?.queryParameters['order'], isNot(contains('destacado')));
   });
 
   test('listado público filtra publicado y activo', () async {
@@ -279,7 +178,6 @@ void main() {
     final draft = await repository.createDraft('Catálogo', 2);
     final catalog = Catalog.fromJson(catalogJson());
     await repository.saveMetadata(catalog, title: 'Nuevo título', order: 4);
-    await repository.setFeatured(catalog.id);
     await repository.setActive(catalog.id, false);
     await repository.deleteAfterStorage(catalog.id, 1);
 
@@ -292,7 +190,6 @@ void main() {
         containsPair('p_reemplazar_archivo', false));
     expect(
         calls['admin_publish_catalog'], containsPair('p_archivo_path', null));
-    expect(calls['admin_set_featured_catalog'], {'p_catalogo_id': catalog.id});
     expect(calls['admin_set_catalog_active'], {
       'p_catalogo_id': catalog.id,
       'p_activo': false,
