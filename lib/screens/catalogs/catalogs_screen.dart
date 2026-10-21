@@ -7,13 +7,14 @@ import 'package:pdfx/pdfx.dart';
 
 import '../../models/catalog.dart';
 import '../../services/catalog_cache_service.dart';
-import '../../services/catalog_cover_image.dart';
 import '../../services/catalog_file_error.dart';
 import '../../services/catalog_pdf_service.dart';
 import '../../services/catalog_repository.dart';
 import '../../services/document_download_service.dart';
 import '../../theme/hg_theme.dart';
+import 'catalog_cover.dart';
 import 'catalog_viewer_screen.dart';
+import 'featured_catalog_banner.dart';
 
 class CatalogsScreen extends StatefulWidget {
   const CatalogsScreen({
@@ -758,92 +759,19 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         ),
       );
 
-  Widget _featured(Catalog catalog, bool mobile) => Semantics(
-        label: 'Catálogo destacado: ${catalog.title}',
-        child: Container(
-          constraints: BoxConstraints(minHeight: mobile ? 190 : 255),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            fit: StackFit.passthrough,
-            children: [
-              Positioned.fill(
-                child: Row(
-                  children: List.generate(64, (index) {
-                    final color = Color.lerp(
-                          context.hg.burgundy,
-                          context.hg.plum,
-                          index / 63,
-                        ) ??
-                        context.hg.burgundy;
-                    return Expanded(child: ColoredBox(color: color));
-                  }),
-                ),
-              ),
-              mobile
-                  ? Row(children: [
-                      Expanded(flex: 4, child: _coverWidget(catalog)),
-                      Expanded(flex: 6, child: _featuredText(catalog)),
-                    ])
-                  : Row(children: [
-                      Expanded(flex: 4, child: _coverWidget(catalog)),
-                      Expanded(flex: 7, child: _featuredText(catalog)),
-                    ]),
-            ],
-          ),
-        ),
-      );
-
-  Widget _featuredText(Catalog catalog) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Text('DESTACADO',
-                  style: TextStyle(
-                      color: Color(0xFFF1D487),
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: 1.2)),
-              const SizedBox(height: 10),
-              Text(catalog.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      fontWeight: FontWeight.w800)),
-              const SizedBox(height: 8),
-              Text(_catalogMeta(catalog),
-                  style: const TextStyle(color: Colors.white70)),
-              if (catalog.filePending ||
-                  _invalidFiles.contains(catalog.id)) ...[
-                const SizedBox(height: 8),
-                Text(
-                  catalog.filePending
-                      ? 'Archivo pendiente de publicación'
-                      : 'PDF no disponible',
-                  style: const TextStyle(color: Colors.white70),
-                ),
-              ],
-              const SizedBox(height: 18),
-              Wrap(spacing: 8, runSpacing: 8, children: [
-                FilledButton.tonalIcon(
-                    onPressed: _fileActionsEnabled(catalog)
-                        ? () => _view(catalog)
-                        : null,
-                    icon: const Icon(Icons.visibility_outlined),
-                    label: const Text('Ver')),
-                IconButton.filledTonal(
-                    tooltip: 'Descargar',
-                    onPressed: _fileActionsEnabled(catalog)
-                        ? () => _download(catalog)
-                        : null,
-                    icon: const Icon(Icons.download_outlined)),
-              ]),
-            ]),
+  Widget _featured(Catalog catalog, bool mobile) => FeaturedCatalogBanner(
+        catalog: catalog,
+        mobile: mobile,
+        cover: _coverWidget(catalog, featured: true),
+        metadata: _catalogMeta(catalog),
+        fileMessage: catalog.filePending
+            ? 'Archivo pendiente de publicación'
+            : _invalidFiles.contains(catalog.id)
+                ? 'PDF no disponible'
+                : null,
+        onView: _fileActionsEnabled(catalog) ? () => _view(catalog) : null,
+        onDownload:
+            _fileActionsEnabled(catalog) ? () => _download(catalog) : null,
       );
 
   Widget _card(Catalog catalog, bool mobile) {
@@ -937,8 +865,15 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         ]),
       ),
     ]);
-    if (!mobile) return Card(clipBehavior: Clip.antiAlias, child: content);
+    if (!mobile) {
+      return Card(
+        key: ValueKey('catalog-list-${catalog.id}-v${catalog.version}'),
+        clipBehavior: Clip.antiAlias,
+        child: content,
+      );
+    }
     return SizedBox(
+        key: ValueKey('catalog-list-${catalog.id}-v${catalog.version}'),
         height: 260,
         child: Card(
             clipBehavior: Clip.antiAlias,
@@ -949,19 +884,12 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
             ])));
   }
 
-  Widget _coverWidget(Catalog catalog) {
+  Widget _coverWidget(Catalog catalog, {bool featured = false}) {
     final key = '${catalog.id}/v${catalog.version}';
-    return RepaintBoundary(
-      child: FutureBuilder<Uint8List?>(
-        future: _coverRequests.putIfAbsent(key, () => _cover(catalog)),
-        builder: (_, snapshot) => snapshot.data == null
-            ? ColoredBox(
-                color: context.hg.tableHeader,
-                child: Center(
-                    child: Icon(Icons.auto_stories_outlined,
-                        size: 56, color: context.hg.mutedText)))
-            : catalogCoverImage(snapshot.data!),
-      ),
+    return CatalogCover(
+      catalog: catalog,
+      bytes: _coverRequests.putIfAbsent(key, () => _cover(catalog)),
+      featured: featured,
     );
   }
 
@@ -1011,16 +939,33 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   }
 
   String _imageMime(Uint8List bytes) {
-    if (bytes.length > 12 &&
-        String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
-        String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP') {
-      return 'image/webp';
-    }
-    if (bytes.length > 3 && bytes[0] == 0xFF && bytes[1] == 0xD8) {
-      return 'image/jpeg';
-    }
+    final mime = catalogImageMime(bytes);
+    if (mime != null) return mime;
+    throw const FormatException('La portada no es PNG, JPEG ni WebP.');
+  }
+}
+
+String? catalogImageMime(Uint8List bytes) {
+  const pngSignature = <int>[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+  var isPng = bytes.length >= pngSignature.length;
+  for (var index = 0; isPng && index < pngSignature.length; index++) {
+    isPng = bytes[index] == pngSignature[index];
+  }
+  if (isPng) {
     return 'image/png';
   }
+  if (bytes.length >= 3 &&
+      bytes[0] == 0xFF &&
+      bytes[1] == 0xD8 &&
+      bytes[2] == 0xFF) {
+    return 'image/jpeg';
+  }
+  if (bytes.length >= 12 &&
+      String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
+      String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP') {
+    return 'image/webp';
+  }
+  return null;
 }
 
 class _CatalogFormResult {
@@ -1148,19 +1093,7 @@ class _CatalogFormDialogState extends State<_CatalogFormDialog> {
   }
 
   bool _isImage(Uint8List bytes, String mime) {
-    if (mime == 'image/png') {
-      return bytes.length > 8 &&
-          bytes[0] == 0x89 &&
-          bytes[1] == 0x50 &&
-          bytes[2] == 0x4E &&
-          bytes[3] == 0x47;
-    }
-    if (mime == 'image/jpeg') {
-      return bytes.length > 3 && bytes[0] == 0xFF && bytes[1] == 0xD8;
-    }
-    return bytes.length > 12 &&
-        String.fromCharCodes(bytes.sublist(0, 4)) == 'RIFF' &&
-        String.fromCharCodes(bytes.sublist(8, 12)) == 'WEBP';
+    return catalogImageMime(bytes) == mime;
   }
 
   void _setError(String text) {

@@ -138,18 +138,39 @@ class _ControlledRepository extends _Repository {
   }
 }
 
+class _ControlledCoverRepository extends _ControlledRepository {
+  final coverDownload = Completer<Uint8List>();
+
+  @override
+  Future<Uint8List> download(
+    String path, {
+    void Function(double p1)? onProgress,
+    bool requirePdf = false,
+  }) {
+    if (path.endsWith('portada.webp')) return coverDownload.future;
+    return super.download(
+      path,
+      onProgress: onProgress,
+      requirePdf: requirePdf,
+    );
+  }
+}
+
 Catalog _catalog({
   required String id,
   required String title,
   bool featured = false,
   bool isNew = false,
+  int version = 1,
+  String? coverPath,
 }) =>
     Catalog(
       id: id,
       organizationId: 'org',
       title: title,
-      filePath: 'org/$id/v1/catalogo.pdf',
-      version: 1,
+      filePath: 'org/$id/v$version/catalogo.pdf',
+      coverPath: coverPath,
+      version: version,
       pageCount: 1,
       status: CatalogStatus.publicado,
       active: true,
@@ -202,6 +223,21 @@ void main() {
       expect(find.text('Catálogos'), findsOneWidget);
       expect(find.byKey(const Key('catalog-search')), findsOneWidget);
       expect(find.text('Colección destacada'), findsWidgets);
+      expect(find.byKey(const ValueKey('featured-id-v1')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('featured-cover-id-v1')),
+        findsOneWidget,
+      );
+      if (size.width >= 650) {
+        expect(
+          find.byKey(const ValueKey('catalog-list-id-v1')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const ValueKey('catalog-list-cover-id-v1')),
+          findsOneWidget,
+        );
+      }
       expect(tester.takeException(), isNull);
     });
   }
@@ -294,6 +330,85 @@ void main() {
     await tester.pump(const Duration(seconds: 11));
 
     expect(find.text('Destacado remoto estable'), findsOneWidget);
+  });
+
+  testWidgets(
+      'el banner permanece completo sin portada, durante la carga y tras error',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ControlledCoverRepository();
+    await _pumpControlled(tester, repository);
+    repository.featuredCalls.single.complete(
+      _catalog(
+        id: 'featured',
+        title: 'Destacado sin portada',
+        featured: true,
+      ),
+    );
+    repository.listCalls.single.completer.complete(const []);
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('featured-featured-v1')), findsOneWidget);
+    expect(find.byKey(const Key('featured-cover-placeholder')), findsOneWidget);
+    expect(find.text('Destacado sin portada'), findsOneWidget);
+    expect(find.text('Ver'), findsOneWidget);
+    expect(find.byTooltip('Descargar'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 15));
+
+    expect(find.byKey(const ValueKey('featured-featured-v1')), findsOneWidget);
+    expect(find.text('Destacado sin portada'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('catalogs-refresh')));
+    await tester.pump();
+    repository.featuredCalls[1].complete(
+      _catalog(
+        id: 'featured',
+        title: 'Destacado con portada',
+        featured: true,
+        version: 2,
+        coverPath: 'org/featured/v2/portada.webp',
+      ),
+    );
+    repository.listCalls[1].completer.complete(const []);
+    await tester.pump();
+
+    expect(find.byKey(const ValueKey('featured-featured-v2')), findsOneWidget);
+    expect(find.byKey(const Key('featured-cover-placeholder')), findsOneWidget);
+    expect(find.text('Destacado con portada'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 15));
+
+    expect(find.byKey(const ValueKey('featured-featured-v2')), findsOneWidget);
+    expect(find.text('Destacado con portada'), findsOneWidget);
+    repository.coverDownload.completeError(StateError('portada no disponible'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('featured-featured-v2')), findsOneWidget);
+    expect(find.byKey(const Key('featured-cover-placeholder')), findsOneWidget);
+    expect(find.text('Destacado con portada'), findsOneWidget);
+    expect(find.text('Ver'), findsOneWidget);
+    expect(find.byTooltip('Descargar'), findsOneWidget);
+  });
+
+  test('detecta correctamente MIME de PNG, JPEG y WebP', () {
+    expect(
+      catalogImageMime(Uint8List.fromList(
+        [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+      )),
+      'image/png',
+    );
+    expect(
+      catalogImageMime(Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0])),
+      'image/jpeg',
+    );
+    expect(
+      catalogImageMime(Uint8List.fromList(
+        'RIFF1234WEBP'.codeUnits,
+      )),
+      'image/webp',
+    );
+    expect(catalogImageMime(Uint8List.fromList([0xFF, 0xD8])), isNull);
   });
 
   testWidgets('una respuesta tardía del buscador no elimina el destacado',
