@@ -29,13 +29,12 @@ class _Repository implements CatalogRepository {
   final item = Catalog(
     id: 'id',
     organizationId: 'org',
-    title: 'Colección destacada',
+    title: 'Colección profesional',
     filePath: 'org/id/v1/catalogo.pdf',
     version: 1,
     pageCount: 12,
     status: CatalogStatus.publicado,
     active: true,
-    featured: true,
     order: 0,
     createdAt: DateTime(2026),
     updatedAt: DateTime(2026, 10, 19),
@@ -147,7 +146,6 @@ class _ControlledCoverRepository extends _ControlledRepository {
 Catalog _catalog({
   required String id,
   required String title,
-  bool featured = false,
   bool isNew = false,
   int version = 1,
   String? coverPath,
@@ -162,7 +160,6 @@ Catalog _catalog({
       pageCount: 1,
       status: CatalogStatus.publicado,
       active: true,
-      featured: featured,
       order: 0,
       createdAt: DateTime(2026),
       updatedAt: DateTime(2026, 10, 20),
@@ -210,7 +207,7 @@ void main() {
 
       expect(find.text('Catálogos'), findsOneWidget);
       expect(find.byKey(const Key('catalog-search')), findsOneWidget);
-      expect(find.text('Colección destacada'), findsOneWidget);
+      expect(find.text('Colección profesional'), findsOneWidget);
       expect(
         find.byKey(const ValueKey('catalog-list-id-v1')),
         findsOneWidget,
@@ -291,32 +288,27 @@ void main() {
     expect(isValidPdfBytes(backend.data['id/v1/catalogo.pdf']!), isTrue);
   });
 
-  testWidgets('un destacado remoto se muestra una vez como tarjeta normal',
+  testWidgets('cada resultado remoto se muestra una vez en el listado',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
     await _pumpControlled(tester, repository);
-    final featured = _catalog(
-      id: 'featured',
-      title: 'Destacado remoto estable',
-      featured: true,
-    );
+    final first = _catalog(id: 'first', title: 'Primera colección');
     repository.listCalls.single.completer.complete([
-      featured,
+      first,
       _catalog(id: 'regular', title: 'Catálogo regular'),
     ]);
     await tester.pumpAndSettle();
 
-    expect(find.text('Destacado remoto estable'), findsOneWidget);
+    expect(find.text('Primera colección'), findsOneWidget);
     expect(
-      find.byKey(const ValueKey('catalog-list-featured-v1')),
+      find.byKey(const ValueKey('catalog-list-first-v1')),
       findsOneWidget,
     );
-    expect(find.byKey(const ValueKey('featured-featured-v1')), findsNothing);
   });
 
   testWidgets(
-      'la carga inicial muestra el listado sin esperar una consulta destacada',
+      'la carga inicial muestra todos los resultados de la consulta única',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
@@ -354,6 +346,25 @@ void main() {
     expect(find.text('No hay catálogos para mostrar.'), findsNothing);
   });
 
+  testWidgets('una recarga vacía conserva el listado actual', (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ControlledRepository();
+    await _pumpControlled(tester, repository);
+    repository.listCalls.single.completer.complete([
+      _catalog(id: 'stable', title: 'Listado estable'),
+    ]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('catalogs-refresh')));
+    await tester.pump();
+    repository.listCalls[1].completer.complete(const []);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Listado estable'), findsOneWidget);
+    expect(find.textContaining('respuesta vacía'), findsOneWidget);
+    expect(find.text('No hay catálogos para mostrar.'), findsNothing);
+  });
+
   testWidgets('un error de portada no reemplaza por vacío el listado remoto',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -361,10 +372,9 @@ void main() {
     await _pumpControlled(tester, repository);
     repository.listCalls.single.completer.complete([
       _catalog(
-        id: 'featured',
+        id: 'cover-error',
         title: 'Catálogo con portada fallida',
-        featured: true,
-        coverPath: 'org/featured/v1/portada.webp',
+        coverPath: 'org/cover-error/v1/portada.webp',
       ),
     ]);
     await tester.pump();
@@ -373,7 +383,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const ValueKey('catalog-list-featured-v1')),
+      find.byKey(const ValueKey('catalog-list-cover-error-v1')),
       findsOneWidget,
     );
     expect(find.byKey(const Key('cover-placeholder')), findsOneWidget);
@@ -451,13 +461,12 @@ void main() {
     expect(find.text('Respuesta antigua'), findsNothing);
   });
 
-  testWidgets('los filtros tratan destacado como cualquier otro catálogo',
-      (tester) async {
+  testWidgets('los filtros sustituyen el alcance del listado', (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _ControlledRepository();
     await _pumpControlled(tester, repository);
     repository.listCalls.single.completer.complete([
-      _catalog(id: 'featured', title: 'Destacado sin filtro', featured: true),
+      _catalog(id: 'new-item', title: 'Colección sin filtro'),
       _catalog(id: 'regular', title: 'Regular'),
     ]);
     await tester.pumpAndSettle();
@@ -469,7 +478,7 @@ void main() {
     repository.listCalls.last.completer.complete(const []);
     await tester.pumpAndSettle();
 
-    expect(find.text('Destacado sin filtro'), findsNothing);
+    expect(find.text('Colección sin filtro'), findsNothing);
     expect(find.text('No hay catálogos para mostrar.'), findsOneWidget);
   });
 
@@ -479,7 +488,7 @@ void main() {
     final repository = _ControlledRepository();
     await _pumpControlled(tester, repository);
     repository.listCalls.single.completer.complete([
-      _catalog(id: 'featured', title: 'Destacado conservado', featured: true),
+      _catalog(id: 'first', title: 'Colección conservada'),
       _catalog(id: 'regular', title: 'Regular'),
     ]);
     await tester.pumpAndSettle();
@@ -491,7 +500,7 @@ void main() {
         .completeError(StateError('red no disponible'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Destacado conservado'), findsOneWidget);
+    expect(find.text('Colección conservada'), findsOneWidget);
     expect(find.textContaining('red no disponible'), findsOneWidget);
   });
 

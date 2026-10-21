@@ -26,7 +26,7 @@ Map<String, dynamic> catalogJson() => {
     };
 
 void main() {
-  test('administración consulta borradores y ocultos sin filtros públicos',
+  test('administración consulta todos los registros sin filtros públicos',
       () async {
     Uri? requestedUri;
     final rows = [
@@ -68,7 +68,7 @@ void main() {
     );
 
     expect(result, hasLength(2));
-    expect(result.where((catalog) => catalog.featured), hasLength(1));
+    expect(result.map((catalog) => catalog.id), hasLength(2));
     expect(requestedUri?.queryParameters, isNot(contains('estado')));
     expect(requestedUri?.queryParameters, isNot(contains('activo')));
     expect(requestedUri?.queryParameters, isNot(contains('destacado')));
@@ -76,7 +76,8 @@ void main() {
       requestedUri?.queryParameters['order'],
       contains('orden.asc'),
     );
-    expect(requestedUri?.queryParameters['order'], isNot(contains('destacado')));
+    expect(
+        requestedUri?.queryParameters['order'], isNot(contains('destacado')));
   });
 
   test('listado público filtra publicado y activo', () async {

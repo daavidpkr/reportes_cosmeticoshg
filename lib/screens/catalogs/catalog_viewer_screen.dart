@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdfx/pdfx.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -39,6 +42,7 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
   String? _startupError;
   int _page = 1;
   int _pages = 0;
+  bool _fullScreen = false;
 
   @override
   void initState() {
@@ -58,6 +62,13 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
 
   @override
   void dispose() {
+    if (_fullScreen &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android) {
+      unawaited(
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
+      );
+    }
     _pageController.dispose();
     _pinchController?.dispose();
     _simpleController?.dispose();
@@ -203,6 +214,20 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
         catalogId: widget.catalog.id);
   }
 
+  void _setFullScreen(bool value) {
+    if (_fullScreen == value) return;
+    setState(() => _fullScreen = value);
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      unawaited(SystemChrome.setEnabledSystemUIMode(
+        value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+      ));
+    }
+  }
+
+  void _handleBack(bool didPop) {
+    if (!didPop && _fullScreen) _setFullScreen(false);
+  }
+
   Widget _pdfViewer() {
     if (_startupError case final error?) {
       return Center(child: Text('No se pudo mostrar el PDF: $error'));
@@ -260,92 +285,165 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
   Widget build(BuildContext context) {
     final oldVersion = widget.cachedVersion != null &&
         widget.cachedVersion! < widget.catalog.version;
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.catalog.title, overflow: TextOverflow.ellipsis),
-        actions: [
-          IconButton(
-              tooltip: 'Descargar',
-              onPressed: _startupError == null ? _download : null,
-              icon: const Icon(Icons.download_outlined)),
-          IconButton(
-              tooltip: 'Compartir',
-              onPressed: _startupError == null ? _share : null,
-              icon: const Icon(Icons.share_outlined)),
-          IconButton(
-              tooltip: 'Abrir con otra aplicación',
-              onPressed: _startupError == null ? _openExternal : null,
-              icon: const Icon(Icons.open_in_new)),
-        ],
-      ),
-      body: Column(children: [
-        if (oldVersion)
-          MaterialBanner(
-            content: Text(
-                'Estás viendo la versión ${widget.cachedVersion}. La versión ${widget.catalog.version} está disponible.'),
-            actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('ACTUALIZAR'))
-            ],
-          ),
-        Expanded(
-          child: ColoredBox(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            child: _pdfViewer(),
-          ),
-        ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: Wrap(
-                alignment: WrapAlignment.center,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  IconButton(
-                    tooltip: 'Página anterior',
-                    onPressed: _page > 1 ? _previousPage : null,
-                    icon: const Icon(Icons.chevron_left),
+    return PopScope(
+      canPop: !_fullScreen,
+      onPopInvokedWithResult: (didPop, _) => _handleBack(didPop),
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () {
+            if (_fullScreen) _setFullScreen(false);
+          },
+        },
+        child: Focus(
+          autofocus: true,
+          child: Scaffold(
+            appBar: _fullScreen
+                ? null
+                : AppBar(
+                    title: Text(
+                      widget.catalog.title,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    actions: [
+                      IconButton(
+                        key: const Key('viewer-enter-fullscreen'),
+                        tooltip: 'Pantalla completa',
+                        onPressed: () => _setFullScreen(true),
+                        icon: const Icon(Icons.fullscreen),
+                      ),
+                      IconButton(
+                        tooltip: 'Descargar',
+                        onPressed: _startupError == null ? _download : null,
+                        icon: const Icon(Icons.download_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Compartir',
+                        onPressed: _startupError == null ? _share : null,
+                        icon: const Icon(Icons.share_outlined),
+                      ),
+                      IconButton(
+                        tooltip: 'Abrir con otra aplicación',
+                        onPressed: _startupError == null ? _openExternal : null,
+                        icon: const Icon(Icons.open_in_new),
+                      ),
+                    ],
                   ),
-                  SizedBox(
-                    width: 60,
-                    child: TextField(
-                      controller: _pageController,
-                      textAlign: TextAlign.center,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                          isDense: true, border: OutlineInputBorder()),
-                      onSubmitted: (_) => _goToPage(),
+            body: Stack(
+              children: [
+                Column(
+                  children: [
+                    Visibility(
+                      visible: !_fullScreen && oldVersion,
+                      maintainState: true,
+                      child: MaterialBanner(
+                        content: Text(
+                          'Estás viendo la versión ${widget.cachedVersion}. '
+                          'La versión ${widget.catalog.version} está disponible.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('ACTUALIZAR'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: ColoredBox(
+                        key: const Key('viewer-pdf-surface'),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                        child: _pdfViewer(),
+                      ),
+                    ),
+                    Visibility(
+                      visible: !_fullScreen,
+                      maintainState: true,
+                      child: SafeArea(
+                        top: false,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              IconButton(
+                                tooltip: 'Página anterior',
+                                onPressed: _page > 1 ? _previousPage : null,
+                                icon: const Icon(Icons.chevron_left),
+                              ),
+                              SizedBox(
+                                width: 60,
+                                child: TextField(
+                                  controller: _pageController,
+                                  textAlign: TextAlign.center,
+                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    isDense: true,
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  onSubmitted: (_) => _goToPage(),
+                                ),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 8),
+                                child: Text('de ${_pages == 0 ? '…' : _pages}'),
+                              ),
+                              IconButton(
+                                tooltip: 'Página siguiente',
+                                onPressed: _pages > 0 && _page < _pages
+                                    ? _nextPage
+                                    : null,
+                                icon: const Icon(Icons.chevron_right),
+                              ),
+                              const SizedBox(width: 8),
+                              if (_pinchController != null) ...[
+                                IconButton(
+                                  tooltip: 'Alejar',
+                                  onPressed: () => _zoom(.8),
+                                  icon: const Icon(Icons.zoom_out),
+                                ),
+                                IconButton(
+                                  tooltip: 'Restablecer zoom',
+                                  onPressed: _resetZoom,
+                                  icon: const Icon(Icons.fit_screen_outlined),
+                                ),
+                                IconButton(
+                                  tooltip: 'Acercar',
+                                  onPressed: () => _zoom(1.25),
+                                  icon: const Icon(Icons.zoom_in),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_fullScreen)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: SafeArea(
+                      child: FloatingActionButton.small(
+                        key: const Key('viewer-exit-fullscreen'),
+                        tooltip: 'Salir de pantalla completa',
+                        onPressed: () => _setFullScreen(false),
+                        child: const Icon(Icons.fullscreen_exit),
+                      ),
                     ),
                   ),
-                  Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      child: Text('de ${_pages == 0 ? '…' : _pages}')),
-                  IconButton(
-                    tooltip: 'Página siguiente',
-                    onPressed: _pages > 0 && _page < _pages ? _nextPage : null,
-                    icon: const Icon(Icons.chevron_right),
-                  ),
-                  const SizedBox(width: 8),
-                  if (_pinchController != null) ...[
-                    IconButton(
-                        tooltip: 'Alejar',
-                        onPressed: () => _zoom(.8),
-                        icon: const Icon(Icons.zoom_out)),
-                    IconButton(
-                        tooltip: 'Restablecer zoom',
-                        onPressed: _resetZoom,
-                        icon: const Icon(Icons.fit_screen_outlined)),
-                    IconButton(
-                        tooltip: 'Acercar',
-                        onPressed: () => _zoom(1.25),
-                        icon: const Icon(Icons.zoom_in)),
-                  ],
-                ]),
+              ],
+            ),
           ),
         ),
-      ]),
+      ),
     );
   }
 }

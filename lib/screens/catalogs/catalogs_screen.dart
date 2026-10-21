@@ -48,6 +48,8 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   Timer? _debounce;
   int _listGeneration = 0;
   int _listRequestId = 0;
+  String _loadedQuery = '';
+  CatalogFilter _loadedFilter = CatalogFilter.all;
   bool _loading = true;
   bool _initialLoading = true;
   bool _loadingMore = false;
@@ -113,9 +115,20 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         return;
       }
       setState(() {
-        _catalogs = reset ? rows : [..._catalogs, ...rows];
+        final sameScope = query == _loadedQuery && filter == _loadedFilter;
+        final preserveCurrent =
+            reset && rows.isEmpty && _catalogs.isNotEmpty && sameScope;
+        if (!preserveCurrent) {
+          _catalogs = reset ? rows : [..._catalogs, ...rows];
+          if (reset) {
+            _loadedQuery = query;
+            _loadedFilter = filter;
+          }
+        }
         _hasMore = rows.length == _pageSize;
-        _error = null;
+        _error = preserveCurrent
+            ? 'La actualización devolvió una respuesta vacía. Se conserva el último listado disponible.'
+            : null;
       });
       for (final catalog in rows) {
         if (await _cache.isDownloaded(catalog) &&
@@ -337,7 +350,6 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         version: draft.version,
         status: CatalogStatus.borrador,
         active: true,
-        featured: false,
         order: input.order,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),

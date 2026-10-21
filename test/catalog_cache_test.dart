@@ -37,7 +37,6 @@ Catalog version(int value) => Catalog(
       pageCount: 1,
       status: CatalogStatus.publicado,
       active: true,
-      featured: false,
       order: 0,
       createdAt: DateTime(2026),
       updatedAt: DateTime(2026, 10, 19),

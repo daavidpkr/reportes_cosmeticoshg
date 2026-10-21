@@ -10,7 +10,6 @@ class Catalog {
     required this.version,
     required this.status,
     required this.active,
-    required this.featured,
     required this.order,
     required this.createdAt,
     required this.updatedAt,
@@ -32,7 +31,6 @@ class Catalog {
   final int? pageCount;
   final CatalogStatus status;
   final bool active;
-  final bool featured;
   final int order;
   final DateTime? publishedAt;
   final DateTime? publicUpdatedAt;
@@ -61,7 +59,6 @@ class Catalog {
             ? CatalogStatus.publicado
             : CatalogStatus.borrador,
         active: json['activo'] == true,
-        featured: json['destacado'] == true,
         order: (json['orden'] as num?)?.toInt() ?? 0,
         publishedAt: _date(json['fecha_publicacion']),
         publicUpdatedAt: _date(json['fecha_actualizacion']),
@@ -83,7 +80,6 @@ class Catalog {
         'numero_paginas': pageCount,
         'estado': status.name,
         'activo': active,
-        'destacado': featured,
         'orden': order,
         'fecha_publicacion': publishedAt?.toIso8601String(),
         'fecha_actualizacion': publicUpdatedAt?.toIso8601String(),

@@ -11,7 +11,6 @@ Catalog catalog({bool isNew = false, bool isUpdated = false}) => Catalog(
       pageCount: 24,
       status: CatalogStatus.publicado,
       active: true,
-      featured: false,
       order: 1,
       createdAt: DateTime(2026),
       updatedAt: DateTime(2026, 10, 19),
