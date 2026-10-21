@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../models/catalog.dart';
 import '../../services/catalog_external_open.dart';
 import '../../services/catalog_file_error.dart';
+import '../../services/catalog_fullscreen.dart';
 import '../../services/document_download_service.dart';
 import '../../theme/hg_theme.dart';
 
@@ -38,15 +37,22 @@ class CatalogViewerScreen extends StatefulWidget {
 class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
   PdfControllerPinch? _pinchController;
   PdfController? _simpleController;
+  final TransformationController _desktopTransform = TransformationController();
+  late final CatalogFullscreenController _fullscreenController;
   late final TextEditingController _pageController;
   String? _startupError;
   int _page = 1;
   int _pages = 0;
   bool _fullScreen = false;
+  bool _desktopZoomed = false;
 
   @override
   void initState() {
     super.initState();
+    _fullscreenController = CatalogFullscreenController(
+      onChanged: _fullscreenChanged,
+    );
+    _desktopTransform.addListener(_desktopTransformChanged);
     if (!isValidPdfBytes(widget.bytes)) {
       _startupError = 'El archivo recibido está vacío o no comienza con %PDF-.';
     } else {
@@ -62,13 +68,8 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
 
   @override
   void dispose() {
-    if (_fullScreen &&
-        !kIsWeb &&
-        defaultTargetPlatform == TargetPlatform.android) {
-      unawaited(
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge),
-      );
-    }
+    _fullscreenController.dispose();
+    _desktopTransform.dispose();
     _pageController.dispose();
     _pinchController?.dispose();
     _simpleController?.dispose();
@@ -155,15 +156,26 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
 
   void _zoom(double factor) {
     final controller = _pinchController;
-    if (controller == null) return;
-    final current = controller.zoomRatio;
+    final current =
+        controller?.zoomRatio ?? _desktopTransform.value.getMaxScaleOnAxis();
     final target = (current * factor).clamp(1.0, 6.0);
     final change = target / current;
-    controller.value = controller.value.clone()
-      ..scaleByDouble(change, change, change, 1);
+    if (controller != null) {
+      controller.value = controller.value.clone()
+        ..scaleByDouble(change, change, change, 1);
+    } else {
+      _desktopTransform.value = _desktopTransform.value.clone()
+        ..scaleByDouble(change, change, change, 1);
+    }
   }
 
-  void _resetZoom() => _animateToPage(_page);
+  void _resetZoom() {
+    if (_pinchController != null) {
+      _animateToPage(_page);
+    } else {
+      _desktopTransform.value = Matrix4.identity();
+    }
+  }
 
   Future<void> _animateToPage(int page) => _pinchController != null
       ? _pinchController!.animateToPage(
@@ -214,19 +226,106 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
         catalogId: widget.catalog.id);
   }
 
-  void _setFullScreen(bool value) {
-    if (_fullScreen == value) return;
-    setState(() => _fullScreen = value);
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      unawaited(SystemChrome.setEnabledSystemUIMode(
-        value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
-      ));
+  void _desktopTransformChanged() {
+    final zoomed = _desktopTransform.value.getMaxScaleOnAxis() > 1.001;
+    if (mounted && zoomed != _desktopZoomed) {
+      setState(() => _desktopZoomed = zoomed);
+    }
+  }
+
+  void _fullscreenChanged(bool value) {
+    if (mounted && value != _fullScreen) {
+      setState(() => _fullScreen = value);
+    }
+  }
+
+  Future<void> _enterFullScreen() async {
+    try {
+      await _fullscreenController.enter();
+    } catch (error) {
+      _actionError(
+        CatalogFileStage.viewer,
+        error,
+        'No se pudo activar la pantalla completa.',
+      );
+    }
+  }
+
+  Future<void> _exitFullScreen() async {
+    try {
+      await _fullscreenController.exit();
+    } catch (error) {
+      _actionError(
+        CatalogFileStage.viewer,
+        error,
+        'No se pudo salir de la pantalla completa.',
+      );
     }
   }
 
   void _handleBack(bool didPop) {
-    if (!didPop && _fullScreen) _setFullScreen(false);
+    if (!didPop && _fullScreen) _exitFullScreen();
   }
+
+  Widget _floatingControls() => SafeArea(
+        minimum: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Material(
+            color: Theme.of(context).colorScheme.surface.withValues(alpha: .9),
+            elevation: 8,
+            borderRadius: BorderRadius.circular(28),
+            clipBehavior: Clip.antiAlias,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6),
+              child: Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  IconButton(
+                    key: const Key('viewer-fullscreen-previous'),
+                    tooltip: 'Página anterior',
+                    onPressed: _page > 1 ? _previousPage : null,
+                    icon: const Icon(Icons.chevron_left),
+                  ),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(minWidth: 62),
+                    child: Text(
+                      '$_page / ${_pages == 0 ? '…' : _pages}',
+                      key: const Key('viewer-fullscreen-page'),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  IconButton(
+                    key: const Key('viewer-fullscreen-next'),
+                    tooltip: 'Página siguiente',
+                    onPressed: _pages > 0 && _page < _pages ? _nextPage : null,
+                    icon: const Icon(Icons.chevron_right),
+                  ),
+                  IconButton(
+                    key: const Key('viewer-fullscreen-zoom-out'),
+                    tooltip: 'Alejar',
+                    onPressed: _startupError == null ? () => _zoom(.8) : null,
+                    icon: const Icon(Icons.zoom_out),
+                  ),
+                  IconButton(
+                    key: const Key('viewer-fullscreen-reset-zoom'),
+                    tooltip: 'Restablecer zoom',
+                    onPressed: _startupError == null ? _resetZoom : null,
+                    icon: const Icon(Icons.fit_screen_outlined),
+                  ),
+                  IconButton(
+                    key: const Key('viewer-fullscreen-zoom-in'),
+                    tooltip: 'Acercar',
+                    onPressed: _startupError == null ? () => _zoom(1.25) : null,
+                    icon: const Icon(Icons.zoom_in),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 
   Widget _pdfViewer() {
     if (_startupError case final error?) {
@@ -260,21 +359,27 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
     if (simple == null) {
       return const Center(child: Text('No se pudo iniciar el visor PDF.'));
     }
-    return PdfView(
-      controller: simple,
-      scrollDirection: Axis.horizontal,
-      onDocumentLoaded: _documentLoaded,
-      onDocumentError: _documentError,
-      onPageChanged: _pageChanged,
-      builders: PdfViewBuilders<DefaultBuilderOptions>(
-        options: const DefaultBuilderOptions(),
-        documentLoaderBuilder: (_) =>
-            const Center(child: CircularProgressIndicator()),
-        pageLoaderBuilder: (_) =>
-            const Center(child: CircularProgressIndicator()),
-        errorBuilder: (_, error) => Center(
-          child: Text(
-            'No se pudo mostrar el PDF validado: ${sanitizeCatalogError(error)}',
+    return InteractiveViewer(
+      transformationController: _desktopTransform,
+      minScale: 1,
+      maxScale: 6,
+      panEnabled: _desktopZoomed,
+      child: PdfView(
+        controller: simple,
+        scrollDirection: Axis.horizontal,
+        onDocumentLoaded: _documentLoaded,
+        onDocumentError: _documentError,
+        onPageChanged: _pageChanged,
+        builders: PdfViewBuilders<DefaultBuilderOptions>(
+          options: const DefaultBuilderOptions(),
+          documentLoaderBuilder: (_) =>
+              const Center(child: CircularProgressIndicator()),
+          pageLoaderBuilder: (_) =>
+              const Center(child: CircularProgressIndicator()),
+          errorBuilder: (_, error) => Center(
+            child: Text(
+              'No se pudo mostrar el PDF validado: ${sanitizeCatalogError(error)}',
+            ),
           ),
         ),
       ),
@@ -291,7 +396,7 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
       child: CallbackShortcuts(
         bindings: {
           const SingleActivator(LogicalKeyboardKey.escape): () {
-            if (_fullScreen) _setFullScreen(false);
+            if (_fullScreen) _exitFullScreen();
           },
         },
         child: Focus(
@@ -308,7 +413,7 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
                       IconButton(
                         key: const Key('viewer-enter-fullscreen'),
                         tooltip: 'Pantalla completa',
-                        onPressed: () => _setFullScreen(true),
+                        onPressed: _enterFullScreen,
                         icon: const Icon(Icons.fullscreen),
                       ),
                       IconButton(
@@ -402,23 +507,21 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
                                 icon: const Icon(Icons.chevron_right),
                               ),
                               const SizedBox(width: 8),
-                              if (_pinchController != null) ...[
-                                IconButton(
-                                  tooltip: 'Alejar',
-                                  onPressed: () => _zoom(.8),
-                                  icon: const Icon(Icons.zoom_out),
-                                ),
-                                IconButton(
-                                  tooltip: 'Restablecer zoom',
-                                  onPressed: _resetZoom,
-                                  icon: const Icon(Icons.fit_screen_outlined),
-                                ),
-                                IconButton(
-                                  tooltip: 'Acercar',
-                                  onPressed: () => _zoom(1.25),
-                                  icon: const Icon(Icons.zoom_in),
-                                ),
-                              ],
+                              IconButton(
+                                tooltip: 'Alejar',
+                                onPressed: () => _zoom(.8),
+                                icon: const Icon(Icons.zoom_out),
+                              ),
+                              IconButton(
+                                tooltip: 'Restablecer zoom',
+                                onPressed: _resetZoom,
+                                icon: const Icon(Icons.fit_screen_outlined),
+                              ),
+                              IconButton(
+                                tooltip: 'Acercar',
+                                onPressed: () => _zoom(1.25),
+                                icon: const Icon(Icons.zoom_in),
+                              ),
                             ],
                           ),
                         ),
@@ -426,6 +529,7 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
                     ),
                   ],
                 ),
+                if (_fullScreen) _floatingControls(),
                 if (_fullScreen)
                   Positioned(
                     top: 12,
@@ -434,7 +538,7 @@ class _CatalogViewerScreenState extends State<CatalogViewerScreen> {
                       child: FloatingActionButton.small(
                         key: const Key('viewer-exit-fullscreen'),
                         tooltip: 'Salir de pantalla completa',
-                        onPressed: () => _setFullScreen(false),
+                        onPressed: _exitFullScreen,
                         child: const Icon(Icons.fullscreen_exit),
                       ),
                     ),

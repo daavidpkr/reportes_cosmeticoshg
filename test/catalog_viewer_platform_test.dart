@@ -61,18 +61,26 @@ void main() {
         ));
 
         await tester.tap(find.byTooltip('Pantalla completa'));
-        await tester.pump();
+        await tester.pumpAndSettle();
 
         expect(find.text('Colección profesional'), findsNothing);
         expect(find.byTooltip('Descargar'), findsNothing);
         expect(find.byTooltip('Salir de pantalla completa'), findsOneWidget);
+        expect(
+          find.byKey(const Key('viewer-fullscreen-page')),
+          findsOneWidget,
+        );
+        expect(
+          find.byKey(const Key('viewer-fullscreen-zoom-in')),
+          findsOneWidget,
+        );
         expect(
           tester.element(find.byKey(const Key('viewer-pdf-surface'))),
           same(surface),
         );
 
         await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-        await tester.pump();
+        await tester.pumpAndSettle();
 
         expect(find.byTooltip('Pantalla completa'), findsOneWidget);
         expect(find.byTooltip('Salir de pantalla completa'), findsNothing);
@@ -88,12 +96,28 @@ void main() {
       (tester) async {
     await _pumpViewer(tester, Brightness.light);
     await tester.tap(find.byTooltip('Pantalla completa'));
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     await tester.binding.handlePopRoute();
-    await tester.pump();
+    await tester.pumpAndSettle();
 
     expect(find.byType(CatalogViewerScreen), findsOneWidget);
     expect(find.byTooltip('Pantalla completa'), findsOneWidget);
   });
+
+  for (final size in [const Size(360, 800), const Size(800, 360)]) {
+    testWidgets('controles flotantes responden en ${size.width}x${size.height}',
+        (tester) async {
+      await tester.binding.setSurfaceSize(size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await _pumpViewer(tester, Brightness.dark);
+
+      await tester.tap(find.byTooltip('Pantalla completa'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('viewer-fullscreen-page')), findsOneWidget);
+      expect(find.byTooltip('Salir de pantalla completa'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
