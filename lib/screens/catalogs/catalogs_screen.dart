@@ -52,6 +52,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   int _listRequestId = 0;
   int _featuredGeneration = 0;
   bool _loading = true;
+  bool _initialLoading = true;
   bool _loadingMore = false;
   bool _featuredLoading = true;
   bool _hasMore = true;
@@ -82,6 +83,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
 
   void _onScroll() {
     if (_scroll.position.extentAfter < 500 &&
+        !_initialLoading &&
         !_loading &&
         !_loadingMore &&
         _hasMore) {
@@ -109,6 +111,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         limit: _pageSize,
         query: query,
         filter: filter,
+        includeAdministration: true,
       );
       if (!mounted ||
           generation != _listGeneration ||
@@ -136,7 +139,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
         return;
       }
       setState(() {
-        if (reset && cached.isNotEmpty) {
+        if (reset && _catalogs.isEmpty && cached.isNotEmpty) {
           _catalogs = cached
               .where((item) =>
                   item.title.toLowerCase().contains(query.toLowerCase()) &&
@@ -145,6 +148,9 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
           _downloaded.addAll(cached.map((item) => item.id));
           _hasMore = false;
           _error = 'Sin conexión: mostrando catálogos descargados.';
+        } else if (_catalogs.isNotEmpty) {
+          _error =
+              'No se pudieron actualizar los catálogos. Se conserva el último listado disponible: $error';
         } else {
           _error = 'No se pudieron cargar los catálogos: $error';
         }
@@ -189,10 +195,16 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
   }
 
   Future<void> _refreshAll() async {
-    await Future.wait<void>([
-      _load(reset: true),
-      _loadFeatured(),
-    ]);
+    try {
+      await Future.wait<void>([
+        _load(reset: true),
+        _loadFeatured(),
+      ]);
+    } finally {
+      if (mounted && _initialLoading) {
+        setState(() => _initialLoading = false);
+      }
+    }
   }
 
   void _searchChanged(String _) {
@@ -595,12 +607,14 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
                       mobile ? 16 : 32,
                       22,
                     ),
-                    child: switch (_featuredCatalog) {
-                      final featured? => _featured(featured, mobile),
-                      null when _featuredLoading =>
-                        const LinearProgressIndicator(),
-                      null => const SizedBox.shrink(),
-                    },
+                    child: _initialLoading
+                        ? const LinearProgressIndicator()
+                        : switch (_featuredCatalog) {
+                            final featured? => _featured(featured, mobile),
+                            null when _featuredLoading =>
+                              const LinearProgressIndicator(),
+                            null => const SizedBox.shrink(),
+                          },
                   ),
                   _catalogBody(mobile),
                   if (_loadingMore)
@@ -616,7 +630,7 @@ class _CatalogsScreenState extends State<CatalogsScreen> {
       });
 
   Widget _catalogBody(bool mobile) {
-    if (_loading) {
+    if (_loading || _initialLoading) {
       return const SizedBox(
         height: 220,
         child: Center(child: CircularProgressIndicator()),

@@ -82,7 +82,7 @@ class SupabaseCatalogRepository implements CatalogRepository {
 
   @override
   Future<Catalog?> getFeatured() async {
-    final initialContext = await _featuredQueryContext();
+    final initialContext = await _queryContext();
     final row = await _queryFeatured();
     if (row != null) {
       final catalog = Catalog.fromJson(row);
@@ -94,14 +94,14 @@ class SupabaseCatalogRepository implements CatalogRepository {
       return catalog;
     }
 
-    final confirmationContext = await _featuredQueryContext();
+    final confirmationContext = await _queryContext();
     if (confirmationContext != initialContext) {
       throw StateError(
         'La sesión u organización cambió durante la consulta.',
       );
     }
     final confirmedRow = await _queryFeatured();
-    final finalContext = await _featuredQueryContext();
+    final finalContext = await _queryContext();
     if (finalContext != initialContext) {
       throw StateError(
         'La sesión u organización cambió durante la confirmación.',
@@ -126,7 +126,7 @@ class SupabaseCatalogRepository implements CatalogRepository {
       .limit(1)
       .maybeSingle();
 
-  Future<CatalogQueryContext> _featuredQueryContext() async {
+  Future<CatalogQueryContext> _queryContext() async {
     if (_queryContextProvider case final provider?) return provider();
     final userBefore = _client.auth.currentUser?.id;
     if (userBefore == null) {
@@ -153,6 +153,7 @@ class SupabaseCatalogRepository implements CatalogRepository {
     CatalogFilter filter = CatalogFilter.all,
     bool includeAdministration = true,
   }) async {
+    final initialContext = await _queryContext();
     dynamic request = _client.from('catalogos_con_etiquetas').select();
     if (!includeAdministration) {
       request = request.eq('estado', 'publicado').eq('activo', true);
@@ -169,12 +170,26 @@ class SupabaseCatalogRepository implements CatalogRepository {
     }
     final rows = await request
         .order('destacado', ascending: false)
-        .order('orden')
+        .order('orden', ascending: true)
         .order('fecha_actualizacion', ascending: false)
         .range(offset, offset + limit - 1);
-    return List<Map<String, dynamic>>.from(rows as List)
+    final catalogs = List<Map<String, dynamic>>.from(rows as List)
         .map(Catalog.fromJson)
         .toList(growable: false);
+    final finalContext = await _queryContext();
+    if (finalContext != initialContext) {
+      throw StateError(
+        'La sesión u organización cambió durante la consulta.',
+      );
+    }
+    if (catalogs.any(
+      (catalog) => catalog.organizationId != initialContext.organizationId,
+    )) {
+      throw StateError(
+        'El listado contiene catálogos ajenos a la organización activa.',
+      );
+    }
+    return catalogs;
   }
 
   String _escapeLike(String value) => value

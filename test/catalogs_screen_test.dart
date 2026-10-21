@@ -333,6 +333,60 @@ void main() {
   });
 
   testWidgets(
+      'la carga inicial no muestra el listado antes del destacado y ambos permanecen 30 segundos',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ControlledRepository();
+    await _pumpControlled(tester, repository);
+    repository.listCalls.single.completer.complete([
+      _catalog(id: 'original', title: 'Catálogo original'),
+      _catalog(id: 'new', title: 'Catálogo recién creado'),
+    ]);
+    await tester.pump();
+
+    expect(find.text('Catálogo original'), findsNothing);
+    expect(find.text('Catálogo recién creado'), findsNothing);
+
+    repository.featuredCalls.single.complete(
+      _catalog(id: 'featured', title: 'Destacado estable', featured: true),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Catálogo original'), findsOneWidget);
+    expect(find.text('Catálogo recién creado'), findsOneWidget);
+    expect(find.text('Destacado estable'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 31));
+    expect(find.text('Catálogo original'), findsOneWidget);
+    expect(find.text('Catálogo recién creado'), findsOneWidget);
+    expect(find.text('Destacado estable'), findsOneWidget);
+  });
+
+  testWidgets('una recarga fallida conserva el listado actual y muestra error',
+      (tester) async {
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final repository = _ControlledRepository();
+    await _pumpControlled(tester, repository);
+    repository.featuredCalls.single.complete(null);
+    repository.listCalls.single.completer.complete([
+      _catalog(id: 'regular', title: 'Listado conservado'),
+    ]);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('catalogs-refresh')));
+    await tester.pump();
+    repository.featuredCalls[1].complete(null);
+    repository.listCalls[1].completer.completeError(
+      StateError('consulta remota fallida'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Listado conservado'), findsOneWidget);
+    expect(
+        find.textContaining('Se conserva el último listado'), findsOneWidget);
+    expect(find.text('No hay catálogos para mostrar.'), findsNothing);
+  });
+
+  testWidgets(
       'el banner permanece completo sin portada, durante la carga y tras error',
       (tester) async {
     addTearDown(() => tester.binding.setSurfaceSize(null));

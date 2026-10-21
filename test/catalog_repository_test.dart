@@ -131,6 +131,121 @@ void main() {
     await expectLater(repository.getFeatured(), throwsStateError);
   });
 
+  test('administración consulta borradores y ocultos sin filtros públicos',
+      () async {
+    Uri? requestedUri;
+    final rows = [
+      catalogJson(),
+      {
+        ...catalogJson(),
+        'id': '00000000-0000-0000-0000-000000000003',
+        'activo': false
+      },
+    ];
+    final client = SupabaseClient(
+      'https://example.supabase.co',
+      'anon-key',
+      accessToken: () async => 'session-token',
+      httpClient: MockClient((request) async {
+        requestedUri = request.url;
+        return http.Response(
+          jsonEncode(rows),
+          200,
+          headers: {'content-type': 'application/json'},
+          request: request,
+        );
+      }),
+    );
+    addTearDown(client.dispose);
+    final repository = SupabaseCatalogRepository(
+      client: client,
+      queryContextProvider: () async => (
+        userId: 'user',
+        organizationId: catalogJson()['organization_id']! as String,
+      ),
+    );
+
+    final result = await repository.list(
+      offset: 0,
+      limit: 12,
+      includeAdministration: true,
+    );
+
+    expect(result, hasLength(2));
+    expect(requestedUri?.queryParameters, isNot(contains('estado')));
+    expect(requestedUri?.queryParameters, isNot(contains('activo')));
+    expect(
+      requestedUri?.queryParameters['order'],
+      contains('orden.asc'),
+    );
+  });
+
+  test('listado público filtra publicado y activo', () async {
+    Uri? requestedUri;
+    final client = SupabaseClient(
+      'https://example.supabase.co',
+      'anon-key',
+      accessToken: () async => 'session-token',
+      httpClient: MockClient((request) async {
+        requestedUri = request.url;
+        return http.Response(
+          '[]',
+          200,
+          headers: {'content-type': 'application/json'},
+          request: request,
+        );
+      }),
+    );
+    addTearDown(client.dispose);
+    final repository = SupabaseCatalogRepository(
+      client: client,
+      queryContextProvider: () async => (
+        userId: 'user',
+        organizationId: catalogJson()['organization_id']! as String,
+      ),
+    );
+
+    expect(
+      await repository.list(
+        offset: 0,
+        limit: 12,
+        includeAdministration: false,
+      ),
+      isEmpty,
+    );
+    expect(requestedUri?.queryParameters['estado'], 'eq.publicado');
+    expect(requestedUri?.queryParameters['activo'], 'eq.true');
+  });
+
+  test('rechaza filas de una organización distinta', () async {
+    final client = SupabaseClient(
+      'https://example.supabase.co',
+      'anon-key',
+      accessToken: () async => 'session-token',
+      httpClient: MockClient((request) async => http.Response(
+            jsonEncode([
+              {...catalogJson(), 'organization_id': 'foreign-organization'},
+            ]),
+            200,
+            headers: {'content-type': 'application/json'},
+            request: request,
+          )),
+    );
+    addTearDown(client.dispose);
+    final repository = SupabaseCatalogRepository(
+      client: client,
+      queryContextProvider: () async => (
+        userId: 'user',
+        organizationId: catalogJson()['organization_id']! as String,
+      ),
+    );
+
+    await expectLater(
+      repository.list(offset: 0, limit: 12),
+      throwsStateError,
+    );
+  });
+
   test('usa las firmas RPC reales para crear, administrar y eliminar',
       () async {
     final calls = <String, Map<String, dynamic>>{};
