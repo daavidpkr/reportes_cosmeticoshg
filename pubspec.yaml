@@ -12,6 +12,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   archive: ^4.0.9
+  crypto: ^3.0.7
   file_picker: ^8.0.0
   path_provider: ^2.1.2
   desktop_drop: ^0.7.1

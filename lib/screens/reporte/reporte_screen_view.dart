@@ -1884,6 +1884,9 @@ extension _ReporteScreenView on _ReporteScreenState {
                   case 'notifications':
                     await Navigator.of(context).push(MaterialPageRoute<void>(
                         builder: (_) => const PaymentRemindersScreen()));
+                  case 'updates':
+                    await Navigator.of(context).push(MaterialPageRoute<void>(
+                        builder: (_) => UpdatesScreen()));
                   case 'refresh':
                     await _actualizarDesdeSupabase();
                   case 'theme':
@@ -1941,6 +1944,12 @@ extension _ReporteScreenView on _ReporteScreenState {
                     child: ListTile(
                         leading: Icon(Icons.notifications_outlined),
                         title: Text('Notificaciones'))),
+                if (_esAndroid)
+                  const PopupMenuItem(
+                      value: 'updates',
+                      child: ListTile(
+                          leading: Icon(Icons.system_update_outlined),
+                          title: Text('Updates'))),
                 const PopupMenuItem(
                     value: 'refresh',
                     child: ListTile(

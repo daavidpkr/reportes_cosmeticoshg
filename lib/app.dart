@@ -12,6 +12,7 @@ import 'services/fcm_device_repository.dart';
 import 'services/firebase_messaging_service.dart';
 import 'services/notification_open_request.dart';
 import 'theme/hg_theme.dart';
+import 'widgets/android_update_gate.dart';
 
 class CosmeticosHGApp extends StatefulWidget {
   const CosmeticosHGApp({super.key});
@@ -374,12 +375,14 @@ class _CosmeticosHGAppState extends State<CosmeticosHGApp> {
         useMaterial3: true,
       ),
       home: _sesionIniciada
-          ? ReporteScreen(
-              initialCalendarDate: _calendarRequest?.localDate,
-              calendarRequestId: _calendarRequestId,
-              onCerrarSesion: _cerrarSesion,
-              onCambiarTema: _cambiarTema,
-              modoOscuro: _themeMode == ThemeMode.dark,
+          ? AndroidUpdateGate(
+              child: ReporteScreen(
+                initialCalendarDate: _calendarRequest?.localDate,
+                calendarRequestId: _calendarRequestId,
+                onCerrarSesion: _cerrarSesion,
+                onCambiarTema: _cambiarTema,
+                modoOscuro: _themeMode == ThemeMode.dark,
+              ),
             )
           : const LoginScreen(),
     );

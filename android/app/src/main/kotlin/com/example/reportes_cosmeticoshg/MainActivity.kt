@@ -6,17 +6,20 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 import java.io.FileOutputStream
+import java.security.MessageDigest
 
 class MainActivity : FlutterActivity() {
     private data class PendingDownload(
@@ -25,6 +28,11 @@ class MainActivity : FlutterActivity() {
     )
 
     private var pendingDownload: PendingDownload? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        cleanupInstalledUpdates()
+        super.onCreate(savedInstanceState)
+    }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -83,6 +91,26 @@ class MainActivity : FlutterActivity() {
                 return@setMethodCallHandler
             }
             saveDocument(call, result)
+        }
+
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "com.example.reportes_cosmeticoshg/updates",
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "installedVersion" -> result.success(
+                    mapOf(
+                        "version" to installedPackageInfo().versionName.orEmpty(),
+                        "build" to packageBuild(installedPackageInfo()),
+                    ),
+                )
+                "prepareDownload" -> prepareUpdateDownload(call, result)
+                "validateApk" -> validateUpdateApk(call, result)
+                "canInstallPackages" -> result.success(canInstallPackages())
+                "requestInstallPermission" -> requestInstallPermission(result)
+                "installApk" -> installUpdateApk(call, result)
+                else -> result.notImplemented()
+            }
         }
     }
 
@@ -238,6 +266,168 @@ class MainActivity : FlutterActivity() {
             "${name.substring(0, dot)} ($suffix)${name.substring(dot)}"
         } else {
             "$name ($suffix)"
+        }
+    }
+
+    private fun installedPackageInfo() = packageManager.getPackageInfo(
+        packageName,
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        },
+    )
+
+    @Suppress("DEPRECATION")
+    private fun packageBuild(info: android.content.pm.PackageInfo): Long =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode
+        else info.versionCode.toLong()
+
+    private fun prepareUpdateDownload(call: MethodCall, result: MethodChannel.Result) {
+        val build = call.argument<Int>("build")
+        if (build == null || build.toLong() <= packageBuild(installedPackageInfo())) {
+            result.error("invalid_update_build", "La actualización debe tener un build superior.", null)
+            return
+        }
+        val directory = updateDirectory()
+        if (!directory.exists() && !directory.mkdirs()) {
+            result.error("update_directory", "No se pudo preparar la carpeta segura.", null)
+            return
+        }
+        result.success(directory.absolutePath)
+    }
+
+    private fun validateUpdateApk(call: MethodCall, result: MethodChannel.Result) {
+        val file = verifiedUpdateFile(call.argument<String>("path"))
+        val expectedBuild = call.argument<Int>("build")?.toLong()
+        val expectedVersion = call.argument<String>("version")
+        if (file == null || expectedBuild == null || expectedVersion.isNullOrBlank()) {
+            result.success(false)
+            return
+        }
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            PackageManager.GET_SIGNING_CERTIFICATES
+        } else {
+            @Suppress("DEPRECATION")
+            PackageManager.GET_SIGNATURES
+        }
+        @Suppress("DEPRECATION")
+        val archive = packageManager.getPackageArchiveInfo(file.absolutePath, flags)
+        val installed = installedPackageInfo()
+        val valid = archive != null &&
+            archive.packageName == packageName &&
+            packageBuild(archive) == expectedBuild &&
+            packageBuild(archive) > packageBuild(installed) &&
+            archive.versionName == expectedVersion &&
+            compareVersions(expectedVersion, installed.versionName.orEmpty()) >= 0 &&
+            packageSignatures(archive).isNotEmpty() &&
+            packageSignatures(archive).intersect(packageSignatures(installed)).isNotEmpty()
+        result.success(valid)
+    }
+
+    private fun packageSignatures(info: android.content.pm.PackageInfo): Set<String> {
+        val signatures = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val signingInfo = info.signingInfo
+            if (signingInfo?.hasMultipleSigners() == true) {
+                signingInfo.apkContentsSigners?.toList().orEmpty()
+            } else {
+                signingInfo?.signingCertificateHistory?.toList().orEmpty()
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            info.signatures?.toList().orEmpty()
+        }
+        return signatures.map { signature ->
+            MessageDigest.getInstance("SHA-256")
+                .digest(signature.toByteArray())
+                .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
+        }.toSet()
+    }
+
+    private fun compareVersions(left: String, right: String): Int {
+        fun parts(value: String) = value
+            .substringBefore('-')
+            .substringBefore('+')
+            .split('.')
+            .map { it.toIntOrNull() ?: -1 }
+        val a = parts(left)
+        val b = parts(right)
+        for (index in 0 until maxOf(a.size, b.size)) {
+            val comparison = a.getOrElse(index) { 0 }.compareTo(b.getOrElse(index) { 0 })
+            if (comparison != 0) return comparison
+        }
+        return 0
+    }
+
+    private fun canInstallPackages(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()
+
+    private fun requestInstallPermission(result: MethodChannel.Result) {
+        if (canInstallPackages()) {
+            result.success(null)
+            return
+        }
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName"),
+                ),
+            )
+            result.success(null)
+        } catch (error: Exception) {
+            result.error("install_permission", "No se pudo abrir la autorización de Android.", null)
+        }
+    }
+
+    private fun installUpdateApk(call: MethodCall, result: MethodChannel.Result) {
+        if (!canInstallPackages()) {
+            result.error("install_permission", "Android todavía no autorizó la instalación.", null)
+            return
+        }
+        val file = verifiedUpdateFile(call.argument<String>("path"))
+        if (file == null || !file.name.matches(Regex("update-[0-9]+\\.apk"))) {
+            result.error("invalid_apk_path", "El APK no está en la carpeta segura.", null)
+            return
+        }
+        try {
+            val uri = FileProvider.getUriForFile(this, "$packageName.update_files", file)
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+            result.success(null)
+        } catch (error: Exception) {
+            result.error("installer_unavailable", "Android no pudo abrir el instalador.", null)
+        }
+    }
+
+    private fun verifiedUpdateFile(path: String?): File? {
+        if (path.isNullOrBlank()) return null
+        val directory = updateDirectory().canonicalFile
+        val file = File(path).canonicalFile
+        return file.takeIf {
+            it.exists() && it.isFile && it.parentFile == directory && it.extension == "apk"
+        }
+    }
+
+    private fun updateDirectory() = File(cacheDir, "updates")
+
+    private fun cleanupInstalledUpdates() {
+        val directory = updateDirectory()
+        val installedBuild = try {
+            packageBuild(packageManager.getPackageInfo(packageName, 0))
+        } catch (_: Exception) {
+            return
+        }
+        directory.listFiles()?.forEach { file ->
+            val match = Regex("update-([0-9]+)\\.(apk|part)").matchEntire(file.name)
+            val targetBuild = match?.groupValues?.get(1)?.toLongOrNull()
+            if (targetBuild == null || targetBuild <= installedBuild || file.extension == "part") {
+                file.delete()
+            }
         }
     }
 

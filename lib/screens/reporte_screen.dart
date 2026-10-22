@@ -32,6 +32,7 @@ import 'payment_calendar/payment_calendar_screen.dart';
 import 'payment_calendar/dialogs/reschedule_reminder_dialog.dart';
 import 'reporte/report_invoice_table.dart';
 import 'payment_reminders_screen.dart';
+import 'updates_screen.dart';
 import 'reporte/report_responsive_layout.dart';
 import 'vendedores_screen.dart';
 
@@ -168,6 +169,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
   bool get _vistaBusquedaGeneral =>
       _destination == ReportDestination.globalSearch;
   bool get _vistaCatalogos => _destination == ReportDestination.catalogs;
+  bool get _esAndroid =>
+      !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   void _navigate(ReportDestination destination) {
     if (_destination == destination) return;
