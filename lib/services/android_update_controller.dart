@@ -35,10 +35,7 @@ class AndroidUpdateController extends ChangeNotifier {
   bool get blocksNormalUse {
     final current = installed;
     final update = manifest;
-    return current != null &&
-        update != null &&
-        update.mandatory &&
-        update.isNewerThan(current);
+    return current != null && update != null && update.isMandatoryFor(current);
   }
 
   Future<void> start() async {

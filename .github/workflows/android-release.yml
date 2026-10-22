@@ -1,0 +1,245 @@
+name: Publicar actualización Android
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Versión exacta declarada en pubspec.yaml (sin +build)
+        required: true
+        type: string
+      minimum_supported_version:
+        description: Versión mínima admitida por la política de esta release
+        required: true
+        type: string
+      mandatory:
+        description: Bloquear versiones anteriores a la mínima indicada
+        required: true
+        default: false
+        type: boolean
+      title:
+        description: Título visible de la actualización
+        required: true
+        type: string
+      description:
+        description: Descripción visible y notas de la release
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Firmar, validar y publicar
+    runs-on: ubuntu-latest
+    environment: android-release
+    env:
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_CERT_SHA256: ${{ secrets.ANDROID_CERT_SHA256 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validar rama, entradas y secretos
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_MINIMUM: ${{ inputs.minimum_supported_version }}
+          INPUT_TITLE: ${{ inputs.title }}
+          INPUT_DESCRIPTION: ${{ inputs.description }}
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || {
+            echo "La publicación solo puede ejecutarse desde main." >&2
+            exit 1
+          }
+          for value in INPUT_VERSION INPUT_MINIMUM INPUT_TITLE INPUT_DESCRIPTION \
+            ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD ANDROID_STORE_PASSWORD \
+            ANDROID_KEYSTORE_BASE64 ANDROID_CERT_SHA256; do
+            [[ -n "${!value:-}" ]] || {
+              echo "Falta la entrada o secret requerido: $value" >&2
+              exit 1
+            }
+          done
+          release="$(sed -nE 's/^version:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' pubspec.yaml)"
+          [[ "$release" == *+* ]] || {
+            echo "pubspec.yaml no contiene versión+build." >&2
+            exit 1
+          }
+          pubspec_version="${release%%+*}"
+          build_number="${release##*+}"
+          [[ "$INPUT_VERSION" == "$pubspec_version" ]] || {
+            echo "La entrada version no coincide con pubspec.yaml." >&2
+            exit 1
+          }
+          [[ "$build_number" =~ ^[1-9][0-9]*$ ]] || {
+            echo "El buildNumber de pubspec.yaml no es válido." >&2
+            exit 1
+          }
+
+      - name: Configurar Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.9
+          cache: true
+
+      - name: Instalar dependencias
+        run: flutter pub get
+
+      - name: Preparar firma temporal
+        shell: bash
+        run: |
+          set -euo pipefail
+          keystore_path="$RUNNER_TEMP/cosmeticos-hg-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore_path"
+          [[ -s "$keystore_path" ]] || {
+            echo "El keystore decodificado está vacío." >&2
+            exit 1
+          }
+          chmod 600 "$keystore_path"
+          echo "ANDROID_KEYSTORE_PATH=$keystore_path" >> "$GITHUB_ENV"
+
+      - name: Generar APK release firmado
+        run: flutter build apk --release
+
+      - name: Verificar firma y certificado
+        id: signed_apk
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          source_apk="build/app/outputs/flutter-apk/app-release.apk"
+          [[ -s "$source_apk" ]] || {
+            echo "No se generó el APK release." >&2
+            exit 1
+          }
+          release="$(sed -nE 's/^version:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' pubspec.yaml)"
+          build_number="${release##*+}"
+          apk_name="cosmeticos-hg-${INPUT_VERSION}-${build_number}.apk"
+          apk_path="$RUNNER_TEMP/$apk_name"
+          cp "$source_apk" "$apk_path"
+
+          apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner -print | sort -V | tail -n 1)"
+          [[ -x "$apksigner" ]] || {
+            echo "No se encontró apksigner." >&2
+            exit 1
+          }
+          verification="$($apksigner verify --verbose --print-certs "$apk_path")"
+          actual_cert="$(printf '%s\n' "$verification" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          expected_cert="$(printf '%s' "$ANDROID_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
+          [[ -n "$actual_cert" && "$actual_cert" == "$expected_cert" ]] || {
+            echo "El certificado del APK no coincide con ANDROID_CERT_SHA256." >&2
+            exit 1
+          }
+          echo "apk_name=$apk_name" >> "$GITHUB_OUTPUT"
+          echo "apk_path=$apk_path" >> "$GITHUB_OUTPUT"
+          echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
+
+      - name: Generar y validar update_manifest.json
+        id: manifest
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_MINIMUM: ${{ inputs.minimum_supported_version }}
+          INPUT_MANDATORY: ${{ inputs.mandatory }}
+          INPUT_TITLE: ${{ inputs.title }}
+          INPUT_DESCRIPTION: ${{ inputs.description }}
+          APK_PATH: ${{ steps.signed_apk.outputs.apk_path }}
+          APK_NAME: ${{ steps.signed_apk.outputs.apk_name }}
+          BUILD_NUMBER: ${{ steps.signed_apk.outputs.build_number }}
+        run: |
+          set -euo pipefail
+          manifest_path="$RUNNER_TEMP/update_manifest.json"
+          published_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          dart run tool/android_release_manifest.dart \
+            --pubspec pubspec.yaml \
+            --template release/android/update_manifest.v1.template.json \
+            --apk "$APK_PATH" \
+            --output "$manifest_path" \
+            --version "$INPUT_VERSION" \
+            --minimum-supported-version "$INPUT_MINIMUM" \
+            --mandatory "$INPUT_MANDATORY" \
+            --title "$INPUT_TITLE" \
+            --description "$INPUT_DESCRIPTION" \
+            --published-at "$published_at"
+
+          [[ -s "$manifest_path" ]] || {
+            echo "No se generó update_manifest.json." >&2
+            exit 1
+          }
+          jq -e \
+            --arg version "$INPUT_VERSION" \
+            --arg apk "$APK_NAME" \
+            --argjson build "$BUILD_NUMBER" \
+            '.version == $version and .buildNumber == $build and
+             .apkFile == $apk and (.sha256 | test("^[0-9a-f]{64}$")) and
+             (.title | length > 0) and (.description | length > 0)' \
+            "$manifest_path" >/dev/null
+          actual_sha="$(sha256sum "$APK_PATH" | cut -d ' ' -f 1)"
+          manifest_sha="$(jq -r '.sha256' "$manifest_path")"
+          [[ "$actual_sha" == "$manifest_sha" ]] || {
+            echo "El SHA-256 del manifiesto no coincide con el APK." >&2
+            exit 1
+          }
+          echo "manifest_path=$manifest_path" >> "$GITHUB_OUTPUT"
+
+      - name: Crear draft, subir assets y publicar release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TITLE: ${{ inputs.title }}
+          INPUT_DESCRIPTION: ${{ inputs.description }}
+          APK_PATH: ${{ steps.signed_apk.outputs.apk_path }}
+          APK_NAME: ${{ steps.signed_apk.outputs.apk_name }}
+          BUILD_NUMBER: ${{ steps.signed_apk.outputs.build_number }}
+          MANIFEST_PATH: ${{ steps.manifest.outputs.manifest_path }}
+        run: |
+          set -euo pipefail
+          [[ -s "$APK_PATH" && -s "$MANIFEST_PATH" ]] || {
+            echo "Falta el APK o el manifiesto validado." >&2
+            exit 1
+          }
+          tag="android-v${INPUT_VERSION}-${BUILD_NUMBER}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "La release $tag ya existe; no se sobrescribirá." >&2
+            exit 1
+          fi
+          gh release create "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$INPUT_TITLE" \
+            --notes "$INPUT_DESCRIPTION" \
+            --draft \
+            "$APK_PATH#$APK_NAME" \
+            "$MANIFEST_PATH#update_manifest.json"
+
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag")"
+          [[ "$(jq '[.assets[] | select(.state == "uploaded")] | length' <<<"$release_json")" -eq 2 ]]
+          jq -e --arg apk "$APK_NAME" \
+            '([.assets[].name] | sort) == ([$apk, "update_manifest.json"] | sort) and
+             all(.assets[]; .size > 0)' <<<"$release_json" >/dev/null
+          gh release edit "$tag" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft=false \
+            --latest
+
+      - name: Eliminar keystore temporal
+        if: always()
+        shell: bash
+        run: rm -f -- "$RUNNER_TEMP/cosmeticos-hg-release.jks"

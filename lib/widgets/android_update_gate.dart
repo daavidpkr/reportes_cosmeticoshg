@@ -35,7 +35,8 @@ class _AndroidUpdateGateState extends State<AndroidUpdateGate> {
     final update = _controller.manifest;
     if (_controller.status == AndroidUpdateStatus.available &&
         update != null &&
-        !update.mandatory &&
+        _controller.installed != null &&
+        !update.isMandatoryFor(_controller.installed!) &&
         _offeredBuild != update.build) {
       _offeredBuild = update.build;
       WidgetsBinding.instance

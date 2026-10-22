@@ -8,17 +8,15 @@ void main() {
       'https://github.com/daavidpkr/reportes_cosmeticoshg/releases/tag/v1.1.0';
 
   Map<String, dynamic> validManifest() => <String, dynamic>{
-        'schema_version': 1,
         'title': 'Mejoras de reportes',
         'version': '1.1.0',
-        'build': 8,
+        'buildNumber': 8,
+        'minimumSupportedVersion': '1.0.0',
         'description': 'Incluye correcciones y mejoras de seguridad.',
         'mandatory': false,
-        'apk': <String, dynamic>{
-          'asset': 'cosmeticos-hg-8.apk',
-          'size': 123456,
-          'sha256': 'a' * 64,
-        },
+        'apkFile': 'cosmeticos-hg-8.apk',
+        'sha256': 'a' * 64,
+        'publishedAt': '2026-10-22T22:00:00Z',
       };
 
   test('acepta un manifiesto completo de la release oficial', () {
@@ -51,7 +49,7 @@ void main() {
     );
   });
 
-  test('rechaza APK de otro repositorio o tamaño distinto', () {
+  test('rechaza APK de otro repositorio o un asset vacío', () {
     expect(
       () => AndroidUpdateManifest.fromRelease(
         manifest: validManifest(),
@@ -66,7 +64,7 @@ void main() {
       () => AndroidUpdateManifest.fromRelease(
         manifest: validManifest(),
         apkUrl: apkUrl,
-        releaseAssetSize: 999999,
+        releaseAssetSize: 999,
         releaseUrl: releaseUrl,
       ),
       throwsFormatException,
@@ -76,7 +74,8 @@ void main() {
   test('no ofrece una versión semántica inferior aunque aumente el build', () {
     final manifest = validManifest()
       ..['version'] = '0.9.9'
-      ..['build'] = 99;
+      ..['minimumSupportedVersion'] = '0.9.0'
+      ..['buildNumber'] = 99;
     final update = AndroidUpdateManifest.fromRelease(
       manifest: manifest,
       apkUrl: apkUrl,
@@ -86,6 +85,39 @@ void main() {
 
     expect(
       update.isNewerThan(
+        const InstalledAndroidVersion(version: '1.0.3', build: 7),
+      ),
+      isFalse,
+    );
+  });
+
+  test('solo bloquea cuando mandatory es explícito y la versión es inferior',
+      () {
+    final manifest = validManifest()
+      ..['mandatory'] = true
+      ..['minimumSupportedVersion'] = '1.0.4';
+    final update = AndroidUpdateManifest.fromRelease(
+      manifest: manifest,
+      apkUrl: apkUrl,
+      releaseAssetSize: 123456,
+      releaseUrl: releaseUrl,
+    );
+
+    expect(
+      update.isMandatoryFor(
+        const InstalledAndroidVersion(version: '1.0.3', build: 7),
+      ),
+      isTrue,
+    );
+    manifest['mandatory'] = false;
+    final optional = AndroidUpdateManifest.fromRelease(
+      manifest: manifest,
+      apkUrl: apkUrl,
+      releaseAssetSize: 123456,
+      releaseUrl: releaseUrl,
+    );
+    expect(
+      optional.isMandatoryFor(
         const InstalledAndroidVersion(version: '1.0.3', build: 7),
       ),
       isFalse,

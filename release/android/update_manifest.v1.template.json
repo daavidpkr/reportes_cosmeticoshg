@@ -1,0 +1,11 @@
+{
+  "version": "0.0.0",
+  "buildNumber": 0,
+  "minimumSupportedVersion": "0.0.0",
+  "mandatory": false,
+  "title": "Título visible para el usuario",
+  "description": "Descripción visible para el usuario.",
+  "apkFile": "application.apk",
+  "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "publishedAt": "1970-01-01T00:00:00Z"
+}

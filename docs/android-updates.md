@@ -1,43 +1,42 @@
 # Publicar una actualización Android
 
-El actualizador consulta exclusivamente la última **GitHub Release pública** de
-`daavidpkr/reportes_cosmeticoshg`. La release debe incluir exactamente estos dos
-assets subidos y en estado `uploaded`:
+La publicación Android es independiente del despliegue normal de GitHub Pages.
+Solo se ejecuta manualmente desde **Actions → Publicar actualización Android →
+Run workflow**, sobre la rama `main`. El workflow compila el APK release,
+verifica su firma, calcula el SHA-256, genera `update_manifest.json` desde
+`release/android/update_manifest.v1.template.json` y publica ambos assets en
+una GitHub Release marcada como `latest`.
 
-- El APK release firmado con la misma clave de la aplicación instalada.
-- `update_manifest.json`, con este esquema completo:
+## Configuración única
 
-```json
-{
-  "schema_version": 1,
-  "title": "Novedades de la versión",
-  "version": "1.1.0",
-  "build": 8,
-  "description": "Resumen breve para el usuario.",
-  "mandatory": false,
-  "apk": {
-    "asset": "cosmeticos-hg-8.apk",
-    "size": 12345678,
-    "sha256": "64 caracteres hexadecimales en minúsculas"
-  }
-}
-```
+Crear el environment protegido `android-release` (se recomienda aprobación
+manual) y configurar estos GitHub Secrets:
 
-Antes de publicar:
+- `ANDROID_KEYSTORE_BASE64`: keystore release completo codificado en Base64.
+- `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD` y `ANDROID_STORE_PASSWORD`.
+- `ANDROID_CERT_SHA256`: huella SHA-256 del certificado release esperado.
 
-1. Aumentar `version` y el número después de `+` en `pubspec.yaml`. El `build`
-   del manifiesto debe ser ese mismo número y debe superar al ya instalado.
-2. Firmar el APK con la clave release histórica. No cambiar `applicationId`.
-3. Obtener el tamaño exacto en bytes y el SHA-256 del APK ya firmado; no volver
-   a modificarlo después.
-4. Usar un nombre de asset simple, terminado en `.apk`, y copiarlo de forma
-   idéntica en `apk.asset`.
-5. Elegir `mandatory: true` solo cuando sea imprescindible impedir el uso de
-   versiones anteriores. Un fallo de red sigue ofreciendo **Reintentar**.
-6. Crear la GitHub Release como pública (no borrador ni prerelease) y adjuntar
-   ambos archivos. Comprobar que sea la release marcada como `latest`.
+Nunca subir el keystore, `key.properties` ni contraseñas. El workflow usa un
+keystore temporal y lo elimina siempre. Si falta un secret, la firma no es
+válida, el certificado no coincide o faltan metadatos/assets, la ejecución se
+detiene antes de publicar.
 
-La app no confía solo en el manifiesto: contrasta el asset con la release,
-descarga a la caché privada con nombre seguro y verifica tamaño, SHA-256,
-paquete, versión, build y firma antes de abrir el instalador Android. La versión
-recién instalada elimina al iniciar los APK anteriores que ya no necesita.
+## Antes de ejecutar
+
+1. Actualizar `version: x.y.z+build` en `pubspec.yaml`; ambos valores deben ser
+   superiores a los ya publicados.
+2. Confirmar los cambios en `main`. La entrada **version** debe coincidir
+   exactamente con `x.y.z`; el build se obtiene únicamente de `pubspec.yaml`.
+3. Completar título y descripción. El workflow rechaza valores vacíos.
+
+Para una actualización **opcional**, usar `mandatory: false`. Para una
+actualización **obligatoria**, usar `mandatory: true` y establecer
+`minimum_supported_version` en la primera versión que seguirá admitida. Para
+obligar a todas las versiones anteriores, usar como mínima la nueva versión.
+La aplicación nunca infiere la obligatoriedad solo por el build.
+
+El workflow primero crea una release borrador, comprueba que contenga
+exactamente el APK firmado y `update_manifest.json`, y solo entonces la hace
+pública. No debe ejecutarse para ensayos: al completarse publica una release
+real. La publicación web continúa usando exclusivamente `static.yml` y no
+genera APK ni releases.

@@ -64,12 +64,11 @@ class AndroidUpdateService {
           'No se pudo leer el manifiesto de actualización.');
     }
     final decoded = jsonDecode(utf8.decode(manifestResponse.bodyBytes));
-    if (decoded is! Map<String, dynamic> ||
-        (decoded['apk'] as Map<String, dynamic>?)?['asset'] is! String) {
+    if (decoded is! Map<String, dynamic> || decoded['apkFile'] is! String) {
       throw const FormatException(
           'El manifiesto de actualización está incompleto.');
     }
-    final apkName = (decoded['apk'] as Map<String, dynamic>)['asset'] as String;
+    final apkName = decoded['apkFile'] as String;
     final apkAsset = _findAsset(assets, apkName);
     final result = AndroidUpdateManifest.fromRelease(
       manifest: decoded,

@@ -56,7 +56,9 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Icon(
-                              update?.mandatory == true
+                              update != null &&
+                                      installed != null &&
+                                      update.isMandatoryFor(installed)
                                   ? Icons.system_update_alt
                                   : Icons.system_update_outlined,
                               size: 42,
@@ -93,14 +95,16 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
                           const SizedBox(height: 12),
                           Chip(
                             avatar: Icon(
-                              update.mandatory
+                              installed != null &&
+                                      update.isMandatoryFor(installed)
                                   ? Icons.lock_outline
                                   : Icons.schedule,
                               size: 18,
                             ),
-                            label: Text(update.mandatory
+                            label: Text(installed != null &&
+                                    update.isMandatoryFor(installed)
                                 ? 'Actualización obligatoria'
-                                : 'Actualización opcional'),
+                                : 'Actualización opcional para esta versión'),
                           ),
                         ],
                         if (controller.status ==

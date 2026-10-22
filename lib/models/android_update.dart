@@ -15,6 +15,7 @@ class AndroidUpdateManifest {
     required this.title,
     required this.version,
     required this.build,
+    required this.minimumSupportedVersion,
     required this.description,
     required this.mandatory,
     required this.apkAssetName,
@@ -22,6 +23,7 @@ class AndroidUpdateManifest {
     required this.apkSha256,
     required this.apkUrl,
     required this.releaseUrl,
+    required this.publishedAt,
   });
 
   static final _sha256Pattern = RegExp(r'^[a-fA-F0-9]{64}$');
@@ -33,6 +35,7 @@ class AndroidUpdateManifest {
   final String title;
   final String version;
   final int build;
+  final String minimumSupportedVersion;
   final String description;
   final bool mandatory;
   final String apkAssetName;
@@ -40,10 +43,16 @@ class AndroidUpdateManifest {
   final String apkSha256;
   final String apkUrl;
   final String releaseUrl;
+  final DateTime publishedAt;
 
   bool isNewerThan(InstalledAndroidVersion installed) =>
       build > installed.build &&
       compareVersions(version, installed.version) >= 0;
+
+  bool isMandatoryFor(InstalledAndroidVersion installed) =>
+      mandatory &&
+      isNewerThan(installed) &&
+      compareVersions(installed.version, minimumSupportedVersion) < 0;
 
   static int compareVersions(String left, String right) {
     List<int> parts(String value) {
@@ -68,39 +77,43 @@ class AndroidUpdateManifest {
     required int releaseAssetSize,
     required String releaseUrl,
   }) {
-    if (manifest['schema_version'] != 1 ||
-        manifest['title'] is! String ||
-        manifest['version'] is! String ||
-        manifest['build'] is! int ||
+    if (manifest['version'] is! String ||
+        manifest['buildNumber'] is! int ||
+        manifest['minimumSupportedVersion'] is! String ||
         manifest['description'] is! String ||
         manifest['mandatory'] is! bool ||
-        manifest['apk'] is! Map<String, dynamic>) {
+        manifest['title'] is! String ||
+        manifest['apkFile'] is! String ||
+        manifest['sha256'] is! String ||
+        manifest['publishedAt'] is! String) {
       throw const FormatException(
           'El manifiesto de actualización está incompleto.');
     }
-    final apk = manifest['apk'] as Map<String, dynamic>;
-    if (apk['asset'] is! String ||
-        apk['size'] is! int ||
-        apk['sha256'] is! String) {
-      throw const FormatException('Los datos del APK están incompletos.');
-    }
     final title = (manifest['title'] as String).trim();
     final version = (manifest['version'] as String).trim();
-    final build = manifest['build'] as int;
+    final build = manifest['buildNumber'] as int;
+    final minimumSupportedVersion =
+        (manifest['minimumSupportedVersion'] as String).trim();
     final description = (manifest['description'] as String).trim();
-    final asset = (apk['asset'] as String).trim();
-    final size = apk['size'] as int;
-    final sha256 = (apk['sha256'] as String).trim().toLowerCase();
+    final asset = (manifest['apkFile'] as String).trim();
+    final sha256 = (manifest['sha256'] as String).trim().toLowerCase();
+    final publishedAt = DateTime.tryParse(
+      (manifest['publishedAt'] as String).trim(),
+    );
     if (title.isEmpty ||
         title.length > 120 ||
         description.isEmpty ||
         description.length > 8000 ||
         !_versionPattern.hasMatch(version) ||
+        !_versionPattern.hasMatch(minimumSupportedVersion) ||
+        compareVersions(minimumSupportedVersion, version) > 0 ||
         build < 1 ||
         !_safeApkName.hasMatch(asset) ||
-        size < 1024 ||
-        size != releaseAssetSize ||
+        releaseAssetSize < 1024 ||
         !_sha256Pattern.hasMatch(sha256) ||
+        publishedAt == null ||
+        !publishedAt.isUtc ||
+        !(manifest['publishedAt'] as String).trim().endsWith('Z') ||
         !_isTrustedReleaseUrl(apkUrl, asset) ||
         !_isTrustedPageUrl(releaseUrl)) {
       throw const FormatException(
@@ -110,13 +123,15 @@ class AndroidUpdateManifest {
       title: title,
       version: version,
       build: build,
+      minimumSupportedVersion: minimumSupportedVersion,
       description: description,
       mandatory: manifest['mandatory'] as bool,
       apkAssetName: asset,
-      apkSize: size,
+      apkSize: releaseAssetSize,
       apkSha256: sha256,
       apkUrl: apkUrl,
       releaseUrl: releaseUrl,
+      publishedAt: publishedAt,
     );
   }
 
@@ -124,24 +139,22 @@ class AndroidUpdateManifest {
       AndroidUpdateManifest.fromRelease(
         manifest: json,
         apkUrl: json['cached_apk_url'] as String? ?? '',
-        releaseAssetSize:
-            ((json['apk'] as Map<String, dynamic>?)?['size'] as int?) ?? 0,
+        releaseAssetSize: json['cached_apk_size'] as int? ?? 0,
         releaseUrl: json['cached_release_url'] as String? ?? '',
       );
 
   Map<String, dynamic> toCacheJson() => <String, dynamic>{
-        'schema_version': 1,
         'title': title,
         'version': version,
-        'build': build,
+        'buildNumber': build,
+        'minimumSupportedVersion': minimumSupportedVersion,
         'description': description,
         'mandatory': mandatory,
-        'apk': <String, dynamic>{
-          'asset': apkAssetName,
-          'size': apkSize,
-          'sha256': apkSha256,
-        },
+        'apkFile': apkAssetName,
+        'sha256': apkSha256,
+        'publishedAt': publishedAt.toUtc().toIso8601String(),
         'cached_apk_url': apkUrl,
+        'cached_apk_size': apkSize,
         'cached_release_url': releaseUrl,
       };
 
