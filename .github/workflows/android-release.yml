@@ -97,6 +97,23 @@ jobs:
           flutter-version: 3.44.9
           cache: true
 
+      - name: Crear archivo env
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          for variable in SUPABASE_URL SUPABASE_ANON_KEY; do
+            [[ -n "${!variable:-}" ]] || {
+              echo "Falta el secret requerido: $variable" >&2
+              exit 1
+            }
+          done
+          umask 077
+          printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' \
+            "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > env
+
       - name: Instalar dependencias
         run: flutter pub get
 
@@ -239,7 +256,7 @@ jobs:
             --draft=false \
             --latest
 
-      - name: Eliminar keystore temporal
+      - name: Eliminar archivos temporales
         if: always()
         shell: bash
-        run: rm -f -- "$RUNNER_TEMP/cosmeticos-hg-release.jks"
+        run: rm -f -- env "$RUNNER_TEMP/cosmeticos-hg-release.jks"
