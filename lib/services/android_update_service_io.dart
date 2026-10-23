@@ -11,8 +11,8 @@ import '../models/android_update.dart';
 class AndroidUpdateService {
   static const _channel =
       MethodChannel('com.example.reportes_cosmeticoshg/updates');
-  static const _latestRelease =
-      'https://api.github.com/repos/daavidpkr/reportes_cosmeticoshg/releases/latest';
+  static const _releases =
+      'https://api.github.com/repos/daavidpkr/reportes_cosmeticoshg/releases?per_page=20';
   static const _manifestAsset = 'update_manifest.json';
   static const _cacheKey = 'android_update_manifest_v1';
 
@@ -34,18 +34,40 @@ class AndroidUpdateService {
   }
 
   Future<AndroidUpdateManifest> checkLatest() async {
-    final releaseResponse = await http.get(
-      Uri.parse(_latestRelease),
+    final releasesResponse = await http.get(
+      Uri.parse(_releases),
       headers: const {'Accept': 'application/vnd.github+json'},
     ).timeout(const Duration(seconds: 15));
-    if (releaseResponse.statusCode != 200) {
-      throw HttpException('GitHub respondió ${releaseResponse.statusCode}.');
+    if (releasesResponse.statusCode != 200) {
+      throw HttpException('GitHub respondió ${releasesResponse.statusCode}.');
     }
-    final release = jsonDecode(utf8.decode(releaseResponse.bodyBytes));
-    if (release is! Map<String, dynamic> ||
+    final decodedReleases = jsonDecode(utf8.decode(releasesResponse.bodyBytes));
+    if (decodedReleases is! List<dynamic>) {
+      throw const FormatException('GitHub no devolvió una lista de releases.');
+    }
+    for (final candidate in decodedReleases.whereType<Map<String, dynamic>>()) {
+      try {
+        final result = await _readValidRelease(candidate);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(_cacheKey, result.encodeForCache());
+        return result;
+      } on FormatException {
+        // Las releases web u otros artefactos no son actualizaciones Android.
+      }
+    }
+    throw const FormatException(
+      'No existe una release Android con APK y manifiesto válidos.',
+    );
+  }
+
+  Future<AndroidUpdateManifest> _readValidRelease(
+    Map<String, dynamic> release,
+  ) async {
+    if (release['draft'] == true ||
+        release['prerelease'] == true ||
         release['assets'] is! List<dynamic> ||
         release['html_url'] is! String) {
-      throw const FormatException('La última release pública no es válida.');
+      throw const FormatException('La release no es una candidata Android.');
     }
     final assets = release['assets'] as List<dynamic>;
     final manifestAsset = _findAsset(assets, _manifestAsset);
@@ -54,31 +76,27 @@ class AndroidUpdateService {
       throw const FormatException(
           'El manifiesto no pertenece a la release esperada.');
     }
-    final manifestResponse = await http.get(Uri.parse(manifestUrl!),
-        headers: const {
-          'Accept': 'application/json'
-        }).timeout(const Duration(seconds: 15));
+    final manifestResponse =
+        await http.get(Uri.parse(manifestUrl!), headers: const {
+      'Accept': 'application/json',
+    }).timeout(const Duration(seconds: 15));
     if (manifestResponse.statusCode != 200 ||
         manifestResponse.bodyBytes.length > 100000) {
       throw const FormatException(
           'No se pudo leer el manifiesto de actualización.');
     }
-    final decoded = jsonDecode(utf8.decode(manifestResponse.bodyBytes));
-    if (decoded is! Map<String, dynamic> || decoded['apkFile'] is! String) {
+    final manifest = jsonDecode(utf8.decode(manifestResponse.bodyBytes));
+    if (manifest is! Map<String, dynamic> || manifest['apkFile'] is! String) {
       throw const FormatException(
           'El manifiesto de actualización está incompleto.');
     }
-    final apkName = decoded['apkFile'] as String;
-    final apkAsset = _findAsset(assets, apkName);
-    final result = AndroidUpdateManifest.fromRelease(
-      manifest: decoded,
+    final apkAsset = _findAsset(assets, manifest['apkFile'] as String);
+    return AndroidUpdateManifest.fromRelease(
+      manifest: manifest,
       apkUrl: apkAsset['browser_download_url'] as String? ?? '',
       releaseAssetSize: apkAsset['size'] as int? ?? 0,
       releaseUrl: release['html_url'] as String,
     );
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_cacheKey, result.encodeForCache());
-    return result;
   }
 
   Future<AndroidUpdateManifest?> cachedManifest() async {

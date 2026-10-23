@@ -1,0 +1,141 @@
+name: Versionar y publicar
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: publish-main
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Versionar cambio
+    runs-on: ubuntu-latest
+    outputs:
+      release_type: ${{ steps.prepare.outputs.release_type }}
+      version: ${{ steps.prepare.outputs.version }}
+      build: ${{ steps.prepare.outputs.build }}
+      release_sha: ${{ steps.commit.outputs.release_sha }}
+      mandatory: ${{ steps.policy.outputs.mandatory }}
+      minimum_supported_version: ${{ steps.policy.outputs.minimum_supported_version }}
+      android_release: ${{ steps.policy.outputs.android_release }}
+    steps:
+      - name: Checkout completo
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Leer clasificación y política Android
+        id: policy
+        shell: bash
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          BASE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          release_type="$(sed -nE 's/^Release-Type:[[:space:]]*(patch|minor|major)[[:space:]]*$/\1/p' <<<"$COMMIT_MESSAGE")"
+          [[ "$(wc -l <<<"$release_type" | tr -d ' ')" -eq 1 && -n "$release_type" ]] || {
+            echo "El commit debe contener exactamente un trailer Release-Type: patch|minor|major." >&2
+            exit 1
+          }
+
+          mandatory="$(sed -nE 's/^Android-Mandatory:[[:space:]]*(true|false)[[:space:]]*$/\1/p' <<<"$COMMIT_MESSAGE")"
+          minimum="$(sed -nE 's/^Android-Minimum-Version:[[:space:]]*([0-9]+\.[0-9]+\.[0-9]+)[[:space:]]*$/\1/p' <<<"$COMMIT_MESSAGE")"
+          bootstrap="$(sed -nE 's/^Android-Release:[[:space:]]*bootstrap[[:space:]]*$/true/p' <<<"$COMMIT_MESSAGE")"
+          mandatory="${mandatory:-false}"
+          if [[ "$mandatory" == "true" && -z "$minimum" ]]; then
+            echo "Android-Mandatory: true exige Android-Minimum-Version: x.y.z." >&2
+            exit 1
+          fi
+          android_release=true
+          if [[ "$bootstrap" == "true" ]]; then
+            if git cat-file -e "$BASE_SHA:.github/workflows/publish.yml" 2>/dev/null; then
+              echo "Android-Release: bootstrap solo es valido al incorporar esta automatizacion." >&2
+              exit 1
+            fi
+            android_release=false
+          fi
+          {
+            echo "release_type=$release_type"
+            echo "mandatory=$mandatory"
+            echo "minimum_supported_version=$minimum"
+            echo "android_release=$android_release"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.9
+          cache: true
+
+      - name: Validar o aplicar incremento
+        id: prepare
+        shell: bash
+        env:
+          RELEASE_TYPE: ${{ steps.policy.outputs.release_type }}
+          BASE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          current="$(sed -nE 's/^version:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' pubspec.yaml)"
+          previous="$(git show "$BASE_SHA:pubspec.yaml" | sed -nE 's/^version:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p')"
+          git show "$BASE_SHA:pubspec.yaml" > pubspec.yaml
+          dart run tool/release_version.dart --bump "$RELEASE_TYPE" --pubspec pubspec.yaml
+          expected="$(sed -nE 's/^version:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' pubspec.yaml)"
+
+          if [[ "$current" == "$expected" ]]; then
+            echo "El commit ya contiene el incremento correcto: $previous -> $current."
+          elif [[ "$current" == "$previous" ]]; then
+            echo "El workflow aplicará el incremento: $previous -> $expected."
+          else
+            echo "La versión publicada ($current) no coincide con el incremento $RELEASE_TYPE esperado ($expected)." >&2
+            exit 1
+          fi
+
+      - name: Confirmar versión automática si fue necesaria
+        id: commit
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- pubspec.yaml; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add pubspec.yaml
+            git commit -m "chore(release): version ${{ steps.prepare.outputs.version }}+${{ steps.prepare.outputs.build }}" \
+              -m "Release-Versioned: true"
+            git push origin HEAD:main
+          fi
+          echo "release_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  pages:
+    name: Publicar web
+    needs: version
+    uses: ./.github/workflows/static.yml
+    with:
+      ref: ${{ needs.version.outputs.release_sha }}
+    secrets: inherit
+
+  android:
+    name: Publicar Android
+    needs:
+      - version
+      - pages
+    if: >-
+      needs.version.outputs.android_release == 'true' &&
+      (needs.version.outputs.release_type == 'minor' || needs.version.outputs.release_type == 'major')
+    uses: ./.github/workflows/android-release.yml
+    with:
+      ref: ${{ needs.version.outputs.release_sha }}
+      version: ${{ needs.version.outputs.version }}
+      release_type: ${{ needs.version.outputs.release_type }}
+      mandatory: ${{ needs.version.outputs.mandatory == 'true' }}
+      minimum_supported_version: ${{ needs.version.outputs.minimum_supported_version }}
+    secrets: inherit

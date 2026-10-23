@@ -1,10 +1,19 @@
 name: Deploy Flutter Web to GitHub Pages
 
 on:
-  push:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit versionado que se desplegará
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit o rama que se desplegará
+        required: false
+        default: main
+        type: string
 
 permissions:
   contents: read
@@ -22,6 +31,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
 
       - name: Instalar Flutter
         uses: subosito/flutter-action@v2

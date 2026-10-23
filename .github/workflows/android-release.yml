@@ -1,29 +1,47 @@
 name: Publicar actualización Android
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
+      ref:
+        description: Commit versionado que se publicara
+        required: true
+        type: string
       version:
-        description: Versión exacta declarada en pubspec.yaml (sin +build)
+        description: Version esperada sin el build
+        required: true
+        type: string
+      release_type:
+        description: Clasificacion que origino la release
         required: true
         type: string
       minimum_supported_version:
-        description: Versión mínima admitida por la política de esta release
-        required: true
+        description: Version minima para una actualizacion obligatoria
+        required: false
+        default: ""
         type: string
       mandatory:
-        description: Bloquear versiones anteriores a la mínima indicada
-        required: true
+        description: Bloquear versiones anteriores a la minima indicada
+        required: false
         default: false
         type: boolean
-      title:
-        description: Título visible de la actualización
-        required: true
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Commit o rama de emergencia que se publicara
+        required: false
+        default: main
         type: string
-      description:
-        description: Descripción visible y notas de la release
-        required: true
+      minimum_supported_version:
+        description: Version minima para una actualizacion obligatoria
+        required: false
+        default: ""
         type: string
+      mandatory:
+        description: Bloquear versiones anteriores a la minima indicada
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -47,20 +65,100 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Generar titulo, notas y politica
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+          REQUESTED_MINIMUM: ${{ inputs.minimum_supported_version }}
+          REQUESTED_MANDATORY: ${{ inputs.mandatory }}
+        run: |
+          set -euo pipefail
+          declared="$(sed -nE 's/^version:[[:space:]]*([^[:space:]]+)[[:space:]]*$/\1/p' pubspec.yaml)"
+          [[ "$declared" == *+* ]] || {
+            echo "pubspec.yaml no contiene version+build." >&2
+            exit 1
+          }
+          version="${declared%%+*}"
+          if [[ -n "$REQUESTED_VERSION" && "$REQUESTED_VERSION" != "$version" ]]; then
+            echo "La version solicitada no coincide con pubspec.yaml." >&2
+            exit 1
+          fi
+
+          baseline=""
+          previous_android_version=""
+          releases_json="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -s 'add')"
+          while IFS= read -r candidate; do
+            manifest_url="$(jq -r '[.assets[] | select(.state == "uploaded" and .name == "update_manifest.json")] | if length == 1 then .[0].browser_download_url else "" end' <<<"$candidate")"
+            [[ -n "$manifest_url" ]] || continue
+            candidate_manifest="$RUNNER_TEMP/candidate-update-manifest.json"
+            if ! curl --fail --silent --show-error --location \
+              --max-filesize 100000 "$manifest_url" -o "$candidate_manifest"; then
+              continue
+            fi
+            if ! jq -e '
+              (.version | type == "string") and
+              (.buildNumber | type == "number") and
+              (.apkFile | type == "string" and test("^[0-9A-Za-z][0-9A-Za-z._-]{0,119}\\.apk$")) and
+              (.sha256 | type == "string" and test("^[0-9a-f]{64}$")) and
+              (.mandatory | type == "boolean")
+            ' "$candidate_manifest" >/dev/null; then
+              continue
+            fi
+            apk_name="$(jq -r '.apkFile' "$candidate_manifest")"
+            apk_count="$(jq --arg apk "$apk_name" '[.assets[] | select(.state == "uploaded" and .name == $apk and .size >= 1024)] | length' <<<"$candidate")"
+            [[ "$apk_count" -eq 1 ]] || continue
+            baseline="$(jq -r '.target_commitish' <<<"$candidate")"
+            previous_android_version="$(jq -r '.version' "$candidate_manifest")"
+            break
+          done < <(jq -c '.[] | select(.draft == false and .prerelease == false)' <<<"$releases_json")
+
+          release_sha="$(git rev-parse HEAD)"
+          range=""
+          if [[ -n "$baseline" ]] && git cat-file -e "$baseline^{commit}" 2>/dev/null; then
+            range="$baseline..$release_sha"
+          fi
+          changes="$(git log ${range:-$release_sha} --format='- %s (%h)' --no-merges | grep -Ev '^- chore\(release\):' || true)"
+          [[ -n "$changes" ]] || changes="- Actualizacion de mantenimiento."
+          title="Cosmeticos HG $version"
+          if [[ -n "$previous_android_version" ]]; then
+            description="$(printf 'Cambios desde Android %s:\n\n%s' "$previous_android_version" "$changes")"
+          else
+            description="$(printf 'Cambios incluidos:\n\n%s' "$changes")"
+          fi
+
+          mandatory="${REQUESTED_MANDATORY:-false}"
+          minimum="$REQUESTED_MINIMUM"
+          if [[ "$mandatory" == "true" && -z "$minimum" ]]; then
+            echo "Una actualizacion obligatoria exige minimum_supported_version explicito." >&2
+            exit 1
+          fi
+          minimum="${minimum:-${previous_android_version:-$version}}"
+          {
+            echo "version=$version"
+            echo "release_sha=$release_sha"
+            echo "minimum_supported_version=$minimum"
+            echo "mandatory=$mandatory"
+            echo "title=$title"
+            echo "description<<RELEASE_NOTES_EOF"
+            echo "$description"
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Validar rama, entradas y secretos
         shell: bash
         env:
-          INPUT_VERSION: ${{ inputs.version }}
-          INPUT_MINIMUM: ${{ inputs.minimum_supported_version }}
-          INPUT_TITLE: ${{ inputs.title }}
-          INPUT_DESCRIPTION: ${{ inputs.description }}
+          INPUT_VERSION: ${{ steps.release.outputs.version }}
+          INPUT_MINIMUM: ${{ steps.release.outputs.minimum_supported_version }}
+          INPUT_TITLE: ${{ steps.release.outputs.title }}
+          INPUT_DESCRIPTION: ${{ steps.release.outputs.description }}
         run: |
           set -euo pipefail
-          [[ "$GITHUB_REF" == "refs/heads/main" ]] || {
-            echo "La publicación solo puede ejecutarse desde main." >&2
-            exit 1
-          }
           for value in INPUT_VERSION INPUT_MINIMUM INPUT_TITLE INPUT_DESCRIPTION \
             ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD ANDROID_STORE_PASSWORD \
             ANDROID_KEYSTORE_BASE64 ANDROID_CERT_SHA256; do
@@ -137,7 +235,7 @@ jobs:
         id: signed_apk
         shell: bash
         env:
-          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           source_apk="build/app/outputs/flutter-apk/app-release.apk"
@@ -217,11 +315,11 @@ jobs:
         id: manifest
         shell: bash
         env:
-          INPUT_VERSION: ${{ inputs.version }}
-          INPUT_MINIMUM: ${{ inputs.minimum_supported_version }}
-          INPUT_MANDATORY: ${{ inputs.mandatory }}
-          INPUT_TITLE: ${{ inputs.title }}
-          INPUT_DESCRIPTION: ${{ inputs.description }}
+          INPUT_VERSION: ${{ steps.release.outputs.version }}
+          INPUT_MINIMUM: ${{ steps.release.outputs.minimum_supported_version }}
+          INPUT_MANDATORY: ${{ steps.release.outputs.mandatory }}
+          INPUT_TITLE: ${{ steps.release.outputs.title }}
+          INPUT_DESCRIPTION: ${{ steps.release.outputs.description }}
           APK_PATH: ${{ steps.signed_apk.outputs.apk_path }}
           APK_NAME: ${{ steps.signed_apk.outputs.apk_name }}
           BUILD_NUMBER: ${{ steps.signed_apk.outputs.build_number }}
@@ -265,9 +363,10 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          INPUT_VERSION: ${{ inputs.version }}
-          INPUT_TITLE: ${{ inputs.title }}
-          INPUT_DESCRIPTION: ${{ inputs.description }}
+          INPUT_VERSION: ${{ steps.release.outputs.version }}
+          INPUT_TITLE: ${{ steps.release.outputs.title }}
+          INPUT_DESCRIPTION: ${{ steps.release.outputs.description }}
+          RELEASE_SHA: ${{ steps.release.outputs.release_sha }}
           APK_PATH: ${{ steps.signed_apk.outputs.apk_path }}
           APK_NAME: ${{ steps.signed_apk.outputs.apk_name }}
           BUILD_NUMBER: ${{ steps.signed_apk.outputs.build_number }}
@@ -325,7 +424,7 @@ jobs:
 
           gh release create "$tag" \
             --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
+            --target "$RELEASE_SHA" \
             --title "$INPUT_TITLE" \
             --notes "$INPUT_DESCRIPTION" \
             --draft \
