@@ -279,10 +279,50 @@ jobs:
             exit 1
           }
           tag="android-v${INPUT_VERSION}-${BUILD_NUMBER}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+
+          list_releases() {
+            gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/releases?per_page=100" |
+              jq -s 'add'
+          }
+
+          releases_json="$(list_releases)"
+          if jq -e --arg tag "$tag" \
+            'any(.[]; .tag_name == $tag and .draft == false)' \
+            <<<"$releases_json" >/dev/null; then
             echo "La release $tag ya existe; no se sobrescribirá." >&2
             exit 1
           fi
+
+          mapfile -t orphan_draft_ids < <(
+            jq -r --arg tag "$tag" \
+              '.[] | select(.tag_name == $tag and .draft == true) | .id' \
+              <<<"$releases_json"
+          )
+          for orphan_id in "${orphan_draft_ids[@]}"; do
+            if ! orphan_json="$(
+              gh api "repos/$GITHUB_REPOSITORY/releases/$orphan_id" 2>/dev/null
+            )"; then
+              echo "No se pudo confirmar el estado del borrador huérfano; no se eliminará." >&2
+              exit 1
+            fi
+            if ! jq -e --arg tag "$tag" \
+              '.id != null and .draft == true and .tag_name == $tag' \
+              <<<"$orphan_json" >/dev/null; then
+              echo "La release candidata ya no es un borrador del tag exacto; no se eliminará." >&2
+              exit 1
+            fi
+            gh api --method DELETE \
+              "repos/$GITHUB_REPOSITORY/releases/$orphan_id" >/dev/null
+          done
+
+          releases_json="$(list_releases)"
+          if jq -e --arg tag "$tag" 'any(.[]; .tag_name == $tag)' \
+            <<<"$releases_json" >/dev/null; then
+            echo "La release $tag continúa existiendo; no se sobrescribirá." >&2
+            exit 1
+          fi
+
           gh release create "$tag" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
@@ -292,15 +332,45 @@ jobs:
             "$APK_PATH#$APK_NAME" \
             "$MANIFEST_PATH#update_manifest.json"
 
-          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag")"
-          [[ "$(jq '[.assets[] | select(.state == "uploaded")] | length' <<<"$release_json")" -eq 2 ]]
-          jq -e --arg apk "$APK_NAME" \
-            '([.assets[].name] | sort) == ([$apk, "update_manifest.json"] | sort) and
-             all(.assets[]; .size > 0)' <<<"$release_json" >/dev/null
-          gh release edit "$tag" \
-            --repo "$GITHUB_REPOSITORY" \
-            --draft=false \
-            --latest
+          releases_json="$(list_releases)"
+          if jq -e --arg tag "$tag" \
+            'any(.[]; .tag_name == $tag and .draft == false)' \
+            <<<"$releases_json" >/dev/null; then
+            echo "Se encontró una release publicada con el tag $tag; no se modificará." >&2
+            exit 1
+          fi
+          draft_count="$(jq --arg tag "$tag" \
+            '[.[] | select(.tag_name == $tag and .draft == true)] | length' \
+            <<<"$releases_json")"
+          [[ "$draft_count" -eq 1 ]] || {
+            echo "No se pudo identificar un único borrador para $tag." >&2
+            exit 1
+          }
+          release_id="$(jq -r --arg tag "$tag" \
+            '.[] | select(.tag_name == $tag and .draft == true) | .id' \
+            <<<"$releases_json")"
+          [[ "$release_id" =~ ^[0-9]+$ ]] || {
+            echo "El borrador no tiene un release ID válido." >&2
+            exit 1
+          }
+
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id")"
+          if ! jq -e --arg tag "$tag" --arg apk "$APK_NAME" \
+            '.id != null and .draft == true and .tag_name == $tag and
+             ([.assets[] | select(.state == "uploaded")] | length) == 2 and
+             ([.assets[].name] | sort) == ([$apk, "update_manifest.json"] | sort) and
+             all(.assets[]; .size > 0)' <<<"$release_json" >/dev/null; then
+            echo "El borrador no contiene exactamente los dos assets esperados y válidos." >&2
+            exit 1
+          fi
+
+          published_json="$(gh api --method PATCH \
+            "repos/$GITHUB_REPOSITORY/releases/$release_id" \
+            -F draft=false \
+            -f make_latest=true)"
+          jq -e --argjson id "$release_id" --arg tag "$tag" \
+            '.id == $id and .tag_name == $tag and .draft == false' \
+            <<<"$published_json" >/dev/null
 
       - name: Eliminar archivos temporales
         if: always()
