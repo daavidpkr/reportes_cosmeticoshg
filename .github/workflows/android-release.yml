@@ -156,13 +156,59 @@ jobs:
             echo "No se encontró apksigner." >&2
             exit 1
           }
-          verification="$($apksigner verify --verbose --print-certs "$apk_path")"
-          actual_cert="$(printf '%s\n' "$verification" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1 | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
-          expected_cert="$(printf '%s' "$ANDROID_CERT_SHA256" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]')"
-          [[ -n "$actual_cert" && "$actual_cert" == "$expected_cert" ]] || {
-            echo "El certificado del APK no coincide con ANDROID_CERT_SHA256." >&2
-            exit 1
+          normalize_fingerprint() {
+            printf '%s' "$1" | tr -d ':[:space:]' | tr '[:upper:]' '[:lower:]'
           }
+          is_sha256() {
+            [[ "$1" =~ ^[0-9a-f]{64}$ ]]
+          }
+          report_lengths() {
+            echo "Longitudes normalizadas: APK=${#apk_cert}, keystore=${#keystore_cert}, ANDROID_CERT_SHA256=${#expected_cert}." >&2
+          }
+
+          expected_cert="$(normalize_fingerprint "$ANDROID_CERT_SHA256")"
+          apk_cert=""
+          keystore_cert=""
+
+          if ! verification="$("$apksigner" verify --verbose --print-certs "$apk_path" 2>&1)"; then
+            echo "Validación 1 falló: el APK no tiene una firma válida." >&2
+            report_lengths
+            exit 1
+          fi
+
+          apk_cert_raw="$(
+            printf '%s\n' "$verification" |
+              grep -Eio '([[:xdigit:]]{2}[[:space:]:]?){31}[[:xdigit:]]{2}' |
+              head -n 1 || true
+          )"
+          apk_cert="$(normalize_fingerprint "$apk_cert_raw")"
+
+          cert_path="$RUNNER_TEMP/cosmeticos-hg-release.cer"
+          rm -f -- "$cert_path"
+          if ! keytool -exportcert \
+            -alias "$ANDROID_KEY_ALIAS" \
+            -keystore "$ANDROID_KEYSTORE_PATH" \
+            -storepass "$ANDROID_STORE_PASSWORD" \
+            -file "$cert_path" \
+            -noprompt >/dev/null 2>&1; then
+            echo "No se pudo exportar el certificado temporal desde el keystore." >&2
+            report_lengths
+            exit 1
+          fi
+          keystore_cert="$(normalize_fingerprint "$(sha256sum "$cert_path" | awk '{print $1}')")"
+
+          if ! is_sha256 "$apk_cert" || ! is_sha256 "$keystore_cert" || \
+            [[ "$apk_cert" != "$keystore_cert" ]]; then
+            echo "Validación 2 falló: la huella SHA-256 del APK no coincide con la del keystore." >&2
+            report_lengths
+            exit 1
+          fi
+
+          if ! is_sha256 "$expected_cert" || [[ "$keystore_cert" != "$expected_cert" ]]; then
+            echo "Validación 3 falló: la huella SHA-256 del keystore no coincide con ANDROID_CERT_SHA256." >&2
+            report_lengths
+            exit 1
+          fi
           echo "apk_name=$apk_name" >> "$GITHUB_OUTPUT"
           echo "apk_path=$apk_path" >> "$GITHUB_OUTPUT"
           echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
@@ -259,4 +305,8 @@ jobs:
       - name: Eliminar archivos temporales
         if: always()
         shell: bash
-        run: rm -f -- env "$RUNNER_TEMP/cosmeticos-hg-release.jks"
+        run: |
+          rm -f -- \
+            env \
+            "$RUNNER_TEMP/cosmeticos-hg-release.jks" \
+            "$RUNNER_TEMP/cosmeticos-hg-release.cer"
