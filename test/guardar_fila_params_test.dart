@@ -31,6 +31,9 @@ void main() {
       'venta': 42.5,
       'identificacion_comprador': '',
       'tipo_identificacion_comprador': '',
+      'direccion_comprador': '',
+      'telefono_comprador': '',
+      'correo_comprador': '',
     });
   });
 

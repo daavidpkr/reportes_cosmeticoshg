@@ -9,6 +9,9 @@ class Factura {
     required this.total,
     this.identificacionComprador = '',
     this.tipoIdentificacionComprador = '',
+    this.direccionComprador = '',
+    this.telefonoComprador = '',
+    this.correoComprador = '',
   });
 
   final String cliente;
@@ -20,6 +23,9 @@ class Factura {
   /// Internal customer identity. It is deliberately never rendered in UI/PDF.
   final String identificacionComprador;
   final String tipoIdentificacionComprador;
+  final String direccionComprador;
+  final String telefonoComprador;
+  final String correoComprador;
 
   Map<String, dynamic> toJson() => {
         'cliente': cliente,
@@ -29,6 +35,9 @@ class Factura {
         'total': total,
         'identificacionComprador': identificacionComprador,
         'tipoIdentificacionComprador': tipoIdentificacionComprador,
+        'direccionComprador': direccionComprador,
+        'telefonoComprador': telefonoComprador,
+        'correoComprador': correoComprador,
       };
 
   factory Factura.fromJson(Map<String, dynamic> json) => Factura(
@@ -41,6 +50,9 @@ class Factura {
             json['identificacionComprador'] as String? ?? '',
         tipoIdentificacionComprador:
             json['tipoIdentificacionComprador'] as String? ?? '',
+        direccionComprador: json['direccionComprador'] as String? ?? '',
+        telefonoComprador: json['telefonoComprador'] as String? ?? '',
+        correoComprador: json['correoComprador'] as String? ?? '',
       );
 }
 

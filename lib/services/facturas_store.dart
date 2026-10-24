@@ -75,6 +75,17 @@ class FacturasStore {
       ),
       tipoIdentificacionComprador:
           (_extraer(texto, 'tipoIdentificacionComprador') ?? '').trim(),
+      direccionComprador: _extraerDireccionComprador(texto),
+      telefonoComprador: _extraerContactoAdicional(
+        texto,
+        const {'telefono', 'celular'},
+        _limpiarTelefono,
+      ),
+      correoComprador: _extraerContactoAdicional(
+        texto,
+        const {'email', 'e-mail', 'correo'},
+        _limpiarCorreo,
+      ),
     );
     return (resultado: ResultadoFactura.agregada, factura: factura);
   }
@@ -99,6 +110,80 @@ class FacturasStore {
         .substring(separador + 1)
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
+  }
+
+  String _extraerDireccionComprador(String texto) {
+    final valor = _extraer(texto, 'direccionComprador');
+    if (valor == null) return '';
+    return _limpiarTexto(valor.split('|').first);
+  }
+
+  String _extraerContactoAdicional(
+    String texto,
+    Set<String> nombres,
+    String Function(String) limpiar,
+  ) {
+    final bloque = RegExp(
+      r'<(?:[\w-]+:)?infoAdicional(?:\s[^>]*)?>(.*?)</(?:[\w-]+:)?infoAdicional\s*>',
+      caseSensitive: false,
+      dotAll: true,
+    ).firstMatch(texto)?.group(1);
+    if (bloque == null) return '';
+    final expresion = RegExp(
+      r'''<(?:[\w-]+:)?campoAdicional\b[^>]*\bnombre\s*=\s*(["'])(.*?)\1[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</(?:[\w-]+:)?campoAdicional\s*>''',
+      caseSensitive: false,
+      dotAll: true,
+    );
+    for (final coincidencia in expresion.allMatches(bloque)) {
+      final nombre = _normalizarNombreCampo(
+        _decodificarXml(coincidencia.group(2) ?? ''),
+      );
+      if (!nombres.contains(nombre)) continue;
+      final valor = limpiar(_decodificarXml(coincidencia.group(3) ?? ''));
+      if (valor.isNotEmpty) return valor;
+    }
+    return '';
+  }
+
+  String _normalizarNombreCampo(String valor) {
+    const reemplazos = {
+      'á': 'a',
+      'é': 'e',
+      'í': 'i',
+      'ó': 'o',
+      'ú': 'u',
+      'ü': 'u',
+    };
+    var normalizado = valor.toLowerCase();
+    reemplazos.forEach((origen, destino) {
+      normalizado = normalizado.replaceAll(origen, destino);
+    });
+    return normalizado.replaceAll(RegExp(r'\s+'), '').trim();
+  }
+
+  String _limpiarTexto(String valor) => valor
+      .replaceAll(RegExp(r'[\u0000-\u001F\u007F]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
+
+  String _limpiarTelefono(String valor) {
+    final limpio = _limpiarTexto(valor);
+    if (!RegExp(r'^[+0-9\s().-]+$').hasMatch(limpio) ||
+        '+'.allMatches(limpio).length > 1) {
+      return '';
+    }
+    final digitos = limpio.replaceAll(RegExp(r'\D'), '');
+    if (digitos.length < 7 || digitos.length > 15) return '';
+    return limpio.contains('+') ? '+$digitos' : digitos;
+  }
+
+  String _limpiarCorreo(String valor) {
+    final limpio = _limpiarTexto(valor).toLowerCase();
+    if (limpio.length > 254 ||
+        !RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(limpio)) {
+      return '';
+    }
+    return limpio;
   }
 
   String? _extraer(String texto, String etiqueta) {

@@ -158,6 +158,9 @@ Map<String, dynamic> _facturaJson(Factura factura,
       'identificacion_comprador': factura.identificacionComprador.trim(),
       'tipo_identificacion_comprador':
           factura.tipoIdentificacionComprador.trim(),
+      'direccion_comprador': factura.direccionComprador.trim(),
+      'telefono_comprador': factura.telefonoComprador.trim(),
+      'correo_comprador': factura.correoComprador.trim(),
       if (vendedor != null) 'vendedor': vendedor,
       if (paymentTermDays != null) 'payment_term_days': paymentTermDays,
       if (payment != null) ...{
@@ -593,6 +596,9 @@ class SupabaseReportesService {
           respuesta['identificacion_comprador']?.toString() ?? '',
       tipoIdentificacionComprador:
           respuesta['tipo_identificacion_comprador']?.toString() ?? '',
+      direccionComprador: respuesta['direccion_comprador']?.toString() ?? '',
+      telefonoComprador: respuesta['telefono_comprador']?.toString() ?? '',
+      correoComprador: respuesta['correo_comprador']?.toString() ?? '',
     );
   }
 
@@ -811,6 +817,9 @@ class SupabaseReportesService {
       'p_identificacion_comprador': factura.identificacionComprador.trim(),
       'p_tipo_identificacion_comprador':
           factura.tipoIdentificacionComprador.trim(),
+      'p_direccion_comprador': factura.direccionComprador.trim(),
+      'p_telefono_comprador': factura.telefonoComprador.trim(),
+      'p_correo_comprador': factura.correoComprador.trim(),
     });
   }
 
