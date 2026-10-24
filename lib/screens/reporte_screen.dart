@@ -20,6 +20,7 @@ import '../services/reportes_store.dart';
 import '../services/supabase_reportes_service.dart';
 import '../services/vendedores_store.dart';
 import '../theme/hg_theme.dart';
+import '../widgets/payment_editor_dialog.dart';
 import 'carga_facturas_screen.dart';
 import 'cobros_mensuales_view.dart';
 import 'catalogs/catalogs_screen.dart';
@@ -676,175 +677,23 @@ class _ReporteScreenState extends State<ReporteScreen> {
       return false;
     }
     final abono = borrador ?? (nuevo ? Abono() : fila.abonos[indice]);
-    final montoController = TextEditingController(
-      text: abono.valor == 0 ? '' : abono.valor.toStringAsFixed(2),
-    );
-    final reciboController = TextEditingController(
-      text: abono.numeroRecibo?.toString() ?? '',
-    );
-    final comentarioController = TextEditingController(text: abono.comentario);
-    final formKey = GlobalKey<FormState>();
-    var eliminar = false;
-    var pagoCompleto = false;
-    var valorManual = montoController.text;
     final saldoInicial = fila.saldo + (nuevo ? 0 : abono.valor);
-    if (pagoCompletoInicial && nuevo && saldoInicial > .005) {
-      pagoCompleto = true;
-      montoController.text = saldoInicial.toStringAsFixed(2);
-    }
-    final resultado = await showDialog<(double, int?, String)>(
+    final factura = fila.numeroFactura.trim().isEmpty
+        ? fila.referencia
+        : fila.numeroFactura;
+    final resultado = await showPaymentEditorDialog(
       context: context,
-      builder: (context) => StatefulBuilder(
-          builder: (context, actualizar) => AlertDialog(
-                title: Text('Abono ${indice + 1}'),
-                content: SizedBox(
-                  width: 360,
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        TextFormField(
-                          controller: montoController,
-                          autofocus: true,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          readOnly: pagoCompleto,
-                          decoration: const InputDecoration(
-                            labelText: 'Valor',
-                            prefixText: '\$ ',
-                            border: OutlineInputBorder(),
-                          ),
-                          validator: (valor) => validarValorAbono(valor ?? ''),
-                        ),
-                        CheckboxListTile(
-                          key: const ValueKey('full-payment-checkbox'),
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Pago completo'),
-                          value: pagoCompleto,
-                          onChanged: (fila.anulada ||
-                                  fila.pagada ||
-                                  saldoInicial <= .005)
-                              ? null
-                              : (value) => actualizar(() {
-                                    pagoCompleto = value ?? false;
-                                    if (pagoCompleto) {
-                                      valorManual = montoController.text;
-                                      montoController.text =
-                                          saldoInicial.toStringAsFixed(2);
-                                    } else {
-                                      montoController.text = valorManual;
-                                    }
-                                  }),
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: reciboController,
-                          keyboardType: TextInputType.number,
-                          validator: (valor) =>
-                              validarNumeroRecibo(valor ?? ''),
-                          decoration: const InputDecoration(
-                            labelText: 'Número de recibo (opcional)',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        TextField(
-                          controller: comentarioController,
-                          maxLines: 3,
-                          decoration: const InputDecoration(
-                            labelText: 'Comentario',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancelar'),
-                  ),
-                  if (!nuevo && abono.valor > 0)
-                    Semantics(
-                      label: 'Eliminar abono ${indice + 1}',
-                      button: true,
-                      child: Tooltip(
-                        message: 'Eliminar abono',
-                        child: TextButton.icon(
-                          style: TextButton.styleFrom(
-                              foregroundColor:
-                                  Theme.of(context).colorScheme.error),
-                          onPressed: () async {
-                            final factura = fila.numeroFactura.trim().isEmpty
-                                ? fila.referencia
-                                : fila.numeroFactura;
-                            final confirmar = await showDialog<bool>(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Eliminar abono'),
-                                content: Text(
-                                  'Se eliminará el abono de \$${abono.valor.toStringAsFixed(2)} de la factura $factura.\n\n'
-                                  'El saldo pendiente aumentará nuevamente y los totales de cobros serán recalculados.\n\n'
-                                  '¿Deseas continuar?',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(context, false),
-                                    child: const Text('Volver'),
-                                  ),
-                                  FilledButton.icon(
-                                    style: FilledButton.styleFrom(
-                                        backgroundColor: Theme.of(context)
-                                            .colorScheme
-                                            .error),
-                                    onPressed: () =>
-                                        Navigator.pop(context, true),
-                                    icon: const Icon(Icons.delete_outline),
-                                    label: const Text('Eliminar abono'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirmar == true && context.mounted) {
-                              eliminar = true;
-                              Navigator.pop(context);
-                            }
-                          },
-                          icon: const Icon(Icons.delete_outline),
-                          label: const Text('Eliminar abono'),
-                        ),
-                      ),
-                    ),
-                  FilledButton(
-                    onPressed: () {
-                      if (!(formKey.currentState?.validate() ?? false)) return;
-                      Navigator.pop(context, (
-                        double.tryParse(
-                                montoController.text.replaceAll(',', '.')) ??
-                            0,
-                        reciboController.text.trim().isEmpty
-                            ? null
-                            : int.parse(reciboController.text.trim()),
-                        comentarioController.text.trim(),
-                      ));
-                    },
-                    child: const Text('Guardar'),
-                  ),
-                ],
-              )),
+      title: 'Abono ${indice + 1}',
+      initialPayment: abono,
+      availableBalance: saldoInicial,
+      initialFullPayment: pagoCompletoInicial && nuevo,
+      fullPaymentEnabled: !fila.pagada,
+      allowDelete: !nuevo,
+      invoiceLabel: factura,
+      deleteSemanticLabel: 'Eliminar abono ${indice + 1}',
     );
-    unawaited(Future<void>.delayed(kThemeAnimationDuration, () {
-      montoController.dispose();
-      reciboController.dispose();
-      comentarioController.dispose();
-    }));
     if (!mounted) return false;
-    if (eliminar) {
+    if (resultado?.action == PaymentEditorAction.delete) {
       await _eliminarAbono(
         fila,
         indice,
@@ -853,8 +702,10 @@ class _ReporteScreenState extends State<ReporteScreen> {
       );
       return true;
     }
-    if (resultado != null) {
-      final totalPropuesto = fila.totalAbonos - abono.valor + resultado.$1;
+    final pagoResultado = resultado?.payment;
+    if (pagoResultado != null) {
+      final totalPropuesto =
+          fila.totalAbonos - abono.valor + pagoResultado.valor;
       if (totalPropuesto > fila.venta + 0.005) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -868,15 +719,15 @@ class _ReporteScreenState extends State<ReporteScreen> {
         return false;
       }
     }
-    if (resultado == null) return false;
+    if (pagoResultado == null) return false;
 
     // Persistimos una copia: totales y saldo visibles no cambian hasta que la
     // RPC confirme. Ante cualquier error, el estado local permanece intacto.
     final propuesta = FilaVenta.fromJson(fila.toJson());
     final abonoPropuesto = Abono(
-      valor: resultado.$1,
-      numeroRecibo: resultado.$2,
-      comentario: resultado.$3,
+      valor: pagoResultado.valor,
+      numeroRecibo: pagoResultado.numeroRecibo,
+      comentario: pagoResultado.comentario,
     );
     if (nuevo) {
       propuesta.abonos.add(abonoPropuesto);

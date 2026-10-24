@@ -79,7 +79,8 @@ Map<String, dynamic> construirParametrosImportarFacturas({
         ? assigned
             .map((item) => _facturaJson(item.factura,
                 vendedor: item.vendedor.trim(),
-                paymentTermDays: item.paymentTermDays))
+                paymentTermDays: item.paymentTermDays,
+                payment: item.pago))
             .toList()
         : plain!.map(_facturaJson).toList(),
   };
@@ -89,8 +90,9 @@ void verificarVendedoresPersistidos({
   required Iterable<FacturaAsignada> esperadas,
   required Iterable<Map<String, dynamic>> persistidas,
 }) {
+  final rows = persistidas.toList(growable: false);
   final actual = <String, String>{
-    for (final row in persistidas)
+    for (final row in rows)
       row['ref_fact']?.toString().trim() ?? '':
           row['vendedor']?.toString().trim() ?? '',
   };
@@ -100,11 +102,51 @@ void verificarVendedoresPersistidos({
       throw StateError(
           'Supabase no confirmó el vendedor de la factura $reference.');
     }
+    final payment = item.pago;
+    if (payment == null) continue;
+    final row = rows.cast<Map<String, dynamic>?>().firstWhere(
+          (candidate) => candidate?['ref_fact']?.toString().trim() == reference,
+          orElse: () => null,
+        );
+    final amounts = row?['abonos'] as List? ?? const [];
+    final receipts = row?['numeros_recibo'] as List? ?? const [];
+    final comments = row?['comentarios_abonos'] as List? ?? const [];
+    final persistedReceipt = receipts.length == 1 && receipts.single != null
+        ? int.tryParse(receipts.single.toString())
+        : null;
+    final persistedComment =
+        comments.length == 1 ? comments.single?.toString() ?? '' : '';
+    if (amounts.length != 1 ||
+        receipts.length != 1 ||
+        comments.length != 1 ||
+        ((amounts.single as num?)?.toDouble() ?? 0) != payment.valor ||
+        persistedReceipt != payment.numeroRecibo ||
+        persistedComment != payment.comentario.trim()) {
+      throw StateError(
+          'Supabase no confirmó el pago de la factura $reference.');
+    }
+  }
+}
+
+void validarFacturasAsignadasParaImportacion(
+    Iterable<FacturaAsignada> facturas) {
+  for (final item in facturas) {
+    if (item.vendedor.trim().isEmpty ||
+        parseInvoiceDate(item.factura.fecha) == null) {
+      throw const FormatException('Factura o vendedor inválido.');
+    }
+    final payment = item.pago;
+    if (payment != null &&
+        (esVendedorAnulado(item.vendedor) ||
+            (payment.valor - item.factura.total).abs() > .005)) {
+      throw const FormatException(
+          'El pago completo es inválido para la factura.');
+    }
   }
 }
 
 Map<String, dynamic> _facturaJson(Factura factura,
-        {String? vendedor, int? paymentTermDays}) =>
+        {String? vendedor, int? paymentTermDays, Abono? payment}) =>
     {
       'ref_fact': factura.secuencial.trim(),
       'nro_fact': factura.secuencial.trim(),
@@ -118,6 +160,13 @@ Map<String, dynamic> _facturaJson(Factura factura,
           factura.tipoIdentificacionComprador.trim(),
       if (vendedor != null) 'vendedor': vendedor,
       if (paymentTermDays != null) 'payment_term_days': paymentTermDays,
+      if (payment != null) ...{
+        'abonos': [payment.valor],
+        'numeros_recibo': [payment.numeroRecibo],
+        'comentarios_abonos': [
+          payment.comentario.trim().isEmpty ? null : payment.comentario.trim(),
+        ],
+      },
     };
 
 class CobroMensual {
@@ -610,11 +659,7 @@ class SupabaseReportesService {
   Future<int> importarFacturasMensualesAsignadas(
       Iterable<FacturaAsignada> facturas, int anio, int mes) async {
     final lote = facturas.toList(growable: false);
-    if (lote.any((item) =>
-        item.vendedor.trim().isEmpty ||
-        parseInvoiceDate(item.factura.fecha) == null)) {
-      throw const FormatException('Factura o vendedor inválido.');
-    }
+    validarFacturasAsignadasParaImportacion(lote);
     final result = await _client.rpc('enterprise_import_monthly_invoices',
         params: construirParametrosImportarFacturas(
             facturasAsignadas: lote,
@@ -627,7 +672,8 @@ class SupabaseReportesService {
         lote.map((item) => item.factura.secuencial.trim()).toList();
     final persisted = await _client
         .from('reportes_ventas')
-        .select('ref_fact,vendedor,nro_fila')
+        .select('ref_fact,vendedor,nro_fila,abonos,numeros_recibo,'
+            'comentarios_abonos')
         .eq('mes_reporte', reportName)
         .inFilter('ref_fact', references)
         .order('nro_fila', ascending: true);

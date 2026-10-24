@@ -8,11 +8,14 @@ import 'package:flutter/services.dart';
 
 import '../services/facturas_store.dart';
 import '../models/factura.dart';
+import '../models/fila_venta.dart';
 import '../services/invoice_batch_importer.dart';
 import '../services/invoice_file_preparer.dart';
+import '../services/payment_calendar_refresh.dart';
 import '../services/supabase_reportes_service.dart';
 import '../services/vendedores_store.dart';
 import '../theme/hg_theme.dart';
+import '../widgets/payment_editor_dialog.dart';
 
 const _maxPaymentTermDays = 3650;
 const _vendedorAnulacion = 'ANUL';
@@ -129,12 +132,86 @@ class _InvoiceReviewDialogState extends State<InvoiceReviewDialog> {
         return;
       }
     }
+    final pagos = widget.review.invoices.where((item) => item.pago != null);
+    if (value == _vendedorAnulacion && pagos.isNotEmpty) {
+      final remove = await _confirmarQuitarPagos(
+        pagos.length == 1
+            ? 'La factura marcada como pagada quedará anulada. Para continuar se quitará su pago.'
+            : '${pagos.length} facturas marcadas como pagadas quedarán anuladas. Para continuar se quitarán sus pagos.',
+      );
+      if (!remove) {
+        setState(() => _masivo = null);
+        return;
+      }
+    }
     setState(() {
       _masivo = value;
       for (final invoice in widget.review.invoices) {
         invoice.vendedor = value;
+        if (value == _vendedorAnulacion) invoice.pago = null;
       }
     });
+  }
+
+  Future<bool> _confirmarQuitarPagos(String message) async =>
+      await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => AlertDialog(
+          title: const Text('Quitar pago completo'),
+          content: Text('$message\n\n¿Deseas continuar?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Conservar pago'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Quitar pago'),
+            ),
+          ],
+        ),
+      ) ??
+      false;
+
+  Future<void> _cambiarVendedor(
+    ReviewableInvoice invoice,
+    String? value,
+  ) async {
+    if (value == _vendedorAnulacion && invoice.pago != null) {
+      final remove = await _confirmarQuitarPagos(
+        'La factura ${invoice.factura.secuencial} está marcada como pagada. '
+        'Para asignar ANUL se quitará el pago.',
+      );
+      if (!remove || !mounted) return;
+      invoice.pago = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      invoice.vendedor = value;
+      _masivo = null;
+    });
+  }
+
+  Future<void> _editarPago(ReviewableInvoice invoice) async {
+    if (invoice.vendedor == _vendedorAnulacion) return;
+    final payment = await showPaymentEditorDialog(
+      context: context,
+      title: 'Pago completo · factura ${invoice.factura.secuencial}',
+      initialPayment: invoice.pago ?? Abono(valor: invoice.factura.total),
+      availableBalance: invoice.factura.total,
+      initialFullPayment: true,
+      lockFullPayment: true,
+    );
+    if (!mounted || payment?.payment == null) return;
+    setState(() => invoice.pago = payment!.payment);
+  }
+
+  Future<void> _quitarPago(ReviewableInvoice invoice) async {
+    final remove = await _confirmarQuitarPagos(
+      'La factura ${invoice.factura.secuencial} dejará de importarse pagada.',
+    );
+    if (remove && mounted) setState(() => invoice.pago = null);
   }
 
   Future<bool> _confirmarDescarte() async {
@@ -292,7 +369,10 @@ class _InvoiceReviewDialogState extends State<InvoiceReviewDialog> {
                       invoice: invoice,
                       showTermEditor: identical(invoice, firstForCustomer),
                       vendedores: widget.vendedores,
-                      onChanged: () => setState(() => _masivo = null),
+                      onSellerChanged: (value) =>
+                          _cambiarVendedor(invoice, value),
+                      onEditPayment: () => _editarPago(invoice),
+                      onRemovePayment: () => _quitarPago(invoice),
                       onTermChanged: (days) => setState(() {
                             for (final sameCustomer in widget.review.invoices
                                 .where((item) =>
@@ -355,7 +435,8 @@ class _InvoiceReviewDialogState extends State<InvoiceReviewDialog> {
                                                   paymentTermDays: item
                                                           .termEstablished
                                                       ? null
-                                                      : item.paymentTermDays))
+                                                      : item.paymentTermDays,
+                                                  pago: item.pago))
                                               .toList());
                                     },
                               icon: const Icon(Icons.upload_file),
@@ -375,12 +456,16 @@ class _InvoiceReviewCard extends StatelessWidget {
       {required this.invoice,
       required this.showTermEditor,
       required this.vendedores,
-      required this.onChanged,
+      required this.onSellerChanged,
+      required this.onEditPayment,
+      required this.onRemovePayment,
       required this.onTermChanged});
   final ReviewableInvoice invoice;
   final bool showTermEditor;
   final List<Vendedor> vendedores;
-  final VoidCallback onChanged;
+  final Future<void> Function(String? value) onSellerChanged;
+  final Future<void> Function() onEditPayment;
+  final Future<void> Function() onRemovePayment;
   final ValueChanged<int?> onTermChanged;
 
   @override
@@ -421,10 +506,7 @@ class _InvoiceReviewCard extends StatelessWidget {
                         ? null
                         : IconButton(
                             tooltip: 'Limpiar vendedor',
-                            onPressed: () {
-                              invoice.vendedor = null;
-                              onChanged();
-                            },
+                            onPressed: () => onSellerChanged(null),
                             icon: const Icon(Icons.clear))),
                 items: [
                   const DropdownMenuItem(
@@ -436,10 +518,7 @@ class _InvoiceReviewCard extends StatelessWidget {
                       child:
                           Text(v.etiqueta, overflow: TextOverflow.ellipsis))),
                 ],
-                onChanged: (value) {
-                  invoice.vendedor = value;
-                  onChanged();
-                },
+                onChanged: onSellerChanged,
               );
               final plazo = invoice.termEstablished
                   ? Text('Plazo configurado: ${invoice.paymentTermDays} días')
@@ -471,13 +550,74 @@ class _InvoiceReviewCard extends StatelessWidget {
                                     : null);
                               },
                             );
+              final payment = invoice.pago;
+              final paymentControls = payment == null
+                  ? OutlinedButton.icon(
+                      key: ValueKey('paid-${invoice.factura.secuencial}'),
+                      onPressed: invoice.vendedor == _vendedorAnulacion ||
+                              invoice.factura.total <= .005
+                          ? null
+                          : onEditPayment,
+                      icon: const Icon(Icons.payments_outlined),
+                      label: const Text('Pagada'),
+                    )
+                  : Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .primaryContainer
+                            .withValues(alpha: .45),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(children: [
+                            Icon(Icons.check_circle,
+                                size: 18,
+                                color: Theme.of(context).colorScheme.primary),
+                            const SizedBox(width: 6),
+                            const Expanded(
+                              child: Text(
+                                'Se importará pagada',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ]),
+                          Text(
+                            '\$${payment.valor.toStringAsFixed(2)}'
+                            '${payment.numeroRecibo == null ? '' : ' · Recibo ${payment.numeroRecibo}'}',
+                          ),
+                          Wrap(
+                            spacing: 4,
+                            children: [
+                              TextButton(
+                                key: ValueKey(
+                                    'edit-payment-${invoice.factura.secuencial}'),
+                                onPressed: onEditPayment,
+                                child: const Text('Editar pago'),
+                              ),
+                              TextButton(
+                                key: ValueKey(
+                                    'remove-payment-${invoice.factura.secuencial}'),
+                                onPressed: onRemovePayment,
+                                child: const Text('Quitar pago'),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
               return constraints.maxWidth >= 700
                   ? Row(children: [
                       Expanded(child: info),
                       const SizedBox(width: 16),
-                      SizedBox(width: 260, child: selector),
+                      SizedBox(width: 220, child: selector),
                       const SizedBox(width: 10),
-                      SizedBox(width: 190, child: plazo)
+                      SizedBox(width: 170, child: plazo),
+                      const SizedBox(width: 10),
+                      SizedBox(width: 190, child: paymentControls),
                     ])
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -486,7 +626,9 @@ class _InvoiceReviewCard extends StatelessWidget {
                           const SizedBox(height: 10),
                           selector,
                           const SizedBox(height: 10),
-                          plazo
+                          plazo,
+                          const SizedBox(height: 10),
+                          paymentControls,
                         ]);
             })),
       );
@@ -675,6 +817,7 @@ class _CargaFacturasViewState extends State<CargaFacturasView> {
           _store.registrar(item.factura);
         }
         await widget.onFacturasGuardadas?.call();
+        paymentCalendarRefresh.refresh();
         importacionConfirmada = true;
       }
     } catch (error) {

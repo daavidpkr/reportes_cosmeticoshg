@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../models/factura.dart';
+import '../models/fila_venta.dart';
 import 'facturas_store.dart';
 import 'invoice_file_preparer.dart';
 
@@ -29,6 +30,7 @@ class ReviewableInvoice {
   String customerKey;
   String? customerId;
   String? resolutionError;
+  Abono? pago;
 
   bool get customerAmbiguous => resolutionError != null;
 }

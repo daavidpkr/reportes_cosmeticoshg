@@ -1,3 +1,5 @@
+import 'fila_venta.dart';
+
 class Factura {
   const Factura({
     required this.cliente,
@@ -47,6 +49,7 @@ class FacturaAsignada {
     required this.factura,
     required this.vendedor,
     this.paymentTermDays,
+    this.pago,
   });
 
   final Factura factura;
@@ -54,4 +57,7 @@ class FacturaAsignada {
 
   /// Only supplied for a customer whose canonical term is missing.
   final int? paymentTermDays;
+
+  /// Canonical full payment registered together with the initial import.
+  final Abono? pago;
 }
