@@ -5,8 +5,8 @@ void main() {
   test('navegación Android intercambia Clientes y Cobros mensuales', () {
     expect(mobileReportNavigationLabels,
         ['Ventas', 'Búsqueda general', 'Clientes', 'Calendario']);
-    expect(mobileReportMenuSectionLabels,
-        ['Cobros mensuales', 'Vendedores', 'Estadísticas']);
+    expect(mobileReportMenuSectionLabels, ['Cobros mensuales', 'Catálogos']);
+    expect(logoReportMenuLabels, ['Vendedores', 'Estadísticas']);
     expect(mobileReportMenuSectionLabels, isNot(contains('Clientes')));
     expect(mobileReportMenuSectionLabels, isNot(contains('Búsqueda general')));
     expect(mobileReportNavigationLabels, isNot(contains('Cobros')));

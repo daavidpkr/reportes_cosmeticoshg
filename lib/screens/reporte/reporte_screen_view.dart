@@ -846,29 +846,15 @@ extension _ReporteScreenView on _ReporteScreenState {
               ),
               const SizedBox(width: 4),
             ],
-            ClipRRect(
-              borderRadius: BorderRadius.circular(9),
-              child: Image.asset('web/icons/Icon-192.png',
-                  width: 34, height: 34, fit: BoxFit.cover),
-            ),
-            const SizedBox(width: 12),
-            const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Cosméticos HG',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                ),
-                Text(
-                  'P E R F E C T  N A I L S',
-                  style: TextStyle(color: Color(0xFFF1E4C0), fontSize: 8),
-                ),
-              ],
+            ReportLogoMenu(
+              destination: _destination,
+              onSelected: (destination) {
+                if (destination == ReportDestination.sellers) {
+                  _gestionarVendedores();
+                } else {
+                  _navigate(destination);
+                }
+              },
             ),
             const SizedBox(width: 20),
             Expanded(
@@ -895,13 +881,6 @@ extension _ReporteScreenView on _ReporteScreenState {
                       'Búsqueda general',
                       _vistaBusquedaGeneral,
                       () => _navigate(ReportDestination.globalSearch),
-                    ),
-                    _pestana(
-                        'Vendedores', _vistaVendedores, _gestionarVendedores),
-                    _pestana(
-                      'Estadísticas',
-                      _vistaEstadisticas,
-                      () => _navigate(ReportDestination.statistics),
                     ),
                     _pestana(
                       'Catálogos',
@@ -1624,32 +1603,16 @@ extension _ReporteScreenView on _ReporteScreenState {
             ),
           ),
           titleSpacing: 16,
-          title: Row(
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(9),
-                child: Image.asset('web/icons/Icon-192.png',
-                    width: 32, height: 32, fit: BoxFit.cover),
-              ),
-              const SizedBox(width: 10),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Cosméticos HG',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                  ),
-                  Text(
-                    'P E R F E C T  N A I L S',
-                    style: TextStyle(
-                      color: Color(0xFFF1E4C0),
-                      fontSize: 8,
-                      letterSpacing: .5,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          title: ReportLogoMenu(
+            compact: true,
+            destination: _destination,
+            onSelected: (destination) {
+              if (destination == ReportDestination.sellers) {
+                _gestionarVendedores();
+              } else {
+                _navigate(destination);
+              }
+            },
           ),
           actions: [
             PopupMenuButton<String>(
@@ -1659,10 +1622,6 @@ extension _ReporteScreenView on _ReporteScreenState {
                 switch (value) {
                   case 'collections':
                     _navigate(ReportDestination.monthlyCollections);
-                  case 'sellers':
-                    _gestionarVendedores();
-                  case 'statistics':
-                    _navigate(ReportDestination.statistics);
                   case 'catalogs':
                     _navigate(ReportDestination.catalogs);
                   case 'notifications':
@@ -1680,42 +1639,12 @@ extension _ReporteScreenView on _ReporteScreenState {
                 }
               },
               itemBuilder: (_) => [
-                PopupMenuItem(
-                    enabled: false,
-                    child: Row(children: [
-                      ClipRRect(
-                          borderRadius: BorderRadius.circular(7),
-                          child: Image.asset('web/icons/Icon-192.png',
-                              width: 30, height: 30)),
-                      const SizedBox(width: 10),
-                      const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Cosméticos HG',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text('PERFECT NAILS',
-                                style: TextStyle(fontSize: 10))
-                          ])
-                    ])),
-                const PopupMenuDivider(),
                 CheckedPopupMenuItem(
                     value: 'collections',
                     checked: _vistaCobrosMensuales,
                     child: const ListTile(
                         leading: Icon(Icons.payments_outlined),
                         title: Text('Cobros mensuales'))),
-                CheckedPopupMenuItem(
-                    value: 'sellers',
-                    checked: _vistaVendedores,
-                    child: const ListTile(
-                        leading: Icon(Icons.people_outline),
-                        title: Text('Vendedores'))),
-                CheckedPopupMenuItem(
-                    value: 'statistics',
-                    checked: _vistaEstadisticas,
-                    child: const ListTile(
-                        leading: Icon(Icons.insights_outlined),
-                        title: Text('Estadísticas'))),
                 CheckedPopupMenuItem(
                     value: 'catalogs',
                     checked: _vistaCatalogos,

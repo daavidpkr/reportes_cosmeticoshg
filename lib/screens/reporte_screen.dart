@@ -67,9 +67,12 @@ const mobileReportNavigationDestinations = <NavigationDestination>[
 ];
 const mobileReportMenuSectionLabels = <String>[
   'Cobros mensuales',
+  'Catálogos',
+];
+
+const logoReportMenuLabels = <String>[
   'Vendedores',
   'Estadísticas',
-  'Catálogos',
 ];
 
 enum ReportDestination {
@@ -102,6 +105,104 @@ ReportDestination destinationForMobileIndex(int index) => switch (index) {
 
 bool isPrimaryReportDestination(ReportDestination destination) =>
     mobileNavigationIndex(destination) != null;
+
+class ReportLogoMenu extends StatelessWidget {
+  const ReportLogoMenu({
+    required this.destination,
+    required this.onSelected,
+    this.compact = false,
+    super.key,
+  });
+
+  final ReportDestination destination;
+  final ValueChanged<ReportDestination> onSelected;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Menú de Cosméticos HG',
+      hint: 'Abre las opciones Vendedores y Estadísticas',
+      child: PopupMenuButton<ReportDestination>(
+        key: const Key('report-logo-menu'),
+        tooltip: 'Abrir menú de Cosméticos HG',
+        position: PopupMenuPosition.under,
+        offset: const Offset(0, 4),
+        constraints: const BoxConstraints(minWidth: 220, maxWidth: 280),
+        onSelected: onSelected,
+        itemBuilder: (_) => [
+          CheckedPopupMenuItem(
+            value: ReportDestination.sellers,
+            checked: destination == ReportDestination.sellers,
+            child: const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.people_outline),
+              title: Text('Vendedores'),
+            ),
+          ),
+          CheckedPopupMenuItem(
+            value: ReportDestination.statistics,
+            checked: destination == ReportDestination.statistics,
+            child: const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(Icons.insights_outlined),
+              title: Text('Estadísticas'),
+            ),
+          ),
+        ],
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 48, minWidth: 48),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(9),
+                child: Image.asset(
+                  'web/icons/Icon-192.png',
+                  width: compact ? 32 : 34,
+                  height: compact ? 32 : 34,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              if (!compact) ...[
+                const SizedBox(width: 10),
+                const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Cosméticos HG',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      'P E R F E C T  N A I L S',
+                      style: TextStyle(
+                        color: Color(0xFFF1E4C0),
+                        fontSize: 8,
+                        letterSpacing: .5,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(width: 4),
+              const Icon(
+                Icons.arrow_drop_down,
+                size: 18,
+                color: Colors.white70,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class ReporteScreen extends StatefulWidget {
   const ReporteScreen({
