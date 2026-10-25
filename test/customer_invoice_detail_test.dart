@@ -304,9 +304,9 @@ void main() {
     expect(find.text('Local de prueba'), findsWidgets);
     expect(find.text('OCTUBRE 2026'), findsOneWidget);
     expect(find.textContaining('Abono de prueba'), findsOneWidget);
-    expect(find.text('Registrar abono'), findsOneWidget);
+    expect(find.text('Añadir abono'), findsOneWidget);
     expect(find.text('Pago completo'), findsOneWidget);
-    expect(find.text('Reprogramar'), findsOneWidget);
+    expect(find.text('Reprogramar cobro'), findsOneWidget);
     expect(
       tester
           .widget<OutlinedButton>(find.byKey(

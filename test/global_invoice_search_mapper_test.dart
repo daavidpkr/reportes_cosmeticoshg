@@ -32,4 +32,38 @@ void main() {
     expect(result.row.paymentTermDays, 30);
     expect(result.paymentDate, DateTime(2024, 2, 19));
   });
+
+  test('maps canonical detail with payment dates and scheduling state', () {
+    final result = invoiceDetailSnapshotFromJson({
+      'reference': '00019',
+      'invoice_number': '001-002-000000019',
+      'invoice_date': '2026-10-01',
+      'cliente': 'Cliente',
+      'commercial_name': 'Comercial',
+      'seller': 'Ana',
+      'sale': 100,
+      'report_month': 'OCTUBRE 2026',
+      'row_number': 4,
+      'nail_polish': 0,
+      'abonos': [25],
+      'payment_receipts': [88],
+      'payment_comments': ['Transferencia'],
+      'payment_dates': ['2026-10-15'],
+      'payment_term_days': 30,
+      'scheduled_date': '2026-10-31',
+      'next_collection_date': '2026-10-31',
+      'schedule_source': 'customer_term',
+      'overdue': true,
+    });
+
+    expect(result.invoice.numeroFactura, '001-002-000000019');
+    expect(result.invoice.abonos.first.fecha, DateTime(2026, 10, 15));
+    expect(result.invoice.totalAbonos, 25);
+    expect(result.invoice.saldo, 75);
+    expect(result.invoice.paymentTermDays, 30);
+    expect(result.scheduledDate, DateTime(2026, 10, 31));
+    expect(result.nextCollectionDate, DateTime(2026, 10, 31));
+    expect(result.scheduleSource, 'customer_term');
+    expect(result.overdue, isTrue);
+  });
 }

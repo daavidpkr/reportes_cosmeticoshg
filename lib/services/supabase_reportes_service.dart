@@ -365,6 +365,60 @@ class GlobalInvoiceRow {
   final DateTime? paymentDate;
 }
 
+class InvoiceDetailSnapshot {
+  const InvoiceDetailSnapshot({
+    required this.invoice,
+    required this.reportMonth,
+    required this.overdue,
+    this.scheduledDate,
+    this.nextCollectionDate,
+    this.scheduleSource,
+  });
+
+  final FilaVenta invoice;
+  final String reportMonth;
+  final bool overdue;
+  final DateTime? scheduledDate;
+  final DateTime? nextCollectionDate;
+  final String? scheduleSource;
+}
+
+InvoiceDetailSnapshot invoiceDetailSnapshotFromJson(Map<String, dynamic> data) {
+  final row = globalInvoiceRowFromJson({
+    ...data,
+    'mes_reporte': data['report_month'],
+    'nro_fila': data['row_number'],
+    'ref_fact': data['reference'],
+    'nro_fact': data['invoice_number'],
+    'nombre_comercial': data['commercial_name'],
+    'fecha': data['invoice_date'],
+    'vendedor': data['seller'],
+    'esmaltes': data['nail_polish'],
+    'venta': data['sale'],
+    'numeros_recibo': data['payment_receipts'],
+    'comentarios_abonos': data['payment_comments'],
+    'plazo_pago_dias': data['payment_term_days'],
+    'fecha_programada': data['scheduled_date'],
+  });
+  final dates =
+      data['payment_dates'] is List ? data['payment_dates'] as List : const [];
+  for (var index = 0;
+      index < row.row.abonos.length && index < dates.length;
+      index++) {
+    row.row.abonos[index].fecha =
+        DateTime.tryParse(dates[index]?.toString() ?? '');
+  }
+  return InvoiceDetailSnapshot(
+    invoice: row.row,
+    reportMonth: row.reportMonth,
+    overdue: data['overdue'] == true,
+    scheduledDate: row.paymentDate,
+    nextCollectionDate:
+        DateTime.tryParse(data['next_collection_date']?.toString() ?? ''),
+    scheduleSource: data['schedule_source']?.toString(),
+  );
+}
+
 GlobalInvoiceRow globalInvoiceRowFromJson(Map<String, dynamic> data) {
   final amounts = data['abonos'] is List ? data['abonos'] as List : const [];
   final receipts = data['numeros_recibo'] is List
@@ -410,6 +464,20 @@ class SupabaseReportesService {
       : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
+
+  Future<InvoiceDetailSnapshot?> obtenerDetalleFactura(
+      String canonicalReference) async {
+    final reference = canonicalReference.trim();
+    if (reference.isEmpty) return null;
+    final response = await _client.rpc(
+      'get_invoice_detail',
+      params: {'p_ref_fact': reference},
+    );
+    if (response == null) return null;
+    return invoiceDetailSnapshotFromJson(
+      Map<String, dynamic>.from(response as Map),
+    );
+  }
 
   Future<List<GlobalInvoiceRow>> buscarFilasGlobales(
     String query, {

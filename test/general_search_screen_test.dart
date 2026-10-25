@@ -162,7 +162,7 @@ void main() {
     expect(find.text('Detalle de factura'), findsOneWidget);
     expect(find.text('REF. (FACT)'), findsWidgets);
     expect(find.text('Número de factura'), findsOneWidget);
-    expect(find.text('17/08/2026'), findsOneWidget);
+    expect(find.text('17/08/2026'), findsNWidgets(2));
     expect(find.textContaining('Recibo: 45'), findsOneWidget);
     expect(find.textContaining('Transferencia'), findsOneWidget);
     expect(find.text('Pago completo'), findsOneWidget);
@@ -365,7 +365,7 @@ void main() {
     await tester.tap(find.text('Ref. 2'));
     await tester.pumpAndSettle();
     expect(find.text('Detalle de factura'), findsOneWidget);
-    expect(find.text('Registrar abono'), findsOneWidget);
+    expect(find.text('Añadir abono'), findsOneWidget);
     expect(find.text('Pago completo'), findsOneWidget);
     await tester.tap(find.text('Ver perfil del cliente'));
     await tester.pump();

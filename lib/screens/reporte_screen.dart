@@ -800,6 +800,13 @@ class _ReporteScreenState extends State<ReporteScreen> {
           mesReporte: mesReporte,
         );
       },
+      onEditPayment: (index) async {
+        await _editarAbono(
+          fila,
+          index,
+          mesReporte: mesReporte,
+        );
+      },
       onPayInFull: () async {
         await _editarAbono(
           fila,

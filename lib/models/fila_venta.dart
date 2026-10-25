@@ -32,21 +32,29 @@ String? validarValorAbono(String valor) {
 }
 
 class Abono {
-  Abono({this.valor = 0, this.numeroRecibo, this.comentario = ''});
+  Abono({
+    this.valor = 0,
+    this.numeroRecibo,
+    this.comentario = '',
+    this.fecha,
+  });
 
   double valor;
   int? numeroRecibo;
   String comentario;
+  DateTime? fecha;
 
   Map<String, dynamic> toJson() => {
         'valor': valor,
         'numeroRecibo': numeroRecibo,
         'comentario': comentario,
+        'fecha': fecha?.toIso8601String(),
       };
   factory Abono.fromJson(Map<String, dynamic> json) => Abono(
         valor: (json['valor'] as num?)?.toDouble() ?? 0,
         numeroRecibo: (json['numeroRecibo'] as num?)?.toInt(),
         comentario: json['comentario'] as String? ?? '',
+        fecha: DateTime.tryParse(json['fecha']?.toString() ?? ''),
       );
 }
 
