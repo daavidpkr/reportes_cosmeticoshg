@@ -593,81 +593,69 @@ extension _ReporteScreenView on _ReporteScreenState {
         ),
       );
 
-  Widget _tarjetasResumen(ReportResponsiveLayout layout) => Row(
+  Widget _tarjetasResumen(ReportResponsiveLayout layout) => Column(
         key: const ValueKey('report-kpis'),
         children: [
-          _kpi(
-            'TOTAL ESMALTES',
-            '$_totalEsmaltes',
-            Icons.brush_outlined,
-            context.hg.plum,
-            context.hg.panel,
-            layout: layout,
+          Row(
+            children: [
+              _kpi(
+                'Total de ventas histórico',
+                '\$${_historicalAggregates.historicalSales.toStringAsFixed(2)}',
+                Icons.payments_outlined,
+                context.hg.burgundy,
+                context.hg.panel,
+                layout: layout,
+              ),
+              _kpi(
+                'Total de cobrar histórico',
+                '\$${_historicalAggregates.totalReceivable.toStringAsFixed(2)}',
+                Icons.account_balance_wallet_outlined,
+                context.hg.warning,
+                context.hg.warningContainer,
+                layout: layout,
+              ),
+              _kpi(
+                'Total de esmaltes histórico',
+                '${_historicalAggregates.historicalNailPolish}',
+                Icons.brush_outlined,
+                context.hg.plum,
+                context.hg.panel,
+                layout: layout,
+                ultimo: true,
+              ),
+            ],
           ),
-          _kpi(
-            'TOTAL VENTAS',
-            '\$${_totalVentas.toStringAsFixed(2)}',
-            Icons.payments_outlined,
-            context.hg.burgundy,
-            context.hg.panel,
-            layout: layout,
-          ),
-          _kpi(
-            'TOTAL COBROS',
-            '\$${_totalCobros.toStringAsFixed(2)}',
-            Icons.check_circle_outline,
-            context.hg.positive,
-            context.hg.positiveContainer,
-            layout: layout,
-          ),
-          _kpi(
-            'POR COBRAR',
-            '\$${_totalPorCobrar.toStringAsFixed(2)}',
-            Icons.schedule,
-            context.hg.warning,
-            context.hg.warningContainer,
-            layout: layout,
-            ultimo: true,
+          SizedBox(height: layout.compact ? 7 : 14),
+          Row(
+            children: [
+              _kpi(
+                'Total de ventas mensuales',
+                '\$${_totalVentas.toStringAsFixed(2)}',
+                Icons.payments_outlined,
+                context.hg.burgundy,
+                context.hg.panel,
+                layout: layout,
+              ),
+              _kpi(
+                'Total de cobros mensuales',
+                '\$${_totalCobros.toStringAsFixed(2)}',
+                Icons.check_circle_outline,
+                context.hg.positive,
+                context.hg.positiveContainer,
+                layout: layout,
+              ),
+              _kpi(
+                'Cartera mensual por cobrar',
+                '\$${_totalPorCobrar.toStringAsFixed(2)}',
+                Icons.schedule,
+                context.hg.warning,
+                context.hg.warningContainer,
+                layout: layout,
+                ultimo: true,
+              ),
+            ],
           ),
         ],
-      );
-
-  Widget _historicalCard(
-    String title,
-    String value,
-    IconData icon,
-    Color color,
-  ) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: context.hg.panel,
-          borderRadius: BorderRadius.circular(12),
-          border:
-              Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: color, size: 20),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style:
-                          TextStyle(color: context.hg.mutedText, fontSize: 11)),
-                  const SizedBox(height: 2),
-                  Text(value,
-                      style: TextStyle(
-                          color: color,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700)),
-                ],
-              ),
-            ),
-          ],
-        ),
       );
 
   Widget _encabezadoPagina(ReportResponsiveLayout layout) => Column(
@@ -772,38 +760,6 @@ extension _ReporteScreenView on _ReporteScreenState {
                   title,
                   const SizedBox(height: 10),
                   Align(alignment: Alignment.centerRight, child: controls),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final cardWidth = constraints.maxWidth >= 600
-                  ? (constraints.maxWidth - 10) / 2
-                  : constraints.maxWidth;
-              return Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: [
-                  SizedBox(
-                    width: cardWidth,
-                    child: _historicalCard(
-                      'Total de esmaltes histórico',
-                      '${_historicalAggregates.historicalNailPolish}',
-                      Icons.brush_outlined,
-                      context.hg.plum,
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: _historicalCard(
-                      'Total de ventas histórico',
-                      '\$${_historicalAggregates.historicalSales.toStringAsFixed(2)}',
-                      Icons.payments_outlined,
-                      context.hg.burgundy,
-                    ),
-                  ),
                 ],
               );
             },
@@ -1446,53 +1402,56 @@ extension _ReporteScreenView on _ReporteScreenState {
     );
   }
 
-  Widget _resumenMovil() => GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 10,
-        crossAxisSpacing: 10,
-        childAspectRatio: 1.75,
-        children: [
-          _kpiMovil(
-            'ESMALTES HISTÓRICO',
-            '${_historicalAggregates.historicalNailPolish}',
-            Icons.brush_outlined,
-            context.hg.plum,
-          ),
-          _kpiMovil(
-            'VENTAS HISTÓRICO',
-            '\$${_historicalAggregates.historicalSales.toStringAsFixed(2)}',
-            Icons.payments_outlined,
-            context.hg.burgundy,
-          ),
-          _kpiMovil(
-            'TOTAL ESMALTES',
-            '$_totalEsmaltes',
-            Icons.brush_outlined,
-            context.hg.plum,
-          ),
-          _kpiMovil(
-            'VENTAS',
-            '\$${_totalVentas.toStringAsFixed(2)}',
-            Icons.payments_outlined,
-            context.hg.burgundy,
-          ),
-          _kpiMovil(
-            'COBROS',
-            '\$${_totalCobros.toStringAsFixed(2)}',
-            Icons.check_circle_outline,
-            context.hg.positive,
-            fondo: context.hg.positiveContainer,
-          ),
-          _kpiMovil(
-            'POR COBRAR',
-            '\$${_totalPorCobrar.toStringAsFixed(2)}',
-            Icons.schedule,
-            context.hg.warning,
-            fondo: context.hg.warningContainer,
-          ),
-        ],
+  Widget _resumenMovil() => LayoutBuilder(
+        builder: (context, constraints) => GridView.count(
+          crossAxisCount: constraints.maxWidth < 330 ? 1 : 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 10,
+          crossAxisSpacing: 10,
+          childAspectRatio: constraints.maxWidth < 330 ? 3.2 : 1.55,
+          children: [
+            _kpiMovil(
+              'Total de ventas histórico',
+              '\$${_historicalAggregates.historicalSales.toStringAsFixed(2)}',
+              Icons.payments_outlined,
+              context.hg.burgundy,
+            ),
+            _kpiMovil(
+              'Total de cobrar histórico',
+              '\$${_historicalAggregates.totalReceivable.toStringAsFixed(2)}',
+              Icons.account_balance_wallet_outlined,
+              context.hg.warning,
+              fondo: context.hg.warningContainer,
+            ),
+            _kpiMovil(
+              'Total de esmaltes histórico',
+              '${_historicalAggregates.historicalNailPolish}',
+              Icons.brush_outlined,
+              context.hg.plum,
+            ),
+            _kpiMovil(
+              'Total de ventas mensuales',
+              '\$${_totalVentas.toStringAsFixed(2)}',
+              Icons.payments_outlined,
+              context.hg.burgundy,
+            ),
+            _kpiMovil(
+              'Total de cobros mensuales',
+              '\$${_totalCobros.toStringAsFixed(2)}',
+              Icons.check_circle_outline,
+              context.hg.positive,
+              fondo: context.hg.positiveContainer,
+            ),
+            _kpiMovil(
+              'Cartera mensual por cobrar',
+              '\$${_totalPorCobrar.toStringAsFixed(2)}',
+              Icons.schedule,
+              context.hg.warning,
+              fondo: context.hg.warningContainer,
+            ),
+          ],
+        ),
       );
 
   Widget _encabezadoMovil() => Column(

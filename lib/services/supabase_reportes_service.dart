@@ -514,6 +514,17 @@ class SupabaseReportesService {
     );
   }
 
+  Future<List<Map<String, dynamic>>> obtenerFilasReporte(
+    String mesReporte,
+  ) async {
+    final response = await _client
+        .from('reportes_ventas')
+        .select()
+        .eq('mes_reporte', mesReporte)
+        .order('nro_fila', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
   /// Calcula el mismo saldo que [FilaVenta.saldo] para cada reporte existente.
   /// Supabase es la única fuente: no utiliza el estado ni el almacenamiento local.
   Future<List<CobroMensual>> obtenerCobrosMensuales() async {

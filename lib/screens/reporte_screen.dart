@@ -224,7 +224,8 @@ class ReporteScreen extends StatefulWidget {
   State<ReporteScreen> createState() => _ReporteScreenState();
 }
 
-class _ReporteScreenState extends State<ReporteScreen> {
+class _ReporteScreenState extends State<ReporteScreen>
+    with WidgetsBindingObserver {
   static const _opcionAnul = 'ANUL';
   static const _opcionAnulada = 'ANULADA';
   final _facturas = FacturasStore.instance;
@@ -252,6 +253,8 @@ class _ReporteScreenState extends State<ReporteScreen> {
   int _handledCalendarRequestId = 0;
   final _busquedaController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
+  int _realtimeGeneration = 0;
+  bool _appEnPrimerPlano = true;
   bool _openingInvoiceDetail = false;
   bool _actualizando = false;
   final Set<String> _abonosGuardandose = {};
@@ -312,6 +315,9 @@ class _ReporteScreenState extends State<ReporteScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _appEnPrimerPlano =
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _crearFilas();
     _inicializar();
     _applyCalendarRequest();
@@ -337,9 +343,26 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _realtimeGeneration++;
     _filasSubscription?.cancel();
     _busquedaController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    final enPrimerPlano = state == AppLifecycleState.resumed;
+    if (enPrimerPlano == _appEnPrimerPlano) return;
+    _appEnPrimerPlano = enPrimerPlano;
+    if (!enPrimerPlano) {
+      _realtimeGeneration++;
+      final subscription = _filasSubscription;
+      _filasSubscription = null;
+      if (subscription != null) unawaited(subscription.cancel());
+      return;
+    }
+    unawaited(_recuperarYEscucharReporteActivo());
   }
 
   void _abrirRecordatorios() => _navigate(ReportDestination.calendar);
@@ -518,68 +541,129 @@ class _ReporteScreenState extends State<ReporteScreen> {
   }
 
   void _escucharReporteActivo() {
-    _filasSubscription?.cancel();
     final reporte = _reportes.activo;
+    unawaited(_crearSuscripcionRealtime(reporte));
+  }
+
+  Future<void> _recuperarYEscucharReporteActivo() async {
+    final reporte = _reportes.activo;
+    final generation = ++_realtimeGeneration;
+    final anterior = _filasSubscription;
+    _filasSubscription = null;
+    if (anterior != null) await anterior.cancel();
+    try {
+      final datos = await _supabaseReportes.obtenerFilasReporte(reporte.nombre);
+      if (!_realtimeVigente(generation, reporte)) return;
+      _aplicarFilasRealtime(datos, reporte);
+      await _crearSuscripcionRealtime(reporte, generation: generation);
+    } catch (error) {
+      if (_realtimeVigente(generation, reporte)) {
+        _mostrarErrorRealtime(error);
+      }
+    }
+  }
+
+  Future<void> _crearSuscripcionRealtime(
+    ReporteMensual reporte, {
+    int? generation,
+  }) async {
+    final currentGeneration = generation ?? ++_realtimeGeneration;
+    final anterior = _filasSubscription;
+    _filasSubscription = null;
+    if (anterior != null) await anterior.cancel();
+    if (!_realtimeVigente(currentGeneration, reporte)) return;
     _filasSubscription = _supabaseReportes.observarFilas(reporte.nombre).listen(
       (datos) {
-        if (!mounted || _reportes.activo.id != reporte.id) return;
-        final porNumero = <int, FilaVenta>{
-          for (final fila in _filas) fila.numero: fila,
-        };
-        for (final dato in datos) {
-          final numero = (dato['nro_fila'] as num?)?.toInt();
-          if (numero == null) continue;
-          final fila = porNumero.putIfAbsent(
-            numero,
-            () => FilaVenta(numero: numero),
-          );
-          final referenciaNube = dato['ref_fact']?.toString().trim() ?? '';
-          fila
-            ..vendedor = dato['vendedor']?.toString() ?? ''
-            ..esmalte = (dato['esmaltes'] as num?)?.toInt() ?? 0;
-          // Legacy rows can have an empty ref_fact even though the locally
-          // imported report still has the reference (most visibly, row 1).
-          // Do not erase that valid value while synchronizing.
-          if (referenciaNube.isNotEmpty) fila.referencia = referenciaNube;
-          final abonos = dato['abonos'];
-          if (abonos is List) {
-            final comentarios = dato['comentarios_abonos'];
-            final numerosRecibo = dato['numeros_recibo'];
-            fila.abonos
-              ..clear()
-              ..addAll(
-                List.generate(abonos.length, (indice) {
-                  final comentario =
-                      comentarios is List && indice < comentarios.length
-                          ? comentarios[indice]?.toString() ?? ''
-                          : '';
-                  final recibo = numerosRecibo is List &&
-                          indice < numerosRecibo.length &&
-                          numerosRecibo[indice] != null
-                      ? int.tryParse(numerosRecibo[indice].toString())
-                      : null;
-                  return Abono(
-                    valor: (abonos[indice] as num?)?.toDouble() ?? 0,
-                    numeroRecibo: recibo,
-                    comentario: comentario,
-                  );
-                }),
-              );
-            while (fila.abonos.length < 2) {
-              fila.abonos.add(Abono());
-            }
-          }
-          if (fila.referencia.isNotEmpty) {
-            _completarFacturaNube(fila, fila.referencia);
-          }
-        }
-        _filas = porNumero.values.toList()
-          ..sort((a, b) => a.numero.compareTo(b.numero));
-        _normalizarFilas();
-        setState(() {});
+        if (!_realtimeVigente(currentGeneration, reporte)) return;
+        _aplicarFilasRealtime(datos, reporte);
       },
-      onError: (Object error) => _mostrarErrorNube(
-        'No se pudo sincronizar el reporte en tiempo real: $error',
+      onError: (Object error) {
+        if (!_realtimeVigente(currentGeneration, reporte)) return;
+        _mostrarErrorRealtime(error);
+      },
+    );
+  }
+
+  bool _realtimeVigente(int generation, ReporteMensual reporte) =>
+      mounted &&
+      _appEnPrimerPlano &&
+      generation == _realtimeGeneration &&
+      _reportes.activo.id == reporte.id;
+
+  void _aplicarFilasRealtime(
+    List<Map<String, dynamic>> datos,
+    ReporteMensual reporte,
+  ) {
+    if (!mounted || _reportes.activo.id != reporte.id) return;
+    final porNumero = <int, FilaVenta>{
+      for (final fila in _filas) fila.numero: fila,
+    };
+    for (final dato in datos) {
+      final numero = (dato['nro_fila'] as num?)?.toInt();
+      if (numero == null) continue;
+      final fila = porNumero.putIfAbsent(
+        numero,
+        () => FilaVenta(numero: numero),
+      );
+      final referenciaNube = dato['ref_fact']?.toString().trim() ?? '';
+      fila
+        ..vendedor = dato['vendedor']?.toString() ?? ''
+        ..esmalte = (dato['esmaltes'] as num?)?.toInt() ?? 0;
+      // Legacy rows can have an empty ref_fact even though the locally
+      // imported report still has the reference (most visibly, row 1).
+      // Do not erase that valid value while synchronizing.
+      if (referenciaNube.isNotEmpty) fila.referencia = referenciaNube;
+      final abonos = dato['abonos'];
+      if (abonos is List) {
+        final comentarios = dato['comentarios_abonos'];
+        final numerosRecibo = dato['numeros_recibo'];
+        fila.abonos
+          ..clear()
+          ..addAll(
+            List.generate(abonos.length, (indice) {
+              final comentario =
+                  comentarios is List && indice < comentarios.length
+                      ? comentarios[indice]?.toString() ?? ''
+                      : '';
+              final recibo = numerosRecibo is List &&
+                      indice < numerosRecibo.length &&
+                      numerosRecibo[indice] != null
+                  ? int.tryParse(numerosRecibo[indice].toString())
+                  : null;
+              return Abono(
+                valor: (abonos[indice] as num?)?.toDouble() ?? 0,
+                numeroRecibo: recibo,
+                comentario: comentario,
+              );
+            }),
+          );
+        while (fila.abonos.length < 2) {
+          fila.abonos.add(Abono());
+        }
+      }
+      if (fila.referencia.isNotEmpty) {
+        _completarFacturaNube(fila, fila.referencia);
+      }
+    }
+    _filas = porNumero.values.toList()
+      ..sort((a, b) => a.numero.compareTo(b.numero));
+    _normalizarFilas();
+    setState(() {});
+  }
+
+  void _mostrarErrorRealtime(Object error) {
+    if (!mounted || !_appEnPrimerPlano) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'No se pudo sincronizar el reporte en tiempo real: $error',
+        ),
+        backgroundColor: context.hg.danger,
+        action: SnackBarAction(
+          label: 'Reintentar',
+          textColor: Colors.white,
+          onPressed: () => unawaited(_recuperarYEscucharReporteActivo()),
+        ),
       ),
     );
   }
@@ -2109,11 +2193,6 @@ class _ReporteScreenState extends State<ReporteScreen> {
 
   List<FilaVenta> get _filasParaTotales =>
       _filasVisibles.map((item) => item.value).toList();
-  int get _totalEsmaltes =>
-      _filasParaTotales.where((fila) => !fila.anulada).fold(
-            0,
-            (suma, fila) => suma + fila.esmalte,
-          );
   double get _totalVentas =>
       _filasParaTotales.where((fila) => !fila.anulada).fold(
             0,
