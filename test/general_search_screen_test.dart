@@ -162,19 +162,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Detalle de factura'), findsOneWidget);
-    expect(find.text('Referencia'), findsOneWidget);
-    expect(find.text('Número de factura'), findsOneWidget);
+    expect(find.text('Factura FAC-2'), findsOneWidget);
+    expect(find.text('REF. 2'), findsOneWidget);
     expect(find.text('17/08/2026'), findsNWidgets(2));
-    expect(find.textContaining('Recibo: 45'), findsOneWidget);
+    expect(find.textContaining('Recibo 45'), findsOneWidget);
     expect(find.textContaining('Transferencia'), findsOneWidget);
-    expect(find.text('Pago completo'), findsOneWidget);
-    expect(find.byTooltip('Atrás'), findsOneWidget);
-    await tester.tap(find.text('Ver perfil del cliente'));
+    expect(find.text('Registrar pago completo'), findsOneWidget);
+    expect(find.byTooltip('Cerrar'), findsOneWidget);
+    await tester.tap(find.text('Ver perfil'));
     await tester.pumpAndSettle();
     expect(find.text('Perfil del Cliente'), findsOneWidget);
     await tester.tap(find.text('Cerrar perfil'));
     await tester.pumpAndSettle();
-    expect(find.text('Detalle de factura'), findsOneWidget);
+    expect(find.text('Detalle de factura'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -368,12 +368,14 @@ void main() {
     await tester.tap(find.text('Ref. 2'));
     await tester.pumpAndSettle();
     expect(find.text('Detalle de factura'), findsOneWidget);
-    expect(find.text('Añadir abono'), findsOneWidget);
-    expect(find.text('Pago completo'), findsOneWidget);
-    await tester.tap(find.text('Ver perfil del cliente'));
-    await tester.pump();
-    expect(find.textContaining('No se pudo identificar al cliente'),
-        findsOneWidget);
+    expect(find.text('Añadir abono'), findsWidgets);
+    expect(find.text('Registrar pago completo'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('view-customer-profile')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('No se pudo identificar al cliente de esta factura.'),
+      findsOneWidget,
+    );
     expect(tester.takeException(), isNull);
   });
 

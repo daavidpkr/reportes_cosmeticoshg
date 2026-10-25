@@ -299,13 +299,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Detalle de factura'), findsOneWidget);
-    expect(find.text('PARTIAL'), findsWidgets);
+    expect(find.text('REF. PARTIAL'), findsOneWidget);
     expect(find.text('Cliente de prueba'), findsWidgets);
-    expect(find.text('Local de prueba'), findsWidgets);
+    expect(find.textContaining('Local de prueba'), findsWidgets);
     expect(find.text('OCTUBRE 2026'), findsOneWidget);
     expect(find.textContaining('Abono de prueba'), findsOneWidget);
-    expect(find.text('Añadir abono'), findsOneWidget);
-    expect(find.text('Pago completo'), findsOneWidget);
+    expect(find.text('Añadir abono'), findsWidgets);
+    expect(find.text('Registrar pago completo'), findsOneWidget);
     expect(find.text('Reprogramar cobro'), findsOneWidget);
     expect(
       tester
@@ -316,7 +316,7 @@ void main() {
       isNull,
     );
 
-    await tester.tap(find.byTooltip('Atrás'));
+    await tester.tap(find.byTooltip('Cerrar'));
     await tester.pumpAndSettle();
     expect(find.text('Perfil del Cliente'), findsOneWidget);
     expect(tester.widget<TextField>(search).controller!.text, 'factura');

@@ -81,5 +81,11 @@ class HgThemeColors extends ThemeExtension<HgThemeColors> {
 }
 
 extension HgThemeContext on BuildContext {
-  HgThemeColors get hg => Theme.of(this).extension<HgThemeColors>()!;
+  HgThemeColors get hg {
+    final theme = Theme.of(this);
+    return theme.extension<HgThemeColors>() ??
+        (theme.brightness == Brightness.dark
+            ? HgThemeColors.dark
+            : HgThemeColors.light);
+  }
 }
