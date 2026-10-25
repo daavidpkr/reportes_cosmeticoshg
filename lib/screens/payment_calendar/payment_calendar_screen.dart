@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../models/billing_customer.dart';
+import '../../models/customer_history.dart';
 import '../../models/payment_calendar_entry.dart';
 import '../../models/payment_calendar_rules.dart';
 import '../../services/customer_terms_repository.dart';
@@ -206,6 +207,7 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
         controller.grouped[dateOnly(day)] ?? const <PaymentCalendarEntry>[];
     await showDayInvoicesDialog(context, day, entries, _edit, _payment, _paid,
         (entry) => _history(entry, day),
+        onOpenDetail: _openInvoiceDetail,
         onAdd: _canSchedule(day) ? () => _addInvoiceToDay(day) : null);
   }
 
@@ -239,7 +241,50 @@ class _PaymentCalendarViewState extends State<PaymentCalendarView> {
     if (refreshed == null || !mounted) return;
     await showDayInvoicesDialog(context, day, refreshed, _edit, _payment, _paid,
         (entry) => _history(entry, day),
+        onOpenDetail: _openInvoiceDetail,
         onAdd: _canSchedule(day) ? () => _addInvoiceToDay(day) : null);
+  }
+
+  Future<void> _openInvoiceDetail(PaymentCalendarEntry entry) async {
+    final callback = widget.onOpenInvoiceDetail;
+    if (callback == null) return;
+    BillingCustomer? customer;
+    try {
+      final source = controller.repository;
+      if (source is CalendarCustomerDataSource) {
+        customer = await (source as CalendarCustomerDataSource)
+            .resolveCustomer(entry.facturaId);
+      }
+    } catch (_) {
+      customer = null;
+    }
+    if (!mounted || customer == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('No se pudo identificar al cliente de esta factura.'),
+        ));
+      }
+      return;
+    }
+    await callback(
+      CustomerHistoryInvoice(
+        reference: entry.facturaId,
+        invoiceNumber: entry.invoiceNumber,
+        date: entry.invoiceDate,
+        seller: '',
+        reportMonth: '',
+        sale: entry.balance,
+        paid: 0,
+        balance: entry.balance,
+        cancelled: false,
+        overdue: entry.reminderDate.isBefore(DateTime.now()),
+        reminderDate: entry.reminderDate,
+        calendarComment: entry.comment,
+        payments: const [],
+      ),
+      customer,
+    );
+    if (mounted) await controller.load(refresh: true);
   }
 
   Future<void> _history(PaymentCalendarEntry entry, DateTime day) async {

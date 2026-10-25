@@ -17,75 +17,81 @@ class PendingInvoiceCard extends StatelessWidget {
       {required this.entry,
       required this.onEdit,
       required this.onHistory,
+      this.onOpenDetail,
       this.onPayment,
       this.onPaid,
       super.key});
   final PaymentCalendarEntry entry;
   final VoidCallback onEdit;
   final VoidCallback? onHistory;
+  final VoidCallback? onOpenDetail;
   final VoidCallback? onPayment, onPaid;
 
   @override
   Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('REF. ${visibleInvoiceReference(entry.facturaId)}',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800)),
-            const SizedBox(height: 8),
-            _line(
-                'Nro. factura',
-                visibleInvoiceReference(entry.invoiceNumber.isEmpty
-                    ? entry.facturaId
-                    : entry.invoiceNumber)),
-            _line('Cliente', entry.cliente),
-            _line('Nombre comercial', entry.nombreComercial),
-            _line('Fecha de factura', calendarDate(entry.invoiceDate)),
-            _line('Saldo pendiente', '\$${entry.balance.toStringAsFixed(2)}'),
-            _line('Fecha de recordatorio', calendarDate(entry.reminderDate)),
-            _line('Comentario',
-                entry.comment.isEmpty ? 'Sin comentario' : entry.comment),
-            const SizedBox(height: 10),
-            LayoutBuilder(builder: (context, constraints) {
-              // Four icon buttons need roughly 145 logical pixels each.
-              final wide = constraints.maxWidth >= 580;
-              final buttons = <Widget>[
-                _action('Registrar abono', 'Abono', Icons.payments_outlined,
-                    onPayment),
-                _action('Reprogramar factura', 'Reprogramar',
-                    Icons.event_repeat_outlined, onEdit),
-                _action('Marcar como pagada', 'Marcar pagada', Icons.task_alt,
-                    onPaid,
-                    filled: true),
-                _action('Ver historial del cliente', 'Historial', Icons.history,
-                    onHistory),
-              ];
-              if (wide) {
-                return Row(
-                    key: const ValueKey('invoice-actions-row'),
-                    children: [
-                      for (var i = 0; i < buttons.length; i++) ...[
-                        Expanded(child: buttons[i]),
-                        if (i < buttons.length - 1) const SizedBox(width: 6),
-                      ]
-                    ]);
-              }
-              return GridView.count(
-                key: const ValueKey('invoice-actions-grid'),
-                crossAxisCount: 2,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: 3.2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                children: buttons,
-              );
-            }),
-          ]),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onOpenDetail,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('REF. ${visibleInvoiceReference(entry.facturaId)}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              _line(
+                  'Nro. factura',
+                  visibleInvoiceReference(entry.invoiceNumber.isEmpty
+                      ? entry.facturaId
+                      : entry.invoiceNumber)),
+              _line('Cliente', entry.cliente),
+              _line('Nombre comercial', entry.nombreComercial),
+              _line('Fecha de factura', calendarDate(entry.invoiceDate)),
+              _line('Saldo pendiente', '\$${entry.balance.toStringAsFixed(2)}'),
+              _line('Fecha de recordatorio', calendarDate(entry.reminderDate)),
+              _line('Comentario',
+                  entry.comment.isEmpty ? 'Sin comentario' : entry.comment),
+              const SizedBox(height: 10),
+              LayoutBuilder(builder: (context, constraints) {
+                // Four icon buttons need roughly 145 logical pixels each.
+                final wide = constraints.maxWidth >= 580;
+                final buttons = <Widget>[
+                  _action('Registrar abono', 'Abono', Icons.payments_outlined,
+                      onPayment),
+                  _action('Reprogramar factura', 'Reprogramar',
+                      Icons.event_repeat_outlined, onEdit),
+                  _action('Marcar como pagada', 'Marcar pagada', Icons.task_alt,
+                      onPaid,
+                      filled: true),
+                  _action('Ver historial del cliente', 'Historial',
+                      Icons.history, onHistory),
+                ];
+                if (wide) {
+                  return Row(
+                      key: const ValueKey('invoice-actions-row'),
+                      children: [
+                        for (var i = 0; i < buttons.length; i++) ...[
+                          Expanded(child: buttons[i]),
+                          if (i < buttons.length - 1) const SizedBox(width: 6),
+                        ]
+                      ]);
+                }
+                return GridView.count(
+                  key: const ValueKey('invoice-actions-grid'),
+                  crossAxisCount: 2,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  childAspectRatio: 3.2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: buttons,
+                );
+              }),
+            ]),
+          ),
         ),
       );
 

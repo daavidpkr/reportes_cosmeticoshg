@@ -1081,7 +1081,6 @@ extension _ReporteScreenView on _ReporteScreenState {
   }
 
   Widget _tarjetaFilaMovil(FilaVenta fila) {
-    final expandida = _filasExpandidas.contains(fila.numero);
     final brightness = Theme.of(context).brightness;
     final statusColor = fila.anulada
         ? context.hg.danger
@@ -1115,11 +1114,9 @@ extension _ReporteScreenView on _ReporteScreenState {
         children: [
           InkWell(
             borderRadius: BorderRadius.circular(14),
-            onTap: () => setState(() {
-              expandida
-                  ? _filasExpandidas.remove(fila.numero)
-                  : _filasExpandidas.add(fila.numero);
-            }),
+            onTap: fila.referencia.trim().isEmpty
+                ? null
+                : () => _abrirDetalleFactura(fila),
             child: Padding(
               padding: const EdgeInsets.all(13),
               child: Row(
@@ -1215,223 +1212,10 @@ extension _ReporteScreenView on _ReporteScreenState {
                     ],
                   ),
                   const SizedBox(width: 6),
-                  AnimatedRotation(
-                    turns: expandida ? .5 : 0,
-                    duration: const Duration(milliseconds: 180),
-                    child: Icon(
-                      Icons.keyboard_arrow_down,
-                      size: 19,
-                      color: context.hg.mutedText,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedCrossFade(
-            duration: const Duration(milliseconds: 180),
-            crossFadeState: expandida
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            firstChild: const SizedBox(width: double.infinity),
-            secondChild: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(14, 10, 14, 16),
-              decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _campoEditableMovil(
-                    'Cliente',
-                    fila.cliente,
-                    'Nombre del cliente',
-                    (valor) => fila.cliente = valor,
-                    fila,
-                  ),
-                  const SizedBox(height: 12),
-                  _campoEditableMovil(
-                    'Nombre comercial',
-                    fila.nombreComercial,
-                    'Nombre comercial',
-                    (valor) => fila.nombreComercial = valor,
-                    fila,
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _textoCampoMovil(
-                          'Fecha',
-                          fila.fecha.isEmpty ? '—' : fila.fecha,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _textoCampoMovil(
-                          'Nro. fact.',
-                          fila.numeroFactura.isEmpty ? '—' : fila.numeroFactura,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'VENDEDOR / REFERENCIA',
-                    style: TextStyle(
-                      color: context.hg.mutedText,
-                      fontSize: 10,
-                      letterSpacing: .6,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _selectorVendedor(fila, _reportLayout.table),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _textoCampoMovil(
-                          'Ref. (Fact)',
-                          fila.referencia.isEmpty
-                              ? '—'
-                              : visibleTableReference(fila.referencia),
-                          key: ValueKey(
-                            'mobile-invoice-detail-${fila.referencia}',
-                          ),
-                          onTap: fila.referencia.trim().isEmpty
-                              ? null
-                              : () => _abrirDetalleFactura(fila),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'ESMALTES',
-                    style: TextStyle(
-                      color: context.hg.mutedText,
-                      fontSize: 10,
-                      letterSpacing: .6,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Container(
-                        width: 11,
-                        height: 11,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFC9A24C),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(child: _entradaEntera(fila)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'VENTA',
-                    style: TextStyle(
-                      color: context.hg.mutedText,
-                      fontSize: 10,
-                      letterSpacing: .6,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  _entrada(
-                    fila.venta == 0 ? '' : fila.venta.toStringAsFixed(2),
-                    double.infinity,
-                    (valor) {
-                      final limpio =
-                          valor.replaceAll(',', '.').replaceAll('\$', '');
-                      setState(() {
-                        fila.venta = double.tryParse(limpio) ?? 0;
-                        _asegurarFilaVacia();
-                      });
-                      _guardarProgreso();
-                      _guardarFilaNube(fila);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'ABONOS',
-                    style: TextStyle(
-                      color: context.hg.mutedText,
-                      fontSize: 10,
-                      letterSpacing: .6,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      Expanded(child: _botonAbono(fila, 0)),
-                      const SizedBox(width: 8),
-                      Expanded(child: _botonAbono(fila, 1)),
-                      _abonosAdicionales(fila),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: context.hg.tableHeader,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        _datoMovil(
-                          'Venta',
-                          fila.anulada
-                              ? 'ANULADA'
-                              : '\$${fila.venta.toStringAsFixed(2)}',
-                        ),
-                        _datoMovil(
-                          'Tot. abono',
-                          fila.anulada
-                              ? 'ANULADA'
-                              : '\$${fila.totalAbonos.toStringAsFixed(2)}',
-                          color: context.hg.positive,
-                        ),
-                        _datoMovil(
-                          'Saldo',
-                          fila.anulada
-                              ? 'ANULADA'
-                              : '\$${fila.saldo.toStringAsFixed(2)}',
-                          color: context.hg.burgundy,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton(
-                      onPressed: _eliminarReporteCliente,
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: context.hg.danger,
-                        side: const BorderSide(color: Color(0xFFA8425A)),
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                      child: const Text(
-                        'Eliminar este cliente',
-                        style: TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 22,
+                    color: context.hg.mutedText,
                   ),
                 ],
               ),

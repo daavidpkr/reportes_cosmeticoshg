@@ -38,6 +38,7 @@ Future<void> showDayInvoicesDialog(
   Future<void> Function(PaymentCalendarEntry) onPayment,
   Future<void> Function(PaymentCalendarEntry) onPaid,
   Future<void> Function(PaymentCalendarEntry) onHistory, {
+  Future<void> Function(PaymentCalendarEntry)? onOpenDetail,
   Future<List<PaymentCalendarEntry>?> Function()? onAdd,
 }) async {
   var visibleEntries = entries;
@@ -101,6 +102,12 @@ Future<void> showDayInvoicesDialog(
                             final entry = visibleEntries[index];
                             return PendingInvoiceCard(
                               entry: entry,
+                              onOpenDetail: onOpenDetail == null
+                                  ? null
+                                  : () async {
+                                      Navigator.pop(context);
+                                      await onOpenDetail(entry);
+                                    },
                               onHistory: () => onHistory(entry),
                               onPayment: () async {
                                 Navigator.pop(context);

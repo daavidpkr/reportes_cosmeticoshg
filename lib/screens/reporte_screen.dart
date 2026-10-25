@@ -151,7 +151,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
   int _handledCalendarRequestId = 0;
   final _busquedaController = TextEditingController();
   StreamSubscription<List<Map<String, dynamic>>>? _filasSubscription;
-  final Set<int> _filasExpandidas = {};
+  bool _openingInvoiceDetail = false;
   bool _actualizando = false;
   final Set<String> _abonosGuardandose = {};
   int _versionCobrosMensuales = 0;
@@ -781,50 +781,59 @@ class _ReporteScreenState extends State<ReporteScreen> {
     String? mesReporte,
     bool desdePerfilCliente = false,
   }) async {
+    if (_openingInvoiceDetail) return;
+    _openingInvoiceDetail = true;
     DateTime? scheduledDate;
     try {
       scheduledDate =
           await _supabaseReportes.obtenerFechaCobro(fila.referencia);
     } catch (_) {}
-    if (!mounted) return;
-    await showInvoiceDetailDialog(
-      context,
-      invoice: fila,
-      scheduledDate: scheduledDate,
-      reportMonth: mesReporte ?? _reportes.activo.nombre,
-      onPayment: () async {
-        await _editarAbono(
-          fila,
-          fila.abonos.length,
-          nuevo: true,
-          mesReporte: mesReporte,
-        );
-      },
-      onEditPayment: (index) async {
-        await _editarAbono(
-          fila,
-          index,
-          mesReporte: mesReporte,
-        );
-      },
-      onPayInFull: () async {
-        await _editarAbono(
-          fila,
-          fila.abonos.length,
-          nuevo: true,
-          mesReporte: mesReporte,
-          pagoCompletoInicial: true,
-        );
-      },
-      onReschedule: () => _reprogramarDesdeDetalle(fila),
-      onViewCustomerProfile:
-          desdePerfilCliente ? null : () => _openCustomerProfile(fila),
-      onClosed: () async {
-        if (mesReporte != null) await _cargarReportes();
-        paymentCalendarRefresh.refresh();
-        if (mounted) setState(() {});
-      },
-    );
+    if (!mounted) {
+      _openingInvoiceDetail = false;
+      return;
+    }
+    try {
+      await showInvoiceDetailDialog(
+        context,
+        invoice: fila,
+        scheduledDate: scheduledDate,
+        reportMonth: mesReporte ?? _reportes.activo.nombre,
+        onPayment: () async {
+          await _editarAbono(
+            fila,
+            fila.abonos.length,
+            nuevo: true,
+            mesReporte: mesReporte,
+          );
+        },
+        onEditPayment: (index) async {
+          await _editarAbono(
+            fila,
+            index,
+            mesReporte: mesReporte,
+          );
+        },
+        onPayInFull: () async {
+          await _editarAbono(
+            fila,
+            fila.abonos.length,
+            nuevo: true,
+            mesReporte: mesReporte,
+            pagoCompletoInicial: true,
+          );
+        },
+        onReschedule: () => _reprogramarDesdeDetalle(fila),
+        onViewCustomerProfile:
+            desdePerfilCliente ? null : () => _openCustomerProfile(fila),
+        onClosed: () async {
+          if (mesReporte != null) await _cargarReportes();
+          paymentCalendarRefresh.refresh();
+          if (mounted) setState(() {});
+        },
+      );
+    } finally {
+      _openingInvoiceDetail = false;
+    }
   }
 
   Future<void> _abrirDetalleDesdePerfil(

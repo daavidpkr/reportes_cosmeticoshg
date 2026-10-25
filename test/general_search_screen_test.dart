@@ -121,6 +121,7 @@ void main() {
 
   testWidgets('la referencia abre el detalle completo y responsive',
       (tester) async {
+    late BuildContext searchContext;
     final value = invoice(
       payments: [
         Abono(valor: 20, numeroRecibo: 45, comentario: 'Transferencia'),
@@ -131,13 +132,13 @@ void main() {
     await tester.pumpWidget(app(
       search: (_, {required offset, required limit}) async => [value],
       detail: (selected) => showInvoiceDetailDialog(
-        tester.element(find.byType(GeneralSearchScreen)),
+        searchContext,
         invoice: selected.row,
         reportMonth: selected.reportMonth,
         scheduledDate: DateTime(2026, 8, 17),
         onViewCustomerProfile: () async {
           await showDialog<void>(
-            context: tester.element(find.byType(GeneralSearchScreen)),
+            context: searchContext,
             builder: (context) => AlertDialog(
               title: const Text('Perfil del Cliente'),
               actions: [
@@ -152,6 +153,7 @@ void main() {
         },
       ),
     ));
+    searchContext = tester.element(find.byType(GeneralSearchScreen));
     await runSearch(tester, 'cliente');
     await tester.tap(find.descendant(
       of: find.byTooltip('Mes original: Julio 2026'),
@@ -160,12 +162,13 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Detalle de factura'), findsOneWidget);
-    expect(find.text('REF. (FACT)'), findsWidgets);
+    expect(find.text('Referencia'), findsOneWidget);
     expect(find.text('Número de factura'), findsOneWidget);
     expect(find.text('17/08/2026'), findsNWidgets(2));
     expect(find.textContaining('Recibo: 45'), findsOneWidget);
     expect(find.textContaining('Transferencia'), findsOneWidget);
     expect(find.text('Pago completo'), findsOneWidget);
+    expect(find.byTooltip('Atrás'), findsOneWidget);
     await tester.tap(find.text('Ver perfil del cliente'));
     await tester.pumpAndSettle();
     expect(find.text('Perfil del Cliente'), findsOneWidget);

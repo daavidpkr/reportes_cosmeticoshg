@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import '../models/fila_venta.dart';
@@ -44,16 +45,33 @@ Future<void> showInvoiceDetailDialog(
   final loader = loadDetail ??
       (String reference) =>
           SupabaseReportesService().obtenerDetalleFactura(reference);
-  final action = await showDialog<_InvoiceDetailAction>(
-    context: context,
-    builder: (context) => _InvoiceDetailDialog(
-      canonicalReference: invoice.referencia.trim(),
-      fallback: fallback,
-      loader: loader,
-      canEditPayment: onEditPayment != null,
-      onViewCustomerProfile: onViewCustomerProfile,
-    ),
+  final mobile = !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
+  final detail = _InvoiceDetailDialog(
+    canonicalReference: invoice.referencia.trim(),
+    fallback: fallback,
+    loader: loader,
+    canEditPayment: onEditPayment != null,
+    onViewCustomerProfile: onViewCustomerProfile,
+    asPage: mobile,
   );
+  final _InvoiceDetailAction? action;
+  if (mobile) {
+    action = await Navigator.of(context).push<_InvoiceDetailAction>(
+      MaterialPageRoute(
+        settings: RouteSettings(
+          name: '/facturas/${invoice.referencia.trim()}',
+        ),
+        builder: (_) => detail,
+      ),
+    );
+  } else {
+    action = await showDialog<_InvoiceDetailAction>(
+      context: context,
+      builder: (_) => detail,
+    );
+  }
   if (action?.type == _InvoiceDetailActionType.payment) await onPayment?.call();
   if (action?.type == _InvoiceDetailActionType.editPayment &&
       action?.paymentIndex != null) {
@@ -75,6 +93,7 @@ class _InvoiceDetailDialog extends StatefulWidget {
     required this.loader,
     required this.canEditPayment,
     required this.onViewCustomerProfile,
+    required this.asPage,
   });
 
   final String canonicalReference;
@@ -82,6 +101,7 @@ class _InvoiceDetailDialog extends StatefulWidget {
   final InvoiceDetailLoader loader;
   final bool canEditPayment;
   final Future<bool> Function()? onViewCustomerProfile;
+  final bool asPage;
 
   @override
   State<_InvoiceDetailDialog> createState() => _InvoiceDetailDialogState();
@@ -246,9 +266,9 @@ class _InvoiceDetailDialogState extends State<_InvoiceDetailDialog> {
                   ]),
             ),
             IconButton(
-              tooltip: 'Cerrar',
+              tooltip: widget.asPage ? 'Atrás' : 'Cerrar',
               onPressed: () => Navigator.pop(context),
-              icon: const Icon(Icons.close),
+              icon: Icon(widget.asPage ? Icons.arrow_back : Icons.close),
             ),
           ]),
         ),
@@ -427,7 +447,7 @@ class _InvoiceDetailDialogState extends State<_InvoiceDetailDialog> {
         ),
       ),
     ]);
-    if (mobile) return Dialog.fullscreen(child: body);
+    if (widget.asPage) return Scaffold(body: body);
     return Dialog(
       insetPadding: const EdgeInsets.all(24),
       child: ConstrainedBox(

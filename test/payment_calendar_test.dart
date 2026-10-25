@@ -396,6 +396,38 @@ void main() {
           find.byKey(const ValueKey('invoice-actions-grid')), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+    testWidgets('tocar la factura abre el detalle directo y conserva el mes',
+        (tester) async {
+      final repository =
+          FakeCalendarRepository([entry('684', DateTime(2026, 8, 17))])
+            ..resolvedCustomer = const BillingCustomer(
+              id: 'customer-684',
+              name: 'Cliente 684',
+              commercialName: 'Comercial 684',
+              paymentTermDays: 30,
+            );
+      CustomerHistoryInvoice? opened;
+      await tester.binding.setSurfaceSize(const Size(390, 844));
+      await tester.pumpWidget(MaterialApp(
+        home: PaymentCalendarScreen(
+          repository: repository,
+          initialMonth: DateTime(2026, 8),
+          onOpenInvoiceDetail: (invoice, _) async => opened = invoice,
+        ),
+      ));
+      await tester.pumpAndSettle();
+      await tester
+          .tap(find.bySemanticsLabel(RegExp('17, 1 facturas pendientes')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('REF. 684'));
+      await tester.pumpAndSettle();
+
+      expect(opened?.reference, '684');
+      expect(find.text('Facturas pendientes'), findsNothing);
+      expect(find.text('Agosto 2026'), findsOneWidget);
+      expect(repository.resolvedInvoice, '684');
+      expect(tester.takeException(), isNull);
+    });
     testWidgets('Android muestra solamente día y contador en cada celda',
         (tester) async {
       await pump(tester, const Size(390, 844), [

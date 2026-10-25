@@ -316,7 +316,7 @@ void main() {
       isNull,
     );
 
-    await tester.tap(find.byTooltip('Cerrar'));
+    await tester.tap(find.byTooltip('Atrás'));
     await tester.pumpAndSettle();
     expect(find.text('Perfil del Cliente'), findsOneWidget);
     expect(tester.widget<TextField>(search).controller!.text, 'factura');
