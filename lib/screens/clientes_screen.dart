@@ -16,11 +16,13 @@ class ClientesScreen extends StatefulWidget {
       this.historyRepository,
       this.bulkReviewRepository,
       this.onOpenInvoiceDetail,
+      this.onToggleTheme,
       super.key});
   final CustomerTermsDataSource? repository;
   final CustomerHistoryDataSource? historyRepository;
   final BulkScheduleReviewDataSource? bulkReviewRepository;
   final CustomerInvoiceDetail? onOpenInvoiceDetail;
+  final VoidCallback? onToggleTheme;
   @override
   State<ClientesScreen> createState() => _ClientesScreenState();
 }
@@ -188,6 +190,7 @@ class _ClientesScreenState extends State<ClientesScreen> {
           onEditHours: _editHours,
           onSchedule: _schedule,
           onDelete: _delete,
+          onToggleTheme: widget.onToggleTheme,
           onOpenInvoiceDetail: widget.onOpenInvoiceDetail));
 
   Future<void> _reviewSchedules() async {

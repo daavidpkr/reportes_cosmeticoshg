@@ -8,8 +8,10 @@ import 'package:cosmeticos_hg_reportes/theme/hg_theme.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-class _HistoryRepository implements CustomerHistoryDataSource {
+class _HistoryRepository
+    implements CustomerHistoryDataSource, CustomerContactDataSource {
   int loads = 0;
+  Map<String, String>? savedContact;
 
   static final invoices = [
     _invoice('PENDING', sale: 100, paid: 0),
@@ -80,6 +82,31 @@ class _HistoryRepository implements CustomerHistoryDataSource {
   Future<InvoiceTermRecalculation> reprogramInvoice(
           InvoiceTermRecalculation preview) =>
       throw UnimplementedError();
+
+  @override
+  Future<Map<String, dynamic>> updateContact({
+    required String customerId,
+    required String address,
+    required String phone,
+    required String email,
+  }) async {
+    savedContact = {
+      'customer_id': customerId,
+      'address': address,
+      'phone': phone,
+      'email': email
+    };
+    return {
+      'id': customerId,
+      'name': _customer.name,
+      'commercial_name': _customer.commercialName,
+      'payment_term_days': _customer.paymentTermDays,
+      'configuration_active': true,
+      'address': address,
+      'phone': phone,
+      'email': email,
+    };
+  }
 }
 
 const _customer = BillingCustomer(
@@ -87,6 +114,9 @@ const _customer = BillingCustomer(
   name: 'Cliente de prueba',
   commercialName: 'Local de prueba',
   paymentTermDays: 30,
+  address: 'Dirección inicial',
+  phone: '0991112222',
+  email: 'inicial@ejemplo.com',
 );
 
 Widget _profile({
@@ -114,6 +144,39 @@ Widget _profile({
     );
 
 void main() {
+  testWidgets(
+      'contacto canónico se edita por customer_id sin mostrar identidad',
+      (tester) async {
+    final repository = _HistoryRepository();
+    await tester.pumpWidget(_profile(
+      repository: repository,
+      onOpenInvoiceDetail: (_, __) async {},
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Dirección inicial'), findsOneWidget);
+    expect(find.textContaining('identificación'), findsNothing);
+    await tester.tap(find.byTooltip('Editar contacto'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('La identificación interna no se muestra.'),
+        findsOneWidget);
+    await tester.enterText(
+        find.byKey(const ValueKey('customer-contact-address')),
+        'Nueva avenida');
+    await tester.enterText(
+        find.byKey(const ValueKey('customer-contact-phone')), '0987654321');
+    await tester.enterText(find.byKey(const ValueKey('customer-contact-email')),
+        'NUEVO@EJEMPLO.COM');
+    await tester.tap(find.text('Guardar cambios'));
+    await tester.pumpAndSettle();
+    expect(repository.savedContact, {
+      'customer_id': 'customer',
+      'address': 'Nueva avenida',
+      'phone': '0987654321',
+      'email': 'nuevo@ejemplo.com',
+    });
+    expect(find.text('Nueva avenida'), findsOneWidget);
+  });
+
   testWidgets('tarjetas usan estados fluorescentes de la tabla',
       (tester) async {
     final repository = _HistoryRepository();
@@ -230,6 +293,8 @@ void main() {
       300,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('customer-invoice-PARTIAL')));
     await tester.tap(find.byKey(const ValueKey('customer-invoice-PARTIAL')));
     await tester.pumpAndSettle();
 

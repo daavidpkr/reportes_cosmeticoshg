@@ -877,6 +877,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
       context: context,
       builder: (_) => CustomerHistoryScreen(
         customer: customer!,
+        onToggleTheme: widget.onCambiarTema,
         onEditTerm: _editProfileCustomerTerm,
         onEditHours: (customer, value) async {
           final updated = await _profileCustomerTerms.saveBusinessHours(
@@ -2074,6 +2075,7 @@ class _ReporteScreenState extends State<ReporteScreen> {
                           )
                         : _vistaClientes
                             ? ClientesScreen(
+                                onToggleTheme: widget.onCambiarTema,
                                 onOpenInvoiceDetail: _abrirDetalleDesdePerfil)
                             : _vistaBusquedaGeneral
                                 ? _busquedaGeneral()

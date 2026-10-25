@@ -10,12 +10,14 @@ class CustomerHistorySummary {
     required this.pendingInvoices,
     required this.overdueInvoices,
     required this.cancelledInvoices,
+    this.partialInvoices = 0,
     this.lastPurchase,
     this.nextPayment,
   });
   final double totalSales, totalPaid, balance;
   final int totalInvoices, paidInvoices, pendingInvoices, overdueInvoices;
   final int cancelledInvoices;
+  final int partialInvoices;
   final DateTime? lastPurchase, nextPayment;
 
   factory CustomerHistorySummary.fromJson(Map<String, dynamic> json) =>
@@ -28,6 +30,7 @@ class CustomerHistorySummary {
         pendingInvoices: (json['pending_invoices'] as num?)?.toInt() ?? 0,
         overdueInvoices: (json['overdue_invoices'] as num?)?.toInt() ?? 0,
         cancelledInvoices: (json['cancelled_invoices'] as num?)?.toInt() ?? 0,
+        partialInvoices: (json['partial_invoices'] as num?)?.toInt() ?? 0,
         lastPurchase: _date(json['last_purchase']),
         nextPayment: _date(json['next_payment']),
       );
@@ -58,12 +61,13 @@ class CustomerHistoryInvoice {
   final bool cancelled, overdue;
   final List<CustomerHistoryPayment> payments;
   bool get isPaid => !cancelled && balance <= .005;
+  bool get isPartial => !cancelled && paid > .005 && balance > .005;
   String get status => cancelled
       ? 'Anulada'
-      : overdue
-          ? 'Vencida'
-          : isPaid
-              ? 'Pagada'
+      : isPaid
+          ? 'Pagada'
+          : isPartial
+              ? 'Abono parcial'
               : 'Pendiente';
 
   factory CustomerHistoryInvoice.fromJson(Map<String, dynamic> json) {

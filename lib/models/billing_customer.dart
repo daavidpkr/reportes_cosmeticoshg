@@ -7,6 +7,11 @@ class BillingCustomer {
     required this.commercialName,
     required this.paymentTermDays,
     this.businessHours,
+    this.address,
+    this.phone,
+    this.email,
+    this.contactInvoiceDate,
+    this.contactInvoiceReference,
     this.configurationActive = true,
   });
   final String id;
@@ -14,8 +19,32 @@ class BillingCustomer {
   final String commercialName;
   final int? paymentTermDays;
   final String? businessHours;
+  final String? address, phone, email;
+  final DateTime? contactInvoiceDate;
+  final String? contactInvoiceReference;
   final bool configurationActive;
   bool get configured => paymentTermDays != null;
+
+  BillingCustomer copyWith({
+    int? paymentTermDays,
+    String? businessHours,
+    String? address,
+    String? phone,
+    String? email,
+  }) =>
+      BillingCustomer(
+        id: id,
+        name: name,
+        commercialName: commercialName,
+        paymentTermDays: paymentTermDays ?? this.paymentTermDays,
+        businessHours: businessHours ?? this.businessHours,
+        address: address ?? this.address,
+        phone: phone ?? this.phone,
+        email: email ?? this.email,
+        contactInvoiceDate: contactInvoiceDate,
+        contactInvoiceReference: contactInvoiceReference,
+        configurationActive: configurationActive,
+      );
 
   factory BillingCustomer.fromJson(Map<String, dynamic> json) =>
       BillingCustomer(
@@ -24,6 +53,12 @@ class BillingCustomer {
         commercialName: json['commercial_name']?.toString() ?? '',
         paymentTermDays: (json['payment_term_days'] as num?)?.toInt(),
         businessHours: _optionalText(json['horario_atencion']),
+        address: _optionalText(json['address']),
+        phone: _optionalText(json['phone']),
+        email: _optionalText(json['email']),
+        contactInvoiceDate:
+            DateTime.tryParse(json['contact_invoice_date']?.toString() ?? ''),
+        contactInvoiceReference: _optionalText(json['contact_invoice_ref']),
         configurationActive: json['configuration_active'] != false,
       );
 }

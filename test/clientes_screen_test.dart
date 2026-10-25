@@ -418,9 +418,11 @@ void main() {
     expect(find.text('Perfil del Cliente'), findsOneWidget);
     expect(find.text('Horario de atención: Sin registrar'), findsOneWidget);
     expect(find.text('Editar horario'), findsOneWidget);
-    expect(tester.getTopLeft(find.text('Editar plazo')).dx,
-        lessThan(tester.getTopLeft(find.text('Editar horario')).dx));
+    expect(tester.getTopLeft(find.text('Editar plazo')).dy,
+        lessThan(tester.getTopLeft(find.text('Editar horario')).dy));
 
+    await tester.drag(find.byType(ListView).first, const Offset(0, -400));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Editar horario'));
     await tester.pumpAndSettle();
     expect(find.text('Editar horario de atención'), findsOneWidget);
@@ -462,8 +464,8 @@ void main() {
         findsOneWidget);
     expect(
         tester
-            .widget<FilledButton>(
-                find.widgetWithText(FilledButton, 'Editar horario'))
+            .widget<OutlinedButton>(
+                find.widgetWithText(OutlinedButton, 'Editar horario'))
             .onPressed,
         isNull);
     expect(tester.takeException(), isNull);

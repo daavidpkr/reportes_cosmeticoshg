@@ -17,7 +17,17 @@ abstract interface class CustomerHistoryDataSource {
       InvoiceTermRecalculation preview);
 }
 
-class CustomerHistoryRepository implements CustomerHistoryDataSource {
+abstract interface class CustomerContactDataSource {
+  Future<Map<String, dynamic>> updateContact({
+    required String customerId,
+    required String address,
+    required String phone,
+    required String email,
+  });
+}
+
+class CustomerHistoryRepository
+    implements CustomerHistoryDataSource, CustomerContactDataSource {
   CustomerHistoryRepository({SupabaseClient? client})
       : _client = client ?? Supabase.instance.client;
   final SupabaseClient _client;
@@ -90,6 +100,23 @@ class CustomerHistoryRepository implements CustomerHistoryDataSource {
     return InvoiceTermRecalculation.fromJson(
         Map<String, dynamic>.from(result as Map));
   }
+
+  @override
+  Future<Map<String, dynamic>> updateContact({
+    required String customerId,
+    required String address,
+    required String phone,
+    required String email,
+  }) async =>
+      Map<String, dynamic>.from(await _client.rpc(
+        'update_customer_contact',
+        params: {
+          'p_customer_id': customerId,
+          'p_address': address,
+          'p_phone': phone,
+          'p_email': email,
+        },
+      ) as Map);
 
   String _safeMessage(String message) => message
       .replaceAll(RegExp(r'[\r\n]+'), ' ')
