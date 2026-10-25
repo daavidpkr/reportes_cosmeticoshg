@@ -3,6 +3,12 @@
 part of '../reporte_screen.dart';
 
 extension _ReporteScreenView on _ReporteScreenState {
+  ({Color foreground, Color background}) get _historicalSummaryColors =>
+      reportSummaryColors(context.hg, ReportSummaryGroup.historical);
+
+  ({Color foreground, Color background}) get _monthlySummaryColors =>
+      reportSummaryColors(context.hg, ReportSummaryGroup.monthly);
+
   Widget _abonosAdicionales(FilaVenta fila) => SizedBox(
         width: 42 * _escalaReporte,
         height: ReportPaymentButton.touchHeight,
@@ -599,27 +605,27 @@ extension _ReporteScreenView on _ReporteScreenState {
           Row(
             children: [
               _kpi(
-                'Total de ventas histórico',
+                reportSummaryLabels[0],
                 '\$${_historicalAggregates.historicalSales.toStringAsFixed(2)}',
                 Icons.payments_outlined,
-                context.hg.burgundy,
-                context.hg.panel,
+                _historicalSummaryColors.foreground,
+                _historicalSummaryColors.background,
                 layout: layout,
               ),
               _kpi(
-                'Total de cobrar histórico',
+                reportSummaryLabels[1],
                 '\$${_historicalAggregates.totalReceivable.toStringAsFixed(2)}',
                 Icons.account_balance_wallet_outlined,
-                context.hg.warning,
-                context.hg.warningContainer,
+                _historicalSummaryColors.foreground,
+                _historicalSummaryColors.background,
                 layout: layout,
               ),
               _kpi(
-                'Total de esmaltes histórico',
+                reportSummaryLabels[2],
                 '${_historicalAggregates.historicalNailPolish}',
                 Icons.brush_outlined,
-                context.hg.plum,
-                context.hg.panel,
+                _historicalSummaryColors.foreground,
+                _historicalSummaryColors.background,
                 layout: layout,
                 ultimo: true,
               ),
@@ -629,27 +635,27 @@ extension _ReporteScreenView on _ReporteScreenState {
           Row(
             children: [
               _kpi(
-                'Total de ventas mensuales',
+                reportSummaryLabels[3],
                 '\$${_totalVentas.toStringAsFixed(2)}',
                 Icons.payments_outlined,
-                context.hg.burgundy,
-                context.hg.panel,
+                _monthlySummaryColors.foreground,
+                _monthlySummaryColors.background,
                 layout: layout,
               ),
               _kpi(
-                'Total de cobros mensuales',
+                reportSummaryLabels[4],
                 '\$${_totalCobros.toStringAsFixed(2)}',
                 Icons.check_circle_outline,
-                context.hg.positive,
-                context.hg.positiveContainer,
+                _monthlySummaryColors.foreground,
+                _monthlySummaryColors.background,
                 layout: layout,
               ),
               _kpi(
-                'Cartera mensual por cobrar',
+                reportSummaryLabels[5],
                 '\$${_totalPorCobrar.toStringAsFixed(2)}',
                 Icons.schedule,
-                context.hg.warning,
-                context.hg.warningContainer,
+                _monthlySummaryColors.foreground,
+                _monthlySummaryColors.background,
                 layout: layout,
                 ultimo: true,
               ),
@@ -1412,43 +1418,46 @@ extension _ReporteScreenView on _ReporteScreenState {
           childAspectRatio: constraints.maxWidth < 330 ? 3.2 : 1.55,
           children: [
             _kpiMovil(
-              'Total de ventas histórico',
+              reportSummaryLabels[0],
               '\$${_historicalAggregates.historicalSales.toStringAsFixed(2)}',
               Icons.payments_outlined,
-              context.hg.burgundy,
+              _historicalSummaryColors.foreground,
+              fondo: _historicalSummaryColors.background,
             ),
             _kpiMovil(
-              'Total de cobrar histórico',
+              reportSummaryLabels[1],
               '\$${_historicalAggregates.totalReceivable.toStringAsFixed(2)}',
               Icons.account_balance_wallet_outlined,
-              context.hg.warning,
-              fondo: context.hg.warningContainer,
+              _historicalSummaryColors.foreground,
+              fondo: _historicalSummaryColors.background,
             ),
             _kpiMovil(
-              'Total de esmaltes histórico',
+              reportSummaryLabels[2],
               '${_historicalAggregates.historicalNailPolish}',
               Icons.brush_outlined,
-              context.hg.plum,
+              _historicalSummaryColors.foreground,
+              fondo: _historicalSummaryColors.background,
             ),
             _kpiMovil(
-              'Total de ventas mensuales',
+              reportSummaryLabels[3],
               '\$${_totalVentas.toStringAsFixed(2)}',
               Icons.payments_outlined,
-              context.hg.burgundy,
+              _monthlySummaryColors.foreground,
+              fondo: _monthlySummaryColors.background,
             ),
             _kpiMovil(
-              'Total de cobros mensuales',
+              reportSummaryLabels[4],
               '\$${_totalCobros.toStringAsFixed(2)}',
               Icons.check_circle_outline,
-              context.hg.positive,
-              fondo: context.hg.positiveContainer,
+              _monthlySummaryColors.foreground,
+              fondo: _monthlySummaryColors.background,
             ),
             _kpiMovil(
-              'Cartera mensual por cobrar',
+              reportSummaryLabels[5],
               '\$${_totalPorCobrar.toStringAsFixed(2)}',
               Icons.schedule,
-              context.hg.warning,
-              fondo: context.hg.warningContainer,
+              _monthlySummaryColors.foreground,
+              fondo: _monthlySummaryColors.background,
             ),
           ],
         ),

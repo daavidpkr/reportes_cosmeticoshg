@@ -41,6 +41,32 @@ export 'reporte/report_responsive_layout.dart';
 
 part 'reporte/reporte_screen_view.dart';
 
+const reportSummaryLabels = <String>[
+  'Total de ventas histórico',
+  'Total de cobrar histórico',
+  'Total de esmaltes histórico',
+  'Total de ventas mensuales',
+  'Total de cobros mensuales',
+  'Cartera mensual por cobrar',
+];
+
+enum ReportSummaryGroup { historical, monthly }
+
+({Color foreground, Color background}) reportSummaryColors(
+  HgThemeColors colors,
+  ReportSummaryGroup group,
+) =>
+    switch (group) {
+      ReportSummaryGroup.historical => (
+          foreground: colors.warning,
+          background: colors.warningContainer,
+        ),
+      ReportSummaryGroup.monthly => (
+          foreground: colors.positive,
+          background: colors.positiveContainer,
+        ),
+    };
+
 const mobileReportNavigationLabels = <String>[
   'Ventas',
   'Búsqueda general',

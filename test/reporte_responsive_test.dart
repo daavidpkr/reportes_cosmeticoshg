@@ -5,6 +5,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('los seis resúmenes conservan textos, orden y tonos semánticos', () {
+    expect(reportSummaryLabels, const [
+      'Total de ventas histórico',
+      'Total de cobrar histórico',
+      'Total de esmaltes histórico',
+      'Total de ventas mensuales',
+      'Total de cobros mensuales',
+      'Cartera mensual por cobrar',
+    ]);
+
+    for (final colors in const [HgThemeColors.light, HgThemeColors.dark]) {
+      final historical =
+          reportSummaryColors(colors, ReportSummaryGroup.historical);
+      final monthly = reportSummaryColors(colors, ReportSummaryGroup.monthly);
+      expect(historical.foreground, colors.warning);
+      expect(historical.background, colors.warningContainer);
+      expect(monthly.foreground, colors.positive);
+      expect(monthly.background, colors.positiveContainer);
+    }
+  });
+
   test('la referencia visible oculta solo ceros iniciales', () {
     expect(visibleTableReference('000000717'), '717');
     expect(visibleTableReference('000'), '0');
