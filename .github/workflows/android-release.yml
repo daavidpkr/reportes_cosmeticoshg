@@ -454,10 +454,13 @@ jobs:
           }
 
           release_json="$(gh api "repos/$GITHUB_REPOSITORY/releases/$release_id")"
+          manifest_sha="$(jq -r '.sha256' "$MANIFEST_PATH")"
           if ! jq -e --arg tag "$tag" --arg apk "$APK_NAME" \
+            --arg digest "sha256:$manifest_sha" \
             '.id != null and .draft == true and .tag_name == $tag and
              ([.assets[] | select(.state == "uploaded")] | length) == 2 and
              ([.assets[].name] | sort) == ([$apk, "update_manifest.json"] | sort) and
+             ([.assets[] | select(.name == $apk and .digest == $digest)] | length) == 1 and
              all(.assets[]; .size > 0)' <<<"$release_json" >/dev/null; then
             echo "El borrador no contiene exactamente los dos assets esperados y válidos." >&2
             exit 1

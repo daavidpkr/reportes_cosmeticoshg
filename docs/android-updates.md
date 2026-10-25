@@ -55,11 +55,29 @@ Android-Minimum-Version: 2.0.0
 El workflow falla si se solicita obligatoriedad sin version minima. Nunca debe
 inferirse `mandatory=true` por severidad, tipo de version, build ni descripcion.
 
-La app consulta las releases publicas en orden y solo considera una release
-Android cuando contiene exactamente un `update_manifest.json` subido, el
-manifiesto supera todas las validaciones y referencia exactamente un APK subido
-valido. Una release web, vacia, borrador, prerelease o con assets incoherentes no
-se muestra como actualizacion.
+La lista completa de GitHub Releases es la unica fuente de verdad de la ultima
+version Android. La app pagina todas las releases publicas, valida cada candidata
+y elige globalmente la mayor version semantica; si dos candidatas tienen la misma
+version, gana el `buildNumber` mayor. El orden o fecha de publicacion no decide.
+Por ejemplo, una instalacion `1.3.0+12` salta directamente a `1.6.0+16` aunque
+tambien existan `1.4.0+13` y `1.5.0+14`.
+
+Solo se considera una release Android cuando contiene exactamente un
+`update_manifest.json` y el APK referenciado, ambos subidos; el tag coincide con
+`android-v<version>-<build>` y el digest SHA-256 del asset coincide con el
+manifiesto. Se ignoran borradores, prereleases, manifiestos malformados, assets
+vacios o incoherentes y releases web. Tras seleccionar se descarga unicamente ese
+APK final. Android vuelve a comprobar archivo no vacio, tamano, SHA-256, paquete,
+version, build y firma antes de abrir el instalador; nunca admite igual build,
+downgrade ni reinstalacion.
+
+`minimumSupportedVersion` solo bloquea el uso cuando la propia release declara
+`mandatory: true`; aun entonces el destino es siempre la ultima version valida,
+sin instalaciones intermedias. Las publicaciones siguen usando `mandatory:
+false` salvo solicitud explicita. Si GitHub no responde, la interfaz ofrece
+reintento y solo muestra el ultimo manifiesto que ya fue validado y guardado en
+cache. Al iniciar una descarga se eliminan parciales y APK anteriores para
+conservar exclusivamente el APK final verificado.
 
 ## Emergencias
 

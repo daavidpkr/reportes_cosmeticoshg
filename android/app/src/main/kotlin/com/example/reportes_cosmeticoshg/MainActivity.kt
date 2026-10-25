@@ -295,6 +295,9 @@ class MainActivity : FlutterActivity() {
             result.error("update_directory", "No se pudo preparar la carpeta segura.", null)
             return
         }
+        directory.listFiles()?.forEach { file ->
+            if (file.name != "update-$build.apk") file.delete()
+        }
         result.success(directory.absolutePath)
     }
 

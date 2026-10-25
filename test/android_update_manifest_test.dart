@@ -124,6 +124,28 @@ void main() {
     );
   });
 
+  test('no reinstala la misma versión y acepta build superior en empate', () {
+    final update = AndroidUpdateManifest.fromRelease(
+      manifest: validManifest(),
+      apkUrl: apkUrl,
+      releaseAssetSize: 123456,
+      releaseUrl: releaseUrl,
+    );
+
+    expect(
+      update.isNewerThan(
+        const InstalledAndroidVersion(version: '1.1.0', build: 8),
+      ),
+      isFalse,
+    );
+    expect(
+      update.isNewerThan(
+        const InstalledAndroidVersion(version: '1.1.0', build: 7),
+      ),
+      isTrue,
+    );
+  });
+
   test('la caché vuelve a validarse al leerse', () {
     final update = AndroidUpdateManifest.fromRelease(
       manifest: validManifest(),

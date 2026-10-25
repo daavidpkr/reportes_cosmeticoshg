@@ -49,6 +49,13 @@ class AndroidUpdateManifest {
       build > installed.build &&
       compareVersions(version, installed.version) >= 0;
 
+  int compareReleaseTo(AndroidUpdateManifest other) {
+    final versionComparison = compareVersions(version, other.version);
+    return versionComparison != 0
+        ? versionComparison
+        : build.compareTo(other.build);
+  }
+
   bool isMandatoryFor(InstalledAndroidVersion installed) =>
       mandatory &&
       isNewerThan(installed) &&
