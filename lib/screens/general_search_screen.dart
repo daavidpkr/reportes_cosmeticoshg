@@ -189,13 +189,37 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
     );
   }
 
-  Widget _longText(String value, double width) => Tooltip(
-        message: value,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: width),
-          child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis),
+  Widget _customerLink(
+    GlobalInvoiceRow invoice,
+    String value,
+    double width,
+    String field,
+  ) {
+    final enabled = invoice.row.customerId?.trim().isNotEmpty == true &&
+        widget.onOpenCustomerProfile != null;
+    return Semantics(
+      button: enabled,
+      label: enabled ? 'Abrir perfil por $field: $value' : value,
+      child: Tooltip(
+        message: enabled ? 'Abrir perfil del cliente' : value,
+        child: InkWell(
+          onTap: enabled ? () => widget.onOpenCustomerProfile!(invoice) : null,
+          borderRadius: BorderRadius.circular(8),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: 48, maxWidth: width),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
         ),
-      );
+      ),
+    );
+  }
 
   Widget _fitText(String value, {TextStyle? style}) => FittedBox(
         fit: BoxFit.scaleDown,
@@ -232,14 +256,10 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
               onTap: widget.onOpenDetail == null
                   ? null
                   : () => widget.onOpenDetail!(invoice)),
-          DataCell(_longText(row.cliente, geometry.clientWidth),
-              onTap: widget.onOpenCustomerProfile == null
-                  ? null
-                  : () => widget.onOpenCustomerProfile!(invoice)),
-          DataCell(_longText(row.nombreComercial, geometry.businessNameWidth),
-              onTap: widget.onOpenCustomerProfile == null
-                  ? null
-                  : () => widget.onOpenCustomerProfile!(invoice)),
+          DataCell(_customerLink(
+              invoice, row.cliente, geometry.clientWidth, 'nombre')),
+          DataCell(_customerLink(invoice, row.nombreComercial,
+              geometry.businessNameWidth, 'nombre comercial')),
           DataCell(_fitText(row.fecha)),
           DataCell(_fitText(row.numeroFactura)),
           DataCell(ConstrainedBox(
@@ -281,6 +301,27 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
           ),
         ]),
       );
+
+  Widget _mobileCustomerDetail(
+      GlobalInvoiceRow invoice, String label, String value) {
+    final enabled = invoice.row.customerId?.trim().isNotEmpty == true &&
+        widget.onOpenCustomerProfile != null;
+    return Semantics(
+      button: enabled,
+      label: enabled ? 'Abrir perfil por $label: $value' : '$label: $value',
+      child: Tooltip(
+        message: enabled ? 'Abrir perfil del cliente' : value,
+        child: InkWell(
+          onTap: enabled ? () => widget.onOpenCustomerProfile!(invoice) : null,
+          borderRadius: BorderRadius.circular(8),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 48),
+            child: _detail(label, value),
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _mobileCard(BuildContext context, GlobalInvoiceRow invoice) {
     final row = invoice.row;
@@ -327,8 +368,9 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
           Text('${invoice.reportMonth} · Fila ${row.numero}',
               style: Theme.of(context).textTheme.bodySmall),
           const Divider(height: 24),
-          _detail('Cliente', row.cliente),
-          _detail('Nombre comercial', row.nombreComercial),
+          _mobileCustomerDetail(invoice, 'Cliente', row.cliente),
+          _mobileCustomerDetail(
+              invoice, 'Nombre comercial', row.nombreComercial),
           _detail('Fecha', row.fecha),
           _detail('Nro. factura', row.numeroFactura),
           _detail('Vendedor', row.vendedor),

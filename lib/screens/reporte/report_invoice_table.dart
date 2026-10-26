@@ -15,7 +15,7 @@ ReportInvoiceRowStatus reportRowStatus(InvoiceStatus status) =>
       InvoiceStatus.paid => ReportInvoiceRowStatus.paid,
       InvoiceStatus.overdue => ReportInvoiceRowStatus.overdue,
       InvoiceStatus.partial => ReportInvoiceRowStatus.partialPayment,
-      InvoiceStatus.pending => ReportInvoiceRowStatus.partialPayment,
+      InvoiceStatus.pending => ReportInvoiceRowStatus.normal,
     };
 
 Color? reportInvoiceRowBackground(

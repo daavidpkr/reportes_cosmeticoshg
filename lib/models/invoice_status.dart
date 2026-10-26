@@ -78,7 +78,8 @@ Color invoiceStatusForeground(BuildContext context, InvoiceStatus status) {
     InvoiceStatus.cancelled => colors.danger,
     InvoiceStatus.paid => colors.positive,
     InvoiceStatus.overdue => const Color(0xFF168CFF),
-    InvoiceStatus.partial || InvoiceStatus.pending => colors.warning,
+    InvoiceStatus.partial => colors.warning,
+    InvoiceStatus.pending => colors.mutedText,
   };
 }
 
@@ -87,14 +88,16 @@ Color invoiceStatusBorder(Brightness brightness, InvoiceStatus status) =>
       InvoiceStatus.cancelled => const Color(0xFFFF1744),
       InvoiceStatus.paid => const Color(0xFF00E676),
       InvoiceStatus.overdue => const Color(0xFF00B7FF),
-      InvoiceStatus.partial ||
-      InvoiceStatus.pending =>
-        brightness == Brightness.dark
-            ? const Color(0xFFFFFF00)
-            : const Color(0xFFFFC400),
+      InvoiceStatus.partial => brightness == Brightness.dark
+          ? const Color(0xFFFFFF00)
+          : const Color(0xFFFFC400),
+      InvoiceStatus.pending => Colors.transparent,
     };
 
 Color invoiceStatusBackground(BuildContext context, InvoiceStatus status) {
+  if (status == InvoiceStatus.pending) {
+    return Theme.of(context).colorScheme.surface;
+  }
   final alpha = Theme.of(context).brightness == Brightness.dark ? .28 : .24;
   return invoiceStatusForeground(context, status).withValues(alpha: alpha);
 }

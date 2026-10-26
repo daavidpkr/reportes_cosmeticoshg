@@ -553,8 +553,10 @@ class _InvoiceDetailDialogState extends State<_InvoiceDetailDialog> {
               : Theme.of(context).colorScheme.surface,
           border: Border.all(
               color: data.balance
-                  ? invoiceStatusBorder(
-                      Theme.of(context).brightness, _semanticStatus)
+                  ? (_semanticStatus == InvoiceStatus.pending
+                      ? Theme.of(context).dividerColor
+                      : invoiceStatusBorder(
+                          Theme.of(context).brightness, _semanticStatus))
                   : Theme.of(context).dividerColor),
           borderRadius: BorderRadius.circular(15),
         ),

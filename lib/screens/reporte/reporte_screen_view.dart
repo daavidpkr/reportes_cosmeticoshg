@@ -182,6 +182,37 @@ extension _ReporteScreenView on _ReporteScreenState {
         ),
       );
 
+  Widget _enlaceCliente(
+    FilaVenta fila,
+    String texto,
+    double ancho,
+    String campo,
+  ) {
+    final enabled = fila.customerId?.trim().isNotEmpty == true;
+    return Semantics(
+      button: enabled,
+      label: enabled ? 'Abrir perfil por $campo: $texto' : texto,
+      child: Tooltip(
+        message: enabled ? 'Abrir perfil del cliente' : texto,
+        child: InkWell(
+          onTap: enabled ? () => _openCustomerProfile(fila) : null,
+          borderRadius: BorderRadius.circular(8),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: 48, maxWidth: ancho),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                texto,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   ReportInvoiceRow _crearFila(
     int indice,
     FilaVenta fila,
@@ -226,18 +257,19 @@ extension _ReporteScreenView on _ReporteScreenState {
                   ? null
                   : () => _abrirDetalleFactura(fila),
             ),
-            DataCell(_textoTablaLargo(fila.cliente, geometry.clientWidth),
-                onTap: fila.customerId == null
-                    ? null
-                    : () => _openCustomerProfile(fila)),
+            DataCell(_enlaceCliente(
+              fila,
+              fila.cliente,
+              geometry.clientWidth,
+              'nombre',
+            )),
             DataCell(
-              _textoTablaLargo(
+              _enlaceCliente(
+                fila,
                 fila.nombreComercial,
                 geometry.businessNameWidth,
+                'nombre comercial',
               ),
-              onTap: fila.customerId == null
-                  ? null
-                  : () => _openCustomerProfile(fila),
             ),
             DataCell(Text(fila.fecha)),
             DataCell(Text(fila.numeroFactura)),

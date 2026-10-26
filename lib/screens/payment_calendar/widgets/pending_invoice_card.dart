@@ -39,11 +39,15 @@ class PendingInvoiceCard extends StatelessWidget {
     );
     return Card(
       clipBehavior: Clip.antiAlias,
-      color: invoiceStatusBackground(context, status),
+      color: status == InvoiceStatus.pending
+          ? null
+          : invoiceStatusBackground(context, status),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: invoiceStatusBorder(Theme.of(context).brightness, status),
+          color: status == InvoiceStatus.pending
+              ? Theme.of(context).colorScheme.outlineVariant
+              : invoiceStatusBorder(Theme.of(context).brightness, status),
         ),
       ),
       child: InkWell(

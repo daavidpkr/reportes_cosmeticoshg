@@ -1186,13 +1186,8 @@ class _InvoiceCard extends StatelessWidget {
   String date(DateTime v) =>
       '${v.day.toString().padLeft(2, '0')}/${v.month.toString().padLeft(2, '0')}/${v.year}';
 
-  ReportInvoiceRowStatus get rowStatus => invoice.cancelled
-      ? ReportInvoiceRowStatus.cancelled
-      : invoice.isPaid
-          ? ReportInvoiceRowStatus.paid
-          : invoice.paid > 0 && invoice.balance > 0
-              ? ReportInvoiceRowStatus.partialPayment
-              : ReportInvoiceRowStatus.normal;
+  ReportInvoiceRowStatus get rowStatus =>
+      reportRowStatus(invoice.semanticStatus);
 
   @override
   Widget build(BuildContext context) {
