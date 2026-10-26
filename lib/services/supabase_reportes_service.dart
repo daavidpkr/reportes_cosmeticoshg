@@ -332,6 +332,7 @@ List<FilaVenta> construirFilasConsolidadas({
       esmalte: (dato['esmaltes'] as num?)?.toInt() ?? 0,
       venta: (factura['venta'] as num?)?.toDouble() ?? 0,
       paymentTermDays: _paymentTermFromInvoice(factura),
+      customerId: _customerIdFromInvoice(factura),
       abonos: pagos,
     );
   }
@@ -351,6 +352,13 @@ int? _paymentTermFromInvoice(Map<String, dynamic> factura) {
   return customer is Map
       ? (customer['payment_term_days'] as num?)?.toInt()
       : null;
+}
+
+String? _customerIdFromInvoice(Map<String, dynamic> factura) {
+  final relation = factura['invoice_payment_terms'];
+  final term =
+      relation is List ? (relation.isEmpty ? null : relation.first) : relation;
+  return term is Map ? term['customer_id']?.toString() : null;
 }
 
 class GlobalInvoiceRow {
@@ -454,6 +462,7 @@ GlobalInvoiceRow globalInvoiceRowFromJson(Map<String, dynamic> data) {
       esmalte: (data['esmaltes'] as num?)?.toInt() ?? 0,
       venta: (data['venta'] as num?)?.toDouble() ?? 0,
       paymentTermDays: (data['plazo_pago_dias'] as num?)?.toInt(),
+      customerId: data['customer_id']?.toString(),
       abonos: payments,
     ),
   );
@@ -492,9 +501,30 @@ class SupabaseReportesService {
         'p_limit': limit,
       },
     );
-    return List<Map<String, dynamic>>.from(response as List)
+    final result = List<Map<String, dynamic>>.from(response as List)
         .map(globalInvoiceRowFromJson)
         .toList(growable: false);
+    final missing = result
+        .where((item) => item.row.customerId?.isNotEmpty != true)
+        .map((item) => item.row.referencia.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    if (missing.isNotEmpty) {
+      final terms = List<Map<String, dynamic>>.from(await _client
+          .from('invoice_payment_terms')
+          .select('factura_id,customer_id')
+          .inFilter('factura_id', missing)
+          .eq('active', true));
+      final ids = {
+        for (final term in terms)
+          term['factura_id'].toString(): term['customer_id'].toString(),
+      };
+      for (final item in result) {
+        item.row.customerId ??= ids[item.row.referencia.trim()];
+      }
+    }
+    return result;
   }
 
   Future<List<Map<String, dynamic>>> obtenerReportesMensuales() async {
@@ -566,7 +596,7 @@ class SupabaseReportesService {
             .from('facturas_maestras')
             .select(
               'ref_fact,cliente,nombre_comercial,fecha,nro_fact,venta,'
-              'invoice_payment_terms(billing_customers(payment_term_days))',
+              'invoice_payment_terms(customer_id,billing_customers(payment_term_days))',
             )
             .range(desde, hasta),
       ),
@@ -599,7 +629,7 @@ class SupabaseReportesService {
     final invoices = List<Map<String, dynamic>>.from(await _client
         .from('facturas_maestras')
         .select('ref_fact,cliente,nombre_comercial,fecha,nro_fact,venta,'
-            'invoice_payment_terms(billing_customers(payment_term_days))')
+            'invoice_payment_terms(customer_id,billing_customers(payment_term_days))')
         .inFilter('ref_fact', refs));
     final result = construirFilasConsolidadas(filas: rows, facturas: invoices);
     result.sort((a, b) => a.numero.compareTo(b.numero));
@@ -815,6 +845,9 @@ class SupabaseReportesService {
 
   Future<FilaVenta> eliminarAbono(
       FilaVenta fila, String mesReporte, int indice, Abono esperado) async {
+    if (fila.anulada) {
+      throw StateError('Factura anulada: las acciones están bloqueadas');
+    }
     final canonicalCount = fila.abonos
         .where((payment) =>
             payment.valor != 0 ||

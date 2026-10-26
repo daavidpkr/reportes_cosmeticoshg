@@ -64,6 +64,17 @@ class PaymentCalendarRepository
   String _date(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
 
+  Future<void> _ensureInvoiceMutable(String facturaId) async {
+    final rows = await _client
+        .from('reportes_ventas')
+        .select('vendedor')
+        .eq('ref_fact', facturaId.trim());
+    if (List<Map<String, dynamic>>.from(rows)
+        .any((row) => esVendedorAnulado(row['vendedor']?.toString() ?? ''))) {
+      throw StateError('Factura anulada: las acciones están bloqueadas');
+    }
+  }
+
   @override
   Future<List<PaymentCalendarEntry>> listMonth(DateTime month) async {
     final rows = await _client.rpc('list_pending_payment_calendar', params: {
@@ -93,6 +104,7 @@ class PaymentCalendarRepository
     required DateTime date,
     String comment = '',
   }) async {
+    await _ensureInvoiceMutable(facturaId);
     final rows = await _client.rpc('schedule_invoice_on_calendar', params: {
       'p_request_id': newRequestId(),
       'p_factura_id': facturaId.trim(),
@@ -109,6 +121,7 @@ class PaymentCalendarRepository
     required DateTime reminderDate,
     required String comment,
   }) async {
+    await _ensureInvoiceMutable(entry.facturaId);
     final rows = await _client.rpc('update_payment_calendar_reminder', params: {
       'p_request_id': newRequestId(),
       'p_reminder_id': entry.reminderId,
@@ -130,6 +143,7 @@ class PaymentCalendarRepository
     int? receiptNumber,
     bool payInFull = false,
   }) async {
+    await _ensureInvoiceMutable(entry.facturaId);
     final rows = await _client.rpc('record_calendar_payment', params: {
       'p_request_id': newRequestId(),
       'p_reminder_id': entry.reminderId,

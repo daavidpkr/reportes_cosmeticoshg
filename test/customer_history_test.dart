@@ -59,7 +59,7 @@ void main() {
     expect(page.summary.totalPaid, 150);
     expect(page.summary.balance, 150);
     expect(page.invoices.map((item) => item.status),
-        ['Pagada', 'Abono parcial', 'Anulada']);
+        ['Pagada', 'Atrasada', 'Anulada']);
     expect(page.invoices[1].payments.single.receiptNumber, 2);
   });
 

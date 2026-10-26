@@ -4,8 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/fila_venta.dart';
+import '../models/invoice_status.dart';
 import '../models/billing_customer.dart';
 import '../models/customer_history.dart';
 import '../models/payment_calendar_entry.dart';
@@ -260,10 +262,7 @@ class _ReporteScreenState extends State<ReporteScreen>
   final _reportes = ReportesStore();
   final _filterPreferences = ReportFilterPreferencesStore();
   final _supabaseReportes = SupabaseReportesService();
-  PaymentCalendarRepository? _paymentCalendarRepository;
   CustomerTermsDataSource? _customerTermsRepository;
-  PaymentCalendarRepository get _invoiceCustomerResolver =>
-      _paymentCalendarRepository ??= PaymentCalendarRepository();
   CustomerTermsDataSource get _profileCustomerTerms =>
       _customerTermsRepository ??= CustomerTermsRepository();
   late List<FilaVenta> _filas;
@@ -283,6 +282,7 @@ class _ReporteScreenState extends State<ReporteScreen>
   bool _appEnPrimerPlano = true;
   bool _openingInvoiceDetail = false;
   bool _actualizando = false;
+  bool _mostrarResumen = true;
   final Set<String> _abonosGuardandose = {};
   int _versionCobrosMensuales = 0;
   ReportAggregates _historicalAggregates = const ReportAggregates.empty();
@@ -398,8 +398,19 @@ class _ReporteScreenState extends State<ReporteScreen>
   void _mostrarClientes() => _navigate(ReportDestination.clients);
 
   Future<void> _inicializar() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(
+          () => _mostrarResumen = prefs.getBool('report_show_summary') ?? true);
+    }
     await Future.wait([_cargarVendedores(), _cargarReportes()]);
     await _restaurarFiltros();
+  }
+
+  Future<void> _setMostrarResumen(bool value) async {
+    setState(() => _mostrarResumen = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('report_show_summary', value);
   }
 
   Future<void> _restaurarFiltros() async {
@@ -1092,10 +1103,11 @@ class _ReporteScreenState extends State<ReporteScreen>
   }
 
   Future<bool> _openCustomerProfile(FilaVenta invoice) async {
+    final customerId = invoice.customerId?.trim() ?? '';
+    if (customerId.isEmpty) return false;
     BillingCustomer? customer;
     try {
-      customer = await _invoiceCustomerResolver
-          .resolveCustomer(invoice.referencia.trim());
+      customer = await CustomerTermsRepository().findCustomerById(customerId);
     } catch (_) {
       customer = null;
     }
@@ -2029,14 +2041,21 @@ class _ReporteScreenState extends State<ReporteScreen>
   }
 
   List<MapEntry<int, FilaVenta>> get _filasVisibles {
-    final texto = _filtro.toLowerCase();
+    final terms = _filtro
+        .split(',')
+        .map((value) => _normalizeSearch(value))
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
     final resultado = _filas.asMap().entries.where((item) {
-      if (texto.isEmpty) return true;
-      return item.value.referencia.toLowerCase().contains(texto) ||
-          item.value.numeroFactura.toLowerCase().contains(texto) ||
-          item.value.cliente.toLowerCase().contains(texto) ||
-          item.value.nombreComercial.toLowerCase().contains(texto) ||
-          item.value.vendedor.toLowerCase().contains(texto);
+      if (terms.isEmpty) return true;
+      final searchable = _normalizeSearch([
+        item.value.referencia,
+        item.value.numeroFactura,
+        item.value.cliente,
+        item.value.nombreComercial,
+        item.value.vendedor,
+      ].join(' '));
+      return terms.any(searchable.contains);
     }).where((item) {
       if (_filtroVendedor.isNotEmpty &&
           !(_filtroVendedor == _opcionAnulada && item.value.anulada) &&
@@ -2061,10 +2080,14 @@ class _ReporteScreenState extends State<ReporteScreen>
       };
     }).where((item) {
       return _filtrosColumnas.entries.every(
-        (filtro) => _valorTexto(
-          item.value,
-          filtro.key,
-        ).toLowerCase().contains(filtro.value.toLowerCase()),
+        (filtro) {
+          final value = _normalizeSearch(_valorTexto(item.value, filtro.key));
+          final terms = filtro.value
+              .split(',')
+              .map(_normalizeSearch)
+              .where((term) => term.isNotEmpty);
+          return terms.isEmpty || terms.any(value.contains);
+        },
       );
     }).toList();
     final columna = _ordenColumna;
@@ -2088,6 +2111,16 @@ class _ReporteScreenState extends State<ReporteScreen>
       });
     }
     return resultado;
+  }
+
+  String _normalizeSearch(String value) {
+    const accented = 'áéíóúüñÁÉÍÓÚÜÑ';
+    const plain = 'aeiouunAEIOUUN';
+    var result = value.trim().toLowerCase();
+    for (var i = 0; i < accented.length; i++) {
+      result = result.replaceAll(accented[i], plain[i]);
+    }
+    return result.replaceAll(RegExp(r'\s+'), ' ');
   }
 
   String _valorTexto(FilaVenta fila, String columna) => switch (columna) {
@@ -2252,6 +2285,7 @@ class _ReporteScreenState extends State<ReporteScreen>
   }
 
   Widget _busquedaGeneral() => GeneralSearchScreen(
+        onOpenCustomerProfile: (invoice) => _openCustomerProfile(invoice.row),
         onOpenDetail: (invoice) => _abrirDetalleFactura(
           invoice.row,
           mesReporte: invoice.reportMonth,
@@ -2322,8 +2356,11 @@ class _ReporteScreenState extends State<ReporteScreen>
                                                     layout: layout,
                                                     header: _encabezadoPagina(
                                                         layout),
-                                                    kpis: _tarjetasResumen(
-                                                        layout),
+                                                    kpis: _mostrarResumen
+                                                        ? _tarjetasResumen(
+                                                            layout)
+                                                        : const SizedBox
+                                                            .shrink(),
                                                     toolbar: _barraRedisenada(
                                                         layout),
                                                     table: _tarjetaTabla(),

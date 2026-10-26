@@ -70,6 +70,7 @@ class FilaVenta {
     this.esmalte = 0,
     this.venta = 0,
     this.paymentTermDays,
+    this.customerId,
     List<Abono>? abonos,
   }) : abonos = abonos ?? [Abono(), Abono()];
 
@@ -85,6 +86,7 @@ class FilaVenta {
 
   /// Plazo vigente del cliente: null = sin establecer; 0 es válido.
   int? paymentTermDays;
+  String? customerId;
   final List<Abono> abonos;
 
   double get totalAbonos => abonos.fold(0, (suma, abono) => suma + abono.valor);
@@ -119,6 +121,7 @@ class FilaVenta {
         'esmalte': esmalte,
         'venta': venta,
         'paymentTermDays': paymentTermDays,
+        'customerId': customerId,
         'abonos': abonos.map((item) => item.toJson()).toList(),
       };
 
@@ -133,6 +136,7 @@ class FilaVenta {
         esmalte: json['esmalte'] as int? ?? 0,
         venta: (json['venta'] as num?)?.toDouble() ?? 0,
         paymentTermDays: (json['paymentTermDays'] as num?)?.toInt(),
+        customerId: json['customerId']?.toString(),
         abonos: (json['abonos'] as List<dynamic>? ?? const [])
             .map((item) => Abono.fromJson(item as Map<String, dynamic>))
             .toList(),

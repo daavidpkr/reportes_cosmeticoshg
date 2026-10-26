@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../models/billing_customer.dart';
 import '../models/customer_history.dart';
+import '../models/invoice_status.dart';
 import '../services/customer_history_repository.dart';
 import 'reporte/report_invoice_table.dart';
 
@@ -56,6 +57,44 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
   int _loadGeneration = 0;
   String? _activeRequestKey;
 
+  Future<CustomerHistoryPage> _loadHistoryPage(int offset) async {
+    final terms = searchController.text
+        .split(',')
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    if (terms.length <= 1) {
+      return repository.load(
+        customerId: customer.id,
+        offset: offset,
+        status: status,
+        search: terms.firstOrNull ?? '',
+        sort: sort,
+      );
+    }
+    final pages = await Future.wait([
+      for (final term in terms)
+        repository.load(
+          customerId: customer.id,
+          offset: offset,
+          status: status,
+          search: term,
+          sort: sort,
+        ),
+    ]);
+    final unique = <String, CustomerHistoryInvoice>{};
+    for (final invoice in pages.expand((page) => page.invoices)) {
+      unique['${invoice.reportMonth}\u0000${invoice.reference}'] = invoice;
+    }
+    final first = pages.first;
+    return CustomerHistoryPage(
+      summary: first.summary,
+      invoices: unique.values.toList(growable: false),
+      filteredCount: pages.fold(0, (sum, page) => sum + page.filteredCount),
+      customer: first.customer,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -91,13 +130,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
       }
     });
     try {
-      final page = await repository.load(
-        customerId: customer.id,
-        offset: offset,
-        status: status,
-        search: searchController.text,
-        sort: sort,
-      );
+      final page = await _loadHistoryPage(offset);
       if (!mounted || generation != _loadGeneration) return;
       setState(() {
         if (page.customer != null) {
@@ -131,13 +164,7 @@ class _CustomerHistoryScreenState extends State<CustomerHistoryScreen> {
       final refreshed = <CustomerHistoryInvoice>[];
       CustomerHistoryPage? firstPage;
       while (refreshed.length < targetCount) {
-        final page = await repository.load(
-          customerId: customer.id,
-          offset: refreshed.length,
-          status: status,
-          search: searchController.text,
-          sort: sort,
-        );
+        final page = await _loadHistoryPage(refreshed.length);
         firstPage ??= page;
         refreshed.addAll(page.invoices);
         if (page.invoices.isEmpty || refreshed.length >= page.filteredCount) {
@@ -1279,19 +1306,15 @@ class _StatusPill extends StatelessWidget {
   final CustomerHistoryInvoice invoice;
   @override
   Widget build(BuildContext context) {
-    final color = invoice.cancelled
-        ? const Color(0xFFFF1744)
-        : invoice.isPaid
-            ? const Color(0xFF00B85C)
-            : invoice.isPartial
-                ? (Theme.of(context).brightness == Brightness.dark
-                    ? const Color(0xFFFFFF00)
-                    : const Color(0xFFD89A00))
-                : Theme.of(context).colorScheme.onSurfaceVariant;
+    final color = invoiceStatusBorder(
+      Theme.of(context).brightness,
+      invoice.semanticStatus,
+    );
     return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
         decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            color: invoiceStatusBackground(context, invoice.semanticStatus),
+            border: Border.all(color: color),
             borderRadius: BorderRadius.circular(99)),
         child: Text(invoice.status,
             style: TextStyle(

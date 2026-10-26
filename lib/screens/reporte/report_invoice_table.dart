@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../../models/fila_venta.dart';
+import '../../models/invoice_status.dart';
 import '../../theme/hg_theme.dart';
 import 'report_responsive_layout.dart';
 
 enum ReportInvoiceTableMode { editable, readOnly, globalSearch }
 
-enum ReportInvoiceRowStatus { normal, cancelled, paid, partialPayment }
+enum ReportInvoiceRowStatus { normal, cancelled, paid, partialPayment, overdue }
+
+ReportInvoiceRowStatus reportRowStatus(InvoiceStatus status) =>
+    switch (status) {
+      InvoiceStatus.cancelled => ReportInvoiceRowStatus.cancelled,
+      InvoiceStatus.paid => ReportInvoiceRowStatus.paid,
+      InvoiceStatus.overdue => ReportInvoiceRowStatus.overdue,
+      InvoiceStatus.partial => ReportInvoiceRowStatus.partialPayment,
+      InvoiceStatus.pending => ReportInvoiceRowStatus.partialPayment,
+    };
 
 Color? reportInvoiceRowBackground(
   BuildContext context,
@@ -23,6 +33,8 @@ Color? reportInvoiceRowBackground(
     ReportInvoiceRowStatus.paid => colors.positive.withValues(alpha: alpha),
     ReportInvoiceRowStatus.partialPayment =>
       colors.warning.withValues(alpha: alpha),
+    ReportInvoiceRowStatus.overdue =>
+      const Color(0xFF168CFF).withValues(alpha: alpha),
     ReportInvoiceRowStatus.normal => null,
   };
 }
@@ -43,6 +55,7 @@ Color reportInvoiceRowBorderForBrightness(
       ReportInvoiceRowStatus.partialPayment => brightness == Brightness.dark
           ? const Color(0xFFFFFF00)
           : const Color(0xFFFFC400),
+      ReportInvoiceRowStatus.overdue => const Color(0xFF00B7FF),
       ReportInvoiceRowStatus.normal => Colors.transparent,
     };
 

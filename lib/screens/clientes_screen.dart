@@ -72,8 +72,15 @@ class _ClientesScreenState extends State<ClientesScreen> {
     super.dispose();
   }
 
-  String _normalizedSearch(String value) =>
-      value.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+  String _normalizedSearch(String value) {
+    const accented = 'áéíóúüñ';
+    const plain = 'aeiouun';
+    var result = value.trim().toLowerCase();
+    for (var i = 0; i < accented.length; i++) {
+      result = result.replaceAll(accented[i], plain[i]);
+    }
+    return result.replaceAll(RegExp(r'\s+'), ' ');
+  }
 
   List<Object> _terms(List<BillingCustomer> customers) {
     final numeric = customers
@@ -90,10 +97,15 @@ class _ClientesScreenState extends State<ClientesScreen> {
   }
 
   bool _matches(BillingCustomer customer) {
-    final query = _normalizedSearch(_query);
+    final queries = _query
+        .split(',')
+        .map(_normalizedSearch)
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
     final searchable =
         _normalizedSearch('${customer.name} ${customer.commercialName}');
-    final matchesQuery = query.isEmpty || searchable.contains(query);
+    final matchesQuery =
+        queries.isEmpty || queries.any((query) => searchable.contains(query));
     final matchesTerm = _selectedTerm == null ||
         (_selectedTerm == pendingTerm
             ? customer.paymentTermDays == null

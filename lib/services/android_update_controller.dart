@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../models/android_update.dart';
 import 'android_update_service.dart';
@@ -17,8 +17,11 @@ enum AndroidUpdateStatus {
   error,
 }
 
-class AndroidUpdateController extends ChangeNotifier {
-  AndroidUpdateController._();
+class AndroidUpdateController extends ChangeNotifier
+    with WidgetsBindingObserver {
+  AndroidUpdateController._() {
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   static final instance = AndroidUpdateController._();
 
@@ -30,6 +33,16 @@ class AndroidUpdateController extends ChangeNotifier {
   String? message;
   String? _apkPath;
   bool _started = false;
+  bool _openingInstaller = false;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        status == AndroidUpdateStatus.permissionNeeded &&
+        _apkPath != null) {
+      unawaited(install());
+    }
+  }
 
   bool get isSupported => _service.isSupported;
   bool get blocksNormalUse {
@@ -99,7 +112,10 @@ class AndroidUpdateController extends ChangeNotifier {
         },
       );
       status = AndroidUpdateStatus.ready;
-      message = 'APK descargado y verificado. Ya puedes abrir el instalador.';
+      message = 'APK descargado y verificado. Abriendo el instalador…';
+      notifyListeners();
+      await install();
+      return;
     } catch (error) {
       if (status == AndroidUpdateStatus.cancelled) return;
       status = AndroidUpdateStatus.error;
@@ -117,11 +133,13 @@ class AndroidUpdateController extends ChangeNotifier {
   }
 
   Future<void> install() async {
+    if (_openingInstaller) return;
     final path = _apkPath;
     if (path == null) {
       await download();
       return;
     }
+    _openingInstaller = true;
     try {
       if (!await _service.canInstallPackages()) {
         status = AndroidUpdateStatus.permissionNeeded;
@@ -139,6 +157,8 @@ class AndroidUpdateController extends ChangeNotifier {
       status = AndroidUpdateStatus.error;
       message = _friendlyError(error);
       notifyListeners();
+    } finally {
+      _openingInstaller = false;
     }
   }
 

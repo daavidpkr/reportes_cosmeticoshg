@@ -1,4 +1,5 @@
 import 'fila_venta.dart';
+import 'invoice_status.dart';
 
 class CustomerHistorySummary {
   const CustomerHistorySummary({
@@ -62,13 +63,14 @@ class CustomerHistoryInvoice {
   final List<CustomerHistoryPayment> payments;
   bool get isPaid => !cancelled && balance <= .005;
   bool get isPartial => !cancelled && paid > .005 && balance > .005;
-  String get status => cancelled
-      ? 'Anulada'
-      : isPaid
-          ? 'Pagada'
-          : isPartial
-              ? 'Abono parcial'
-              : 'Pendiente';
+  InvoiceStatus get semanticStatus => invoiceStatusFromValues(
+        cancelled: cancelled,
+        paid: isPaid,
+        balance: balance,
+        hasPayments: isPartial,
+        overdue: overdue,
+      );
+  String get status => invoiceStatusLabel(semanticStatus);
 
   factory CustomerHistoryInvoice.fromJson(Map<String, dynamic> json) {
     final seller = json['seller']?.toString() ?? '';

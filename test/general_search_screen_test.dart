@@ -101,6 +101,21 @@ void main() {
     expect(find.byType(ReportInvoiceTable), findsNothing);
   });
 
+  testWidgets('busca términos separados por comas con OR y sin duplicados',
+      (tester) async {
+    final calls = <String>[];
+    final same = invoice();
+    await tester.pumpWidget(app(
+      search: (query, {required offset, required limit}) async {
+        calls.add(query);
+        return [same];
+      },
+    ));
+    await runSearch(tester, ' Pepito, , Juan, Farmacia Norte ');
+    expect(calls, ['Pepito', 'Juan', 'Farmacia Norte']);
+    expect(find.text('Cliente Uno'), findsOneWidget);
+  });
+
   testWidgets('uses the canonical complete report table', (tester) async {
     await tester.pumpWidget(app(
       search: (_, {required offset, required limit}) async => [invoice()],
@@ -353,7 +368,7 @@ void main() {
       r'$100.00',
       r'$25.00',
       r'$75.00',
-      'PENDIENTE',
+      'ABONADA',
     ]) {
       expect(find.text(text), findsOneWidget);
     }

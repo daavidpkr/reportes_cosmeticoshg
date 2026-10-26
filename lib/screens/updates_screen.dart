@@ -160,11 +160,7 @@ class _UpdatesScreenState extends State<UpdatesScreen> {
           label: const Text('Cancelar descarga'),
         );
       case AndroidUpdateStatus.ready:
-        return FilledButton.icon(
-          onPressed: controller.install,
-          icon: const Icon(Icons.install_mobile),
-          label: const Text('Abrir instalador'),
-        );
+        return const LinearProgressIndicator();
       case AndroidUpdateStatus.permissionNeeded:
         return FilledButton.icon(
           onPressed: controller.install,

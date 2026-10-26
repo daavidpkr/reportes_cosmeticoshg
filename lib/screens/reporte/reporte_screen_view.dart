@@ -188,13 +188,9 @@ extension _ReporteScreenView on _ReporteScreenState {
     ReportTableGeometry geometry,
   ) =>
       ReportInvoiceRow(
-        status: fila.anulada
-            ? ReportInvoiceRowStatus.cancelled
-            : fila.pagada
-                ? ReportInvoiceRowStatus.paid
-                : fila.abonoParcial
-                    ? ReportInvoiceRowStatus.partialPayment
-                    : ReportInvoiceRowStatus.normal,
+        status: fila.tieneDatos
+            ? reportRowStatus(invoiceStatus(fila))
+            : ReportInvoiceRowStatus.normal,
         data: DataRow(
           key: ValueKey(fila.numero),
           cells: [
@@ -230,12 +226,18 @@ extension _ReporteScreenView on _ReporteScreenState {
                   ? null
                   : () => _abrirDetalleFactura(fila),
             ),
-            DataCell(_textoTablaLargo(fila.cliente, geometry.clientWidth)),
+            DataCell(_textoTablaLargo(fila.cliente, geometry.clientWidth),
+                onTap: fila.customerId == null
+                    ? null
+                    : () => _openCustomerProfile(fila)),
             DataCell(
               _textoTablaLargo(
                 fila.nombreComercial,
                 geometry.businessNameWidth,
               ),
+              onTap: fila.customerId == null
+                  ? null
+                  : () => _openCustomerProfile(fila),
             ),
             DataCell(Text(fila.fecha)),
             DataCell(Text(fila.numeroFactura)),
@@ -704,6 +706,15 @@ extension _ReporteScreenView on _ReporteScreenState {
                     icon: const Icon(Icons.calendar_month_outlined, size: 18),
                     label: const Text('Nuevo mes'),
                   ),
+                  Row(mainAxisSize: MainAxisSize.min, children: [
+                    Switch(
+                      value: _mostrarResumen,
+                      onChanged: _setMostrarResumen,
+                    ),
+                    Text(_mostrarResumen
+                        ? 'Ocultar resumen'
+                        : 'Mostrar resumen'),
+                  ]),
                   OutlinedButton.icon(
                     onPressed: _abrirCargaFacturas,
                     style: OutlinedButton.styleFrom(
@@ -830,6 +841,11 @@ extension _ReporteScreenView on _ReporteScreenState {
                       _mostrarReporteVentas,
                     ),
                     _pestana(
+                      'Búsqueda general',
+                      _vistaBusquedaGeneral,
+                      () => _navigate(ReportDestination.globalSearch),
+                    ),
+                    _pestana(
                       'Reporte de Cobros Mensuales',
                       _vistaCobrosMensuales,
                       () => _navigate(ReportDestination.monthlyCollections),
@@ -838,11 +854,6 @@ extension _ReporteScreenView on _ReporteScreenState {
                       'Clientes',
                       _vistaClientes,
                       _mostrarClientes,
-                    ),
-                    _pestana(
-                      'Búsqueda general',
-                      _vistaBusquedaGeneral,
-                      () => _navigate(ReportDestination.globalSearch),
                     ),
                     _pestana(
                       'Catálogos',
@@ -1509,6 +1520,15 @@ extension _ReporteScreenView on _ReporteScreenState {
                     ),
                   ),
                   const SizedBox(width: 6),
+                  Tooltip(
+                    message:
+                        _mostrarResumen ? 'Ocultar resumen' : 'Mostrar resumen',
+                    child: Switch(
+                      value: _mostrarResumen,
+                      onChanged: _setMostrarResumen,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
                   OutlinedButton(
                     onPressed: _nuevoReporte,
                     style: OutlinedButton.styleFrom(
@@ -1736,9 +1756,11 @@ extension _ReporteScreenView on _ReporteScreenState {
                                                       _encabezadoMovil(),
                                                       const SizedBox(
                                                           height: 14),
-                                                      _resumenMovil(),
-                                                      const SizedBox(
-                                                          height: 14),
+                                                      if (_mostrarResumen) ...[
+                                                        _resumenMovil(),
+                                                        const SizedBox(
+                                                            height: 14),
+                                                      ],
                                                       _controlesMoviles(),
                                                       const SizedBox(
                                                           height: 16),

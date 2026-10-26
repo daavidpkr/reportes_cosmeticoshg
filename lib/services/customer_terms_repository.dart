@@ -55,6 +55,16 @@ class CustomerTermsRepository implements CustomerTermsDataSource {
       .map<BillingCustomer>((row) => BillingCustomer.fromJson(row))
       .toList();
 
+  Future<BillingCustomer?> findCustomerById(String customerId) async {
+    final row = await _client
+        .from('billing_customers')
+        .select(
+            'id,name,commercial_name,payment_term_days,horario_atencion,configuration_active')
+        .eq('id', customerId)
+        .maybeSingle();
+    return row == null ? null : BillingCustomer.fromJson(row);
+  }
+
   @override
   Future<BillingCustomer> saveBusinessHours(
       String customerId, String? businessHours) async {

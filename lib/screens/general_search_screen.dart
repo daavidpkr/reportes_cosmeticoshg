@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import '../models/invoice_status.dart';
 import '../services/supabase_reportes_service.dart';
 import '../theme/hg_theme.dart';
 import 'reporte/report_invoice_table.dart';
@@ -21,12 +22,14 @@ typedef GlobalPaymentEditor = Future<bool> Function(
 typedef GlobalAdditionalPayments = Future<void> Function(
     GlobalInvoiceRow invoice);
 typedef GlobalInvoiceDetail = Future<void> Function(GlobalInvoiceRow invoice);
+typedef GlobalCustomerProfile = Future<bool> Function(GlobalInvoiceRow invoice);
 
 class GeneralSearchScreen extends StatefulWidget {
   const GeneralSearchScreen({
     required this.onEditPayment,
     required this.onManageAdditionalPayments,
     this.onOpenDetail,
+    this.onOpenCustomerProfile,
     this.search,
     this.useMobileCards,
     super.key,
@@ -36,6 +39,7 @@ class GeneralSearchScreen extends StatefulWidget {
   final GlobalPaymentEditor onEditPayment;
   final GlobalAdditionalPayments onManageAdditionalPayments;
   final GlobalInvoiceDetail? onOpenDetail;
+  final GlobalCustomerProfile? onOpenCustomerProfile;
   final bool? useMobileCards;
 
   @override
@@ -104,12 +108,26 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
     });
     try {
       final from = replace ? 0 : _rows.length;
-      final page = await _search(query, offset: from, limit: pageSize);
+      final terms = query
+          .split(',')
+          .map((term) => term.trim().replaceAll(RegExp(r'\s+'), ' '))
+          .where((term) => term.isNotEmpty)
+          .toList(growable: false);
+      final pages = await Future.wait([
+        for (final term in terms)
+          _search(term, offset: replace ? 0 : from, limit: pageSize),
+      ]);
+      final unique = <String, GlobalInvoiceRow>{};
+      for (final item in pages.expand((items) => items)) {
+        unique['${item.reportMonth}\u0000${item.row.referencia}\u0000${item.row.numero}'] =
+            item;
+      }
+      final page = unique.values.toList(growable: false);
       if (!mounted || generation != _generation) return;
       setState(() {
         if (replace) _rows.clear();
         _rows.addAll(page);
-        _hasMore = page.length == pageSize;
+        _hasMore = pages.any((items) => items.length == pageSize);
       });
     } catch (_) {
       if (!mounted || generation != _generation) return;
@@ -188,14 +206,9 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
   ReportInvoiceRow _row(BuildContext context, GlobalInvoiceRow invoice,
       ReportTableGeometry geometry, double scale) {
     final row = invoice.row;
+    final status = invoiceStatus(row, scheduledDate: invoice.paymentDate);
     return ReportInvoiceRow(
-      status: row.anulada
-          ? ReportInvoiceRowStatus.cancelled
-          : row.pagada
-              ? ReportInvoiceRowStatus.paid
-              : row.abonoParcial
-                  ? ReportInvoiceRowStatus.partialPayment
-                  : ReportInvoiceRowStatus.normal,
+      status: reportRowStatus(status),
       data: DataRow(
         key: ValueKey(
             'global-${invoice.reportMonth}-${row.numero}-${row.referencia}'),
@@ -219,8 +232,14 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
               onTap: widget.onOpenDetail == null
                   ? null
                   : () => widget.onOpenDetail!(invoice)),
-          DataCell(_longText(row.cliente, geometry.clientWidth)),
-          DataCell(_longText(row.nombreComercial, geometry.businessNameWidth)),
+          DataCell(_longText(row.cliente, geometry.clientWidth),
+              onTap: widget.onOpenCustomerProfile == null
+                  ? null
+                  : () => widget.onOpenCustomerProfile!(invoice)),
+          DataCell(_longText(row.nombreComercial, geometry.businessNameWidth),
+              onTap: widget.onOpenCustomerProfile == null
+                  ? null
+                  : () => widget.onOpenCustomerProfile!(invoice)),
           DataCell(_fitText(row.fecha)),
           DataCell(_fitText(row.numeroFactura)),
           DataCell(ConstrainedBox(
@@ -265,32 +284,15 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
 
   Widget _mobileCard(BuildContext context, GlobalInvoiceRow invoice) {
     final row = invoice.row;
-    final status = row.anulada
-        ? 'ANULADA'
-        : row.pagada
-            ? 'PAGADA'
-            : 'PENDIENTE';
-    final statusColor = row.anulada
-        ? context.hg.danger
-        : row.pagada
-            ? context.hg.positive
-            : context.hg.warning;
+    final semanticStatus =
+        invoiceStatus(row, scheduledDate: invoice.paymentDate);
+    final status = invoiceStatusLabel(semanticStatus).toUpperCase();
+    final statusColor = invoiceStatusForeground(context, semanticStatus);
     final brightness = Theme.of(context).brightness;
-    final highlighted = row.anulada || row.pagada || row.abonoParcial;
-    final cardColor = highlighted
-        ? statusColor.withValues(
-            alpha: brightness == Brightness.dark ? .28 : .24,
-          )
-        : context.hg.panel;
-    final borderColor = row.anulada
-        ? const Color(0xFFFF1744)
-        : row.pagada
-            ? const Color(0xFF00E676)
-            : row.abonoParcial
-                ? brightness == Brightness.dark
-                    ? const Color(0xFFFFFF00)
-                    : const Color(0xFFFFC400)
-                : Theme.of(context).colorScheme.outlineVariant;
+    final cardColor = semanticStatus == InvoiceStatus.pending
+        ? context.hg.panel
+        : invoiceStatusBackground(context, semanticStatus);
+    final borderColor = invoiceStatusBorder(brightness, semanticStatus);
     return Card(
       key: ValueKey(
           'global-card-${invoice.reportMonth}-${row.numero}-${row.referencia}'),
@@ -422,8 +424,7 @@ class _GeneralSearchScreenState extends State<GeneralSearchScreen> {
                 controller: _controller,
                 onChanged: _onChanged,
                 decoration: InputDecoration(
-                  hintText:
-                      'Buscar por referencia, factura, cliente o nombre comercial',
+                  hintText: 'Buscar uno o varios términos separados por comas',
                   prefixIcon: const Icon(Icons.search),
                   border: const OutlineInputBorder(),
                   suffixIcon: _controller.text.isEmpty

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/fila_venta.dart';
+import '../models/invoice_status.dart';
 import '../services/supabase_reportes_service.dart';
 import '../theme/hg_theme.dart';
 import 'reporte/report_invoice_table.dart';
@@ -193,22 +194,17 @@ class _InvoiceDetailDialogState extends State<_InvoiceDetailDialog> {
   String _money(double value) => '\$${value.toStringAsFixed(2)}';
 
   String get _status {
-    final invoice = _detail.invoice;
-    if (invoice.anulada) return 'Anulada';
-    if (invoice.pagada) return 'Pagada';
-    if (_detail.overdue) return 'Vencida';
-    if (invoice.abonoParcial) return 'Abonada';
-    return 'Pendiente';
+    return invoiceStatusLabel(_semanticStatus);
   }
 
+  InvoiceStatus get _semanticStatus => invoiceStatus(
+        _detail.invoice,
+        scheduledDate: _detail.scheduledDate,
+        overdue: _detail.overdue,
+      );
+
   ReportInvoiceRowStatus get _rowStatus {
-    final invoice = _detail.invoice;
-    if (invoice.anulada) return ReportInvoiceRowStatus.cancelled;
-    if (invoice.pagada) return ReportInvoiceRowStatus.paid;
-    if (invoice.abonoParcial || _detail.overdue) {
-      return ReportInvoiceRowStatus.partialPayment;
-    }
-    return ReportInvoiceRowStatus.normal;
+    return reportRowStatus(_semanticStatus);
   }
 
   String get _scheduleStatus {
@@ -553,11 +549,12 @@ class _InvoiceDetailDialogState extends State<_InvoiceDetailDialog> {
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 16),
         decoration: BoxDecoration(
           color: data.balance
-              ? context.hg.warningContainer
+              ? invoiceStatusBackground(context, _semanticStatus)
               : Theme.of(context).colorScheme.surface,
           border: Border.all(
               color: data.balance
-                  ? context.hg.warning
+                  ? invoiceStatusBorder(
+                      Theme.of(context).brightness, _semanticStatus)
                   : Theme.of(context).dividerColor),
           borderRadius: BorderRadius.circular(15),
         ),
@@ -853,7 +850,9 @@ class _InvoiceDetailDialogState extends State<_InvoiceDetailDialog> {
           const SizedBox(width: 10),
           Expanded(
               child: Text(
-                  'Los valores y el estado se calculan desde los abonos canónicos. Abrir esta ventana no modifica la factura.',
+                  _detail.invoice.anulada
+                      ? 'Factura anulada: las acciones están bloqueadas'
+                      : 'Los valores y el estado se calculan desde los abonos canónicos. Abrir esta ventana no modifica la factura.',
                   style: TextStyle(
                       color: context.hg.mutedText,
                       fontSize: 12,
